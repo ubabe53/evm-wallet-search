@@ -5,7 +5,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
-config.yaml
+/config.yaml
 analytics/target/
 analytics/logs/
 analytics/dbt_packages/

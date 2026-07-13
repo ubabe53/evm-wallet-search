@@ -42,9 +42,6 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
 
-      - name: Prepare fixture configuration
-        run: cp config.example.yaml config.yaml
-
       - name: Run the complete test suite
         run: bun run test
 
