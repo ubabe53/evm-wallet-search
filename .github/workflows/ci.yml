@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -30,7 +30,7 @@ jobs:
           bun-version: 1.2.20
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -41,6 +41,9 @@ jobs:
 
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
+
+      - name: Prepare fixture configuration
+        run: cp config.example.yaml config.yaml
 
       - name: Run the complete test suite
         run: bun run test
@@ -63,7 +66,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -71,7 +74,7 @@ jobs:
           bun-version: 1.2.20
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
