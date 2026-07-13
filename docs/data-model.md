@@ -100,7 +100,7 @@ Daily transfer counts and token-flow aggregates by wallet, token, and direction.
 
 One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, and first/last event timestamps.
 
-The exporter enriches this row in `meta.json` with per-status event, interaction, and token-summary limits; global limits for other files; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard status-filter statistics. The JSON subsets do not change any dbt mart grain.
+The exporter enriches this row in `meta.json` with complete token-summary and counterparty-summary row counts; per-status event, interaction, and token-summary limits; global limits for other files; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. `is_sampled` covers every bounded export, including both summary files. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard status-filter statistics. The JSON subsets do not change any dbt mart grain.
 
 ## Tests
 

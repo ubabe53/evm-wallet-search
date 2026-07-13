@@ -119,7 +119,7 @@ This creates:
 - `public/data/events.json`
 - `public/data/meta.json`
 
-The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status; 500 counterparties and 5,000 timeline rows overall. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for full status-combination counts, exported counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
+The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status; 500 counterparties and 5,000 timeline rows overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for full status-combination counts, complete and exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
 
 ## Verification
 
@@ -128,3 +128,17 @@ bun run test
 ```
 
 The full test command builds analytics, exports JSON, runs JS tests, and runs dbt tests.
+
+## GitHub CI and Deployment
+
+`.github/workflows/ci.yml` runs the reproducible fixture pipeline and production dashboard build for pull requests and pushes to `main`. It also runs advisory JavaScript and Python dependency audits. The uploaded production build is retained for one day to help diagnose a run; this retention setting does not control how long a deployed site stays online.
+
+`.github/workflows/deploy.yml` rebuilds the exact revision that passed `main` CI and publishes it to GitHub Pages. Deployment is disabled by default. To enable it when the repository and GitHub plan support Pages:
+
+1. Set the repository Actions variable `ENABLE_GITHUB_PAGES` to `true`.
+2. In repository Pages settings, select GitHub Actions as the source if GitHub does not configure it automatically.
+3. Run the Deploy workflow manually once, or merge a change into `main` and let successful CI trigger it.
+
+The site does not expire after one day; only the separate CI download artifact does. If private-repository Pages is unavailable on the current plan, keep the gate disabled and connect the private repository to a host that supports private Git integration, such as Cloudflare Pages, Netlify, or Vercel. No dashboard code change is required for a root-domain deployment; set the host's build command to `bun run test && bun run dashboard:build` and its output directory to `dist`.
+
+Dependabot checks Actions, JavaScript, indexer, and Python dependencies weekly. Pull requests inherit the repository template and Copilot review instructions, but branch protection and automatic Copilot review assignment are repository settings and must be enabled separately when desired.

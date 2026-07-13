@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
+import tempfile
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -110,11 +112,30 @@ def merge_registries(
 
 
 def write_snapshot(rows: list[dict[str, Any]], manifest: dict[str, Any]) -> None:
-    with SEED_PATH.open("w", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(rows)
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    csv_descriptor, csv_name = tempfile.mkstemp(dir=SEED_PATH.parent, prefix=f".{SEED_PATH.name}.")
+    manifest_descriptor, manifest_name = tempfile.mkstemp(
+        dir=MANIFEST_PATH.parent,
+        prefix=f".{MANIFEST_PATH.name}.",
+    )
+    csv_path = Path(csv_name)
+    manifest_path = Path(manifest_name)
+    try:
+        with os.fdopen(csv_descriptor, "w", newline="") as output:
+            writer = csv.DictWriter(output, fieldnames=FIELDNAMES)
+            writer.writeheader()
+            writer.writerows(rows)
+            output.flush()
+            os.fsync(output.fileno())
+        with os.fdopen(manifest_descriptor, "w") as output:
+            output.write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
+        csv_path.replace(SEED_PATH)
+        manifest_path.replace(MANIFEST_PATH)
+    except BaseException:
+        csv_path.unlink(missing_ok=True)
+        manifest_path.unlink(missing_ok=True)
+        raise
 
 
 def main() -> None:

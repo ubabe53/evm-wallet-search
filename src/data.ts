@@ -148,6 +148,8 @@ export type PipelineMetadata = {
   suspected_spam_transfer_count: number;
   suspected_spam_token_count: number;
   interaction_count: number;
+  token_summary_row_count: number;
+  counterparty_summary_row_count: number;
   timeline_row_count: number;
   first_event_at: string | null;
   last_event_at: string | null;
@@ -180,22 +182,22 @@ export type DashboardData = {
   metadata: PipelineMetadata;
 };
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, { signal });
   if (!response.ok) {
-    throw new Error(`Could not load ${path}`);
+    throw new Error(`Could not load ${path} (HTTP ${response.status})`);
   }
   return response.json() as Promise<T>;
 }
 
 // The dashboard is static: all runtime data is loaded from generated JSON files.
-export async function loadDashboardData(): Promise<DashboardData> {
+export async function loadDashboardData(signal?: AbortSignal): Promise<DashboardData> {
   const [graph, summaries, timeline, events, metadata] = await Promise.all([
-    fetchJson<DashboardGraph>("data/graph.json"),
-    fetchJson<DashboardData["summaries"]>("data/summaries.json"),
-    fetchJson<TimelineRow[]>("data/timeline.json"),
-    fetchJson<WalletEvent[]>("data/events.json"),
-    fetchJson<PipelineMetadata>("data/meta.json"),
+    fetchJson<DashboardGraph>("data/graph.json", signal),
+    fetchJson<DashboardData["summaries"]>("data/summaries.json", signal),
+    fetchJson<TimelineRow[]>("data/timeline.json", signal),
+    fetchJson<WalletEvent[]>("data/events.json", signal),
+    fetchJson<PipelineMetadata>("data/meta.json", signal),
   ]);
 
   return { graph, summaries, timeline, events, metadata };

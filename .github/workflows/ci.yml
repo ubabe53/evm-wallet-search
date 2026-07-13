@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -54,7 +56,7 @@ jobs:
           name: dashboard-dist-${{ github.sha }}
           path: dist
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   dependency-audit:
     name: Audit dependencies (advisory)
@@ -64,6 +66,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2

@@ -5,5 +5,12 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          return id.includes("/cytoscape/") ? "cytoscape" : undefined;
+        },
+      },
+    },
   },
 });

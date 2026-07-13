@@ -30,6 +30,8 @@ describe("dashboard export shape", () => {
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_export_limit);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.transfer_count);
     expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.interaction_count);
+    expect(metadata.exported_token_summary_count).toBeLessThanOrEqual(metadata.token_summary_row_count);
+    expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(metadata.counterparty_summary_row_count);
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_count);
     expect(graph.edges.length).toBe(metadata.exported_interaction_count * 2);
     expect(typeof summaries.tokens[0].value_raw_sum).toBe("string");

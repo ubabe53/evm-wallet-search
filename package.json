@@ -14,16 +14,16 @@
     "export:dashboard": "python3 scripts/export_dashboard.py",
     "dashboard:dev": "vite --host 127.0.0.1",
     "dashboard:build": "vite build",
-    "test": "bun run test:labels && bun run analytics:build && bun run export:dashboard && bun run test:js && python3 scripts/run_dbt.py test",
+    "test": "bun run analytics:build && bun run test:labels && bun run export:dashboard && bun run test:js && python3 scripts/run_dbt.py test",
     "test:labels": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "test:js": "vitest run",
     "test:analytics": "python3 scripts/run_dbt.py test"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.3",
     "cytoscape": "^3.30.4",
     "lucide-react": "^0.468.0",
-    "vite": "^6.0.7",
+    "vite": "^8.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -38,6 +38,17 @@
     "jsdom": "^25.0.1",
     "playwright": "^1.61.1",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "body-parser": "1.20.3",
+    "cookie": "0.7.2",
+    "esbuild": "0.28.1",
+    "express": "4.21.2",
+    "path-to-regexp": "0.1.13",
+    "qs": "6.15.3",
+    "send": "0.19.0",
+    "serve-static": "1.16.2",
+    "ws": "8.21.0"
   }
 }
