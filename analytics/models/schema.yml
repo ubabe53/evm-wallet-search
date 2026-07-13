@@ -1,0 +1,216 @@
+version: 2
+
+models:
+  - name: stg_erc20_transfers
+    description: Deduplicated raw ERC20 transfer events normalized to lowercase addresses.
+    columns:
+      - name: transfer_id
+        tests:
+          - unique
+          - not_null
+      - name: token_address
+        tests:
+          - not_null
+      - name: from_address
+        tests:
+          - not_null
+      - name: to_address
+        tests:
+          - not_null
+  - name: stg_token_metadata
+    description: Curated Trust Wallet, Uniswap, and CoinGecko registry plus reviewed manual token-label overrides.
+    columns:
+      - name: token_address
+        tests:
+          - unique
+          - not_null
+      - name: token_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: metadata_source
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["manual", "trustwallet", "uniswap", "coingecko", "trustwallet+uniswap", "trustwallet+coingecko", "uniswap+coingecko", "trustwallet+uniswap+coingecko", "ethereum_rpc"]
+  - name: stg_counterparty_metadata
+    description: Pinned-block bytecode classification for enriched counterparty addresses.
+    columns:
+      - name: address
+        tests:
+          - unique
+          - not_null
+      - name: address_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["contract", "wallet", "unknown"]
+      - name: fetch_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["complete", "failed"]
+  - name: int_token_reputation
+    description: One explainable contract-level reputation result per ERC20 address.
+    columns:
+      - name: token_address
+        tests:
+          - unique
+          - not_null
+      - name: token_reputation
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: token_reputation_score
+        tests:
+          - not_null
+  - name: int_wallet_token_interactions
+    description: Behavioral legitimacy evidence at wallet and token grain.
+    columns:
+      - name: interaction_legitimacy
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["not_suspicious", "uncertain", "suspicious"]
+      - name: interaction_legitimacy_score
+        tests:
+          - not_null
+  - name: wallet_events
+    description: Dashboard event table, one row per wallet-relevant ERC20 transfer.
+    columns:
+      - name: transfer_id
+        tests:
+          - unique
+          - not_null
+      - name: wallet_address
+        tests:
+          - not_null
+      - name: counterparty_address
+        tests:
+          - not_null
+      - name: token_address
+        tests:
+          - not_null
+      - name: direction
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["in", "out"]
+      - name: token_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: counterparty_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["contract", "wallet", "unknown"]
+  - name: graph_nodes
+    columns:
+      - name: node_id
+        tests:
+          - unique
+          - not_null
+      - name: node_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["wallet", "counterparty", "token"]
+      - name: address_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["contract", "wallet", "unknown"]
+  - name: graph_edges
+    description: Two directed edge legs per wallet-token-counterparty interaction.
+    columns:
+      - name: edge_id
+        tests:
+          - unique
+          - not_null
+      - name: source_node_id
+        tests:
+          - not_null
+      - name: target_node_id
+        tests:
+          - not_null
+      - name: token_address
+        tests:
+          - not_null
+      - name: edge_role
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["wallet_token", "token_counterparty"]
+      - name: token_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: counterparty_transfer_count
+        tests:
+          - not_null
+  - name: token_summary
+    columns:
+      - name: wallet_address
+        tests:
+          - not_null
+      - name: token_address
+        tests:
+          - not_null
+      - name: token_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["trusted", "unverified", "suspected_spam", "spam"]
+  - name: counterparty_summary
+    columns:
+      - name: wallet_address
+        tests:
+          - not_null
+      - name: counterparty_address
+        tests:
+          - not_null
+  - name: timeline_daily
+    description: Daily token flow at wallet, token, and direction grain; token units are never mixed.
+    columns:
+      - name: wallet_address
+        tests:
+          - not_null
+      - name: block_date
+        tests:
+          - not_null
+      - name: token_address
+        tests:
+          - not_null
+      - name: token_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["trusted", "unverified", "suspected_spam", "spam"]
+  - name: pipeline_metadata
+    description: Export provenance and complete mart counts for each configured wallet.
+    columns:
+      - name: wallet_address
+        tests:
+          - unique
+          - not_null
+      - name: data_source
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["fixture", "hyperindex"]

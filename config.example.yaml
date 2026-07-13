@@ -1,0 +1,10 @@
+# Copy this file to config.yaml. The local file is git-ignored.
+envio:
+  api_token: ""
+
+analytics:
+  hyperindex_postgres_dsn: ""
+
+ethereum:
+  rpc_url: ""
+  public_rpc_url: "https://ethereum-rpc.publicnode.com"

@@ -1,0 +1,50 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Lisbon
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: npm
+    directory: "/indexer"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Lisbon
+    open-pull-requests-limit: 3
+    groups:
+      indexer-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: deps(indexer)
+
+  - package-ecosystem: pip
+    directory: "/analytics"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Lisbon
+    open-pull-requests-limit: 3
+    groups:
+      analytics-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: deps(analytics)

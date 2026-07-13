@@ -1,0 +1,31 @@
+{
+  "chain_id": 1,
+  "entry_count": 4949,
+  "generated_at": "2026-07-11T21:50:10.399853+00:00",
+  "sources": {
+    "coingecko": {
+      "entry_count": 4848,
+      "timestamp": "2026-07-11T15:03:48.047+00:00",
+      "url": "https://tokens.coingecko.com/ethereum/all.json",
+      "version": {
+        "major": 1562,
+        "minor": 1,
+        "patch": 0
+      }
+    },
+    "trustwallet": {
+      "commit_sha": "7a3150e308d50872dd16ceba200a10b608766d34",
+      "entry_count": 289,
+      "url": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/tokenlist.json"
+    },
+    "uniswap": {
+      "entry_count": 393,
+      "url": "https://tokens.uniswap.org/",
+      "version": {
+        "major": 22,
+        "minor": 5,
+        "patch": 0
+      }
+    }
+  }
+}

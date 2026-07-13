@@ -1,0 +1,76 @@
+name: evm_wallet_search
+version: 0.1.0
+config-version: 2
+profile: evm_wallet_search
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+vars:
+  use_fixture: true
+
+models:
+  evm_wallet_search:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  evm_wallet_search:
+    +quote_columns: false
+    raw_erc20_transfers_fixture:
+      +column_types:
+        id: varchar
+        chain_id: integer
+        block_number: bigint
+        block_timestamp: bigint
+        transaction_hash: varchar
+        transaction_index: integer
+        log_index: integer
+        token_address: varchar
+        from_address: varchar
+        to_address: varchar
+        value_raw: varchar
+    token_rpc_metadata:
+      +column_types:
+        token_address: varchar
+        name: varchar
+        symbol: varchar
+        decimals: integer
+        rpc_block_number: bigint
+        fetched_at: varchar
+        fetch_status: varchar
+        error_code: varchar
+    token_rpc_metadata_fixture:
+      +column_types:
+        token_address: varchar
+        name: varchar
+        symbol: varchar
+        decimals: integer
+        rpc_block_number: bigint
+        fetched_at: varchar
+        fetch_status: varchar
+        error_code: varchar
+    counterparty_code_metadata:
+      +column_types:
+        address: varchar
+        address_type: varchar
+        code_size_bytes: bigint
+        rpc_block_number: bigint
+        fetched_at: varchar
+        fetch_status: varchar
+        error_code: varchar
+    counterparty_code_metadata_fixture:
+      +column_types:
+        address: varchar
+        address_type: varchar
+        code_size_bytes: bigint
+        rpc_block_number: bigint
+        fetched_at: varchar
+        fetch_status: varchar
+        error_code: varchar

@@ -1,0 +1,2 @@
+token_address,name,symbol,decimals,rpc_block_number,fetched_at,fetch_status,error_code
+0x9999999999999999999999999999999999999999,Claim at visticlaim.com,VISTI.COM,6,17000000,2023-11-14T00:00:00+00:00,complete,

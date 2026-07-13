@@ -1,0 +1,11 @@
+{
+  "name": "evm-wallet-search-indexer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "envio": "^3.2.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
