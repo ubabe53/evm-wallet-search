@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -108,10 +110,19 @@ def fetch_address_types(client: JsonRpcClient, addresses: list[str], block_tag: 
 def write_rows(existing: dict[str, dict[str, str]], rows: list[dict[str, Any]], path: Path = OUTPUT_PATH) -> None:
     merged: dict[str, dict[str, Any]] = {**existing}
     merged.update({str(row["address"]): row for row in rows})
-    with path.open("w", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(merged[address] for address in sorted(merged))
+    descriptor, temporary_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", newline="") as output:
+            writer = csv.DictWriter(output, fieldnames=FIELDNAMES)
+            writer.writeheader()
+            writer.writerows(merged[address] for address in sorted(merged))
+            output.flush()
+            os.fsync(output.fileno())
+        temporary_path.replace(path)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def parse_args() -> argparse.Namespace:

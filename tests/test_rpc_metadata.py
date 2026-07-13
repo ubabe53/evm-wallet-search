@@ -7,14 +7,10 @@ from scripts.enrich_token_metadata import (
     JsonRpcClient,
     decode_decimals_result,
     decode_text_result,
-    ensure_dependencies,
     fetch_metadata,
     select_candidates,
     write_rows,
 )
-
-
-ensure_dependencies()
 from eth_abi import encode
 
 
@@ -78,6 +74,21 @@ class RpcMetadataTest(unittest.TestCase):
         client = JsonRpcClient("https://private.invalid/key", transport=transport)
         result = client.batch([("eth_call", [], ("0x1", "name"))])
         self.assertEqual(result[("0x1", "name")], "0x01")
+
+    def test_json_rpc_call_rejects_malformed_or_mismatched_responses(self) -> None:
+        for response in ([], {"jsonrpc": "2.0", "id": 99, "result": "0x01"}):
+            with self.subTest(response=response):
+                client = JsonRpcClient("https://private.invalid/key", transport=lambda _url, _payload: response)
+                with self.assertRaisesRegex(RuntimeError, "invalid response"):
+                    client.call("eth_chainId", [])
+
+    def test_json_rpc_batch_ignores_malformed_items(self) -> None:
+        client = JsonRpcClient(
+            "https://private.invalid/key",
+            transport=lambda _url, _payload: [None, {"jsonrpc": "2.0", "id": 999, "result": "0x01"}],
+        )
+        result = client.batch([("eth_call", [], ("0x1", "name"))])
+        self.assertIsNone(result[("0x1", "name")])
 
     def test_snapshot_merge_is_idempotent_and_sorted(self) -> None:
         with TemporaryDirectory() as directory:

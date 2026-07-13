@@ -111,6 +111,8 @@ const metadata = {
   spam_transfer_count: 1,
   spam_token_count: 1,
   interaction_count: 2,
+  token_summary_row_count: 2,
+  counterparty_summary_row_count: 0,
   timeline_row_count: 1,
   first_event_at: "2023-11-14T22:15:00+00:00",
   last_event_at: "2023-11-14T22:15:00+00:00",
@@ -241,5 +243,17 @@ describe("App", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(graphElement).toBe(screen.getByRole("img", { name: /wallet interaction graph/i }));
     expect(graphShell).toHaveAttribute("data-graph-theme", "light");
+  });
+
+  it("shows an actionable error when generated data is unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByText(/Could not load data\/graph\.json \(HTTP 404\)/)).toBeInTheDocument();
+    expect(screen.getByText(/analytics:build/)).toBeInTheDocument();
   });
 });

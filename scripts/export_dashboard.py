@@ -8,8 +8,10 @@ or API server is required at dashboard runtime.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -74,7 +76,31 @@ def rows(
 def write_json(name: str, payload: Any) -> None:
     PUBLIC_DATA.mkdir(parents=True, exist_ok=True)
     path = PUBLIC_DATA / name
-    path.write_text(json.dumps(payload, default=json_default, indent=2) + "\n")
+    serialized = json.dumps(payload, default=json_default, indent=2) + "\n"
+    descriptor, temporary_name = tempfile.mkstemp(dir=PUBLIC_DATA, prefix=f".{name}.")
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w") as output:
+            output.write(serialized)
+            output.flush()
+            os.fsync(output.fileno())
+        temporary_path.replace(path)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def export_is_sampled(metadata: dict[str, Any]) -> bool:
+    """Return whether any browser-facing export is smaller than its complete mart."""
+
+    count_pairs = (
+        ("exported_event_count", "transfer_count"),
+        ("exported_interaction_count", "interaction_count"),
+        ("exported_token_summary_count", "token_summary_row_count"),
+        ("exported_counterparty_summary_count", "counterparty_summary_row_count"),
+        ("exported_timeline_row_count", "timeline_row_count"),
+    )
+    return any(metadata[exported] < metadata[complete] for exported, complete in count_pairs)
 
 
 def display_label(node: dict[str, Any]) -> str:
@@ -246,6 +272,15 @@ def main() -> None:
         if len(metadata) != 1:
             raise RuntimeError(f"Expected one configured wallet, found {len(metadata)}")
 
+        complete_export_counts = query_rows(
+            connection,
+            """
+              select
+                (select count(*) from token_summary) as token_summary_row_count,
+                (select count(*) from counterparty_summary) as counterparty_summary_row_count
+            """,
+        )[0]
+
         statuses = ("trusted", "unverified", "suspected_spam", "spam")
         status_counts: dict[str, dict[str, int]] = {}
         for mask in range(1, 1 << len(statuses)):
@@ -267,6 +302,7 @@ def main() -> None:
 
         meta = {
             **metadata[0],
+            **complete_export_counts,
             "status_counts": status_counts,
             "exported_event_count": len(events),
             "exported_interaction_count": len({edge["interaction_id"] for edge in edges}),
@@ -279,13 +315,7 @@ def main() -> None:
             "counterparty_summary_export_limit": COUNTERPARTY_SUMMARY_LIMIT,
             "timeline_row_export_limit": TIMELINE_ROW_LIMIT,
         }
-        meta["is_sampled"] = any(
-            (
-                meta["exported_event_count"] < meta["transfer_count"],
-                meta["exported_interaction_count"] < meta["interaction_count"],
-                meta["exported_timeline_row_count"] < meta["timeline_row_count"],
-            )
-        )
+        meta["is_sampled"] = export_is_sampled(meta)
 
         write_json("graph.json", build_graph(nodes, edges))
         write_json(

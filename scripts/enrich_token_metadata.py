@@ -7,8 +7,10 @@ import argparse
 import csv
 import importlib.util
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -128,8 +130,12 @@ class JsonRpcClient:
         request_id = self.next_id
         self.next_id += 1
         response = self.send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
-        if response.get("error"):
-            raise RuntimeError(f"RPC {method} failed: {response['error'].get('code', 'unknown')}")
+        if not isinstance(response, dict) or response.get("id") != request_id:
+            raise RuntimeError(f"RPC {method} returned an invalid response")
+        error = response.get("error")
+        if error:
+            code = error.get("code", "unknown") if isinstance(error, dict) else "unknown"
+            raise RuntimeError(f"RPC {method} failed: {code}")
         return response.get("result")
 
     def batch(self, requests: list[tuple[str, list[Any], tuple[str, str]]]) -> dict[tuple[str, str], str | None]:
@@ -149,7 +155,7 @@ class JsonRpcClient:
                 except RuntimeError:
                     results[key] = None
             return results
-        by_id = {item.get("id"): item for item in response}
+        by_id = {item.get("id"): item for item in response if isinstance(item, dict)}
         return {
             key: None if by_id.get(request_id, {}).get("error") else by_id.get(request_id, {}).get("result")
             for request_id, key in keys.items()
@@ -228,10 +234,19 @@ def fetch_metadata(client: JsonRpcClient, addresses: list[str], block_tag: str) 
 def write_rows(existing: dict[str, dict[str, str]], rows: list[dict[str, Any]], path: Path = OUTPUT_PATH) -> None:
     merged: dict[str, dict[str, Any]] = {**existing}
     merged.update({str(row["token_address"]): row for row in rows})
-    with path.open("w", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(merged[address] for address in sorted(merged))
+    descriptor, temporary_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", newline="") as output:
+            writer = csv.DictWriter(output, fieldnames=FIELDNAMES)
+            writer.writeheader()
+            writer.writerows(merged[address] for address in sorted(merged))
+            output.flush()
+            os.fsync(output.fileno())
+        temporary_path.replace(path)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def parse_args() -> argparse.Namespace:

@@ -46,6 +46,28 @@ bun run test
 
 When code changes, update the related docs in the same change. For example, a mart schema change must update `docs/data-model.md`, `src/data.ts`, and any affected export or dashboard notes.
 
+## GitHub Automation
+
+- CI runs the complete fixture pipeline and production build on every pull request and every push to `main`. Its downloadable dashboard build is retained for one day; that is artifact storage, not a website expiry time.
+- Deploy runs only after successful `main` CI (or a manual dispatch) and only when the repository variable `ENABLE_GITHUB_PAGES` is exactly `true`. The published site remains online until it is replaced or disabled.
+- Dependabot checks GitHub Actions, the root JavaScript application, the indexer package, and Python analytics dependencies every Monday.
+- The pull-request template makes validation, data-contract, security, documentation, and screenshot checks explicit.
+- `.github/copilot-instructions.md` gives GitHub Copilot project-specific review priorities. It guides Copilot when review is requested; it does not approve or merge changes automatically.
+
+GitHub Pages deployment is intentionally gated because private-repository Pages availability depends on the GitHub plan. See `docs/operations.md` for the enablement steps and hosting alternatives.
+
+### Local Codex review gate
+
+Install the repository-managed Git hooks once after cloning:
+
+```sh
+bun run hooks:install
+```
+
+Every commit with staged changes then starts a fresh, ephemeral Codex session in a read-only sandbox. It reviews only `git diff --cached`, returns a schema-validated result, and blocks the commit only for concrete correctness, security, data-integrity, regression, portability, or materially missing-test errors. The hook requires authenticated `codex` and `bun` commands and may take longer than deterministic checks because it calls an agent.
+
+Run the same gate without committing with `bun run review:staged`. For an exceptional offline or recovery commit, bypass it once with `SKIP_CODEX_REVIEW=1 git commit ...`; GitHub CI still remains the shared enforcement layer.
+
 ## Data Contract
 
 The dashboard consumes five generated files:

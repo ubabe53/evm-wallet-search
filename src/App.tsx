@@ -517,7 +517,14 @@ export function App() {
   });
 
   useEffect(() => {
-    loadDashboardData().then(setData).catch((loadError: Error) => setError(loadError.message));
+    const controller = new AbortController();
+    loadDashboardData(controller.signal).then(setData).catch((loadError: unknown) => {
+      if (loadError instanceof Error && loadError.name === "AbortError") {
+        return;
+      }
+      setError(loadError instanceof Error ? loadError.message : "Could not load dashboard data");
+    });
+    return () => controller.abort();
   }, []);
 
   useLayoutEffect(() => {
@@ -763,7 +770,7 @@ export function App() {
       <header className="topbar">
         <div>
           <h1>EVM Wallet Search</h1>
-          <p>ERC20 token flow analytics for vitalik.eth</p>
+          <p>ERC20 token flow analytics for {data.metadata.ens}</p>
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
             <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>

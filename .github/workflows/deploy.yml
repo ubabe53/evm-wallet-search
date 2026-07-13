@@ -36,6 +36,7 @@ jobs:
       - name: Check out verified revision
         uses: actions/checkout@v7
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Pages
