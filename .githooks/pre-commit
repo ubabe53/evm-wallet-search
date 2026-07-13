@@ -1,0 +1,6 @@
+#!/bin/sh
+
+set -eu
+
+repository_root=$(git rev-parse --show-toplevel)
+exec "$repository_root/scripts/codex_review_gate.sh"

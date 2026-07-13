@@ -56,6 +56,18 @@ When code changes, update the related docs in the same change. For example, a ma
 
 GitHub Pages deployment is intentionally gated because private-repository Pages availability depends on the GitHub plan. See `docs/operations.md` for the enablement steps and hosting alternatives.
 
+### Local Codex review gate
+
+Install the repository-managed Git hooks once after cloning:
+
+```sh
+bun run hooks:install
+```
+
+Every commit with staged changes then starts a fresh, ephemeral Codex session in a read-only sandbox. It reviews only `git diff --cached`, returns a schema-validated result, and blocks the commit only for concrete correctness, security, data-integrity, regression, portability, or materially missing-test errors. The hook requires authenticated `codex` and `bun` commands and may take longer than deterministic checks because it calls an agent.
+
+Run the same gate without committing with `bun run review:staged`. For an exceptional offline or recovery commit, bypass it once with `SKIP_CODEX_REVIEW=1 git commit ...`; GitHub CI still remains the shared enforcement layer.
+
 ## Data Contract
 
 The dashboard consumes five generated files:
