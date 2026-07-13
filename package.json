@@ -20,7 +20,7 @@
     "test:analytics": "python3 scripts/run_dbt.py test"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.3",
     "cytoscape": "^3.30.4",
     "lucide-react": "^0.468.0",
     "vite": "^6.0.7",
