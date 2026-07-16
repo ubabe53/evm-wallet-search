@@ -309,6 +309,14 @@ describe("App", () => {
     const graphShell = graphElement.parentElement;
     expect(graphShell).toHaveAttribute("data-graph-theme", "light");
 
+    fireEvent.click(screen.getByLabelText("Open graph theater mode"));
+    expect(screen.getByRole("dialog", { name: "Interaction Graph theater mode" })).toHaveClass("theater");
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(screen.getByLabelText("Exit graph theater mode")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Interaction Graph theater mode" })).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe("");
+
     fireEvent.click(screen.getByLabelText("Switch to dark theme"));
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(graphElement).toBe(screen.getByRole("img", { name: /wallet interaction graph/i }));

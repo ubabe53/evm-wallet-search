@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import cytoscape from "cytoscape";
 import {
   Activity,
@@ -8,6 +8,8 @@ import {
   ChevronUp,
   Database,
   ExternalLink,
+  Maximize2,
+  Minimize2,
   Moon,
   Network,
   RotateCcw,
@@ -250,7 +252,7 @@ function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
   ];
 }
 
-function Graph({ data, theme }: { data: DashboardGraph; theme: Theme }) {
+function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Theme; theaterMode: boolean }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
   const isClampingRef = useRef(false);
@@ -400,6 +402,19 @@ function Graph({ data, theme }: { data: DashboardGraph; theme: Theme }) {
     // Updating the stylesheet preserves node positions, pan, and zoom.
     cy.style(graphStyles(container));
   }, [theme]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) {
+      return;
+    }
+
+    const resizeFrame = window.requestAnimationFrame(() => {
+      cy.resize();
+      fitGraph();
+    });
+    return () => window.cancelAnimationFrame(resizeFrame);
+  }, [theaterMode]);
 
   return (
     <div className="graphShell" data-graph-theme={theme}>
@@ -623,6 +638,7 @@ export function App() {
   const [eventLimit, setEventLimit] = useState(EVENT_PAGE_SIZE);
   const [graphInteractionLimit, setGraphInteractionLimit] = useState(DEFAULT_GRAPH_INTERACTION_LIMIT);
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
+  const [graphTheaterMode, setGraphTheaterMode] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<TokenStatus[]>(DEFAULT_TOKEN_STATUSES);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("theme");
@@ -650,6 +666,25 @@ export function App() {
 
   useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, selectedStatuses]);
   useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [data, query, selectedStatuses]);
+
+  useEffect(() => {
+    if (!graphTheaterMode) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setGraphTheaterMode(false);
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [graphTheaterMode]);
 
   const filtered = useMemo(() => {
     if (!data) {
@@ -861,6 +896,30 @@ export function App() {
     return { nodes, edges };
   }, [filtered, graphInteractionLimit]);
 
+  function trapTheaterFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!graphTheaterMode || event.key !== "Tab") {
+      return;
+    }
+
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])",
+    )];
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   if (error) {
     return (
       <main className="shell">
@@ -948,7 +1007,16 @@ export function App() {
       </section>
 
       <section className="workspace">
-        <div className="panel graphPanel">
+        {graphTheaterMode && (
+          <div className="theaterBackdrop" aria-hidden="true" onClick={() => setGraphTheaterMode(false)} />
+        )}
+        <div
+          className={`panel graphPanel${graphTheaterMode ? " theater" : ""}`}
+          role={graphTheaterMode ? "dialog" : undefined}
+          aria-modal={graphTheaterMode ? "true" : undefined}
+          aria-label={graphTheaterMode ? "Interaction Graph theater mode" : undefined}
+          onKeyDown={trapTheaterFocus}
+        >
           <div className="panelHeader">
             <h2>Interaction Graph</h2>
             <div className="graphHeaderControls">
@@ -965,9 +1033,18 @@ export function App() {
                   ))}
                 </select>
               </label>
+              <button
+                className="iconButton theaterToggle"
+                type="button"
+                onClick={() => setGraphTheaterMode((current) => !current)}
+                aria-label={graphTheaterMode ? "Exit graph theater mode" : "Open graph theater mode"}
+                title={graphTheaterMode ? "Exit theater mode (Esc)" : "Open graph theater mode"}
+              >
+                {graphTheaterMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              </button>
             </div>
           </div>
-          <Graph data={displayedGraph} theme={theme} />
+          <Graph data={displayedGraph} theme={theme} theaterMode={graphTheaterMode} />
         </div>
 
         <div className="panel counterpartyPanel">
