@@ -2,12 +2,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   App,
+  aggregateCounterparties,
   counterpartyNodeSize,
   etherscanAddressUrl,
   etherscanTokenUrl,
   etherscanTransactionUrl,
   interactionEdgeLabel,
 } from "../src/App";
+import type { CounterpartySummary } from "../src/data";
 
 const graph = {
   nodes: [
@@ -38,19 +40,44 @@ const summaries = {
       metadata_source: "manual",
       metadata_source_url: "https://example.com/usdc",
       token_label_reason: "Canonical metadata",
-      direction: "in",
+      token_reputation: "trusted",
+      token_reputation_score: 0,
+      token_reputation_reasons: "curated_registry",
       transfer_count: 1,
+      inbound_transfer_count: 1,
+      outbound_transfer_count: 0,
+      counterparty_count: 1,
+      sender_account_count: 1,
+      recipient_account_count: 0,
       amount_decimal_sum: 125,
       value_raw_sum: "125000000",
     },
     {
       wallet_id: "vitalik", wallet_address: "0x1", token_address: "0x3", token_symbol: "SPAM",
       token_name: "Spam Token", token_decimals: 18, token_status: "spam", metadata_source: "manual",
-      metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam", direction: "in",
-      transfer_count: 1, amount_decimal_sum: 1, value_raw_sum: "1000000000000000000",
+      metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
+      token_reputation: "spam", token_reputation_score: 100, token_reputation_reasons: "reviewed_spam",
+      transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
+      counterparty_count: 1, sender_account_count: 1, recipient_account_count: 0,
+      amount_decimal_sum: 1, value_raw_sum: "1000000000000000000",
     },
   ],
-  counterparties: [],
+  counterparties: [
+    {
+      wallet_id: "vitalik", wallet_address: "0x1",
+      counterparty_address: "0x1111111111111111111111111111111111111111",
+      counterparty_type: "contract", token_status: "trusted", transfer_count: 3,
+      inbound_transfer_count: 2, outbound_transfer_count: 1, token_count: 2,
+      first_seen_at: "2023-11-01T00:00:00+00:00", last_seen_at: "2023-11-14T22:15:00+00:00",
+    },
+    {
+      wallet_id: "vitalik", wallet_address: "0x1",
+      counterparty_address: "0x2222222222222222222222222222222222222222",
+      counterparty_type: "wallet", token_status: "spam", transfer_count: 1,
+      inbound_transfer_count: 1, outbound_transfer_count: 0, token_count: 1,
+      first_seen_at: "2023-11-14T22:16:00+00:00", last_seen_at: "2023-11-14T22:16:00+00:00",
+    },
+  ],
 };
 
 const timeline = [{ wallet_id: "vitalik", wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, amount_decimal_sum: 125, value_raw_sum: "125000000" }];
@@ -95,6 +122,17 @@ const events = [
   },
 ];
 
+const dashboardEvents = [
+  events[0],
+  ...Array.from({ length: 10 }, (_, index) => ({
+    ...events[0],
+    transfer_id: `1-0xextra-${index}`,
+    transaction_hash: `0xextra${index}`,
+    log_index: index + 1,
+  })),
+  events[1],
+];
+
 const metadata = {
   wallet_id: "vitalik",
   ens: "vitalik.eth",
@@ -112,7 +150,7 @@ const metadata = {
   spam_token_count: 1,
   interaction_count: 2,
   token_summary_row_count: 2,
-  counterparty_summary_row_count: 0,
+  counterparty_summary_row_count: 2,
   timeline_row_count: 1,
   first_event_at: "2023-11-14T22:15:00+00:00",
   last_event_at: "2023-11-14T22:15:00+00:00",
@@ -128,12 +166,12 @@ const metadata = {
   exported_event_count: 2,
   exported_interaction_count: 2,
   exported_token_summary_count: 2,
-  exported_counterparty_summary_count: 0,
+  exported_counterparty_summary_count: 2,
   exported_timeline_row_count: 1,
   event_export_limit_per_status: 1000,
   graph_interaction_export_limit_per_status: 250,
   token_summary_export_limit_per_status: 500,
-  counterparty_summary_export_limit: 500,
+  counterparty_ranking_limit_per_status_combination: 50,
   timeline_row_export_limit: 5000,
   is_sampled: false,
 };
@@ -150,6 +188,29 @@ describe("App", () => {
   it("labels graph interactions with token and transfer count", () => {
     expect(interactionEdgeLabel("USDC", 5)).toBe("USDC x5");
     expect(interactionEdgeLabel("DAI", 12_500)).toBe("DAI x12,500");
+  });
+
+  it("aggregates token-status rows into one transfer-ranked counterparty", () => {
+    const base = summaries.counterparties[0] as CounterpartySummary;
+    const rows = aggregateCounterparties([
+      base,
+      {
+        ...base,
+        token_status: "unverified" as const,
+        transfer_count: 2,
+        inbound_transfer_count: 0,
+        outbound_transfer_count: 2,
+        token_count: 1,
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      transfer_count: 5,
+      inbound_transfer_count: 2,
+      outbound_transfer_count: 3,
+      token_count: 3,
+    });
   });
 
   it("builds canonical Etherscan routes", () => {
@@ -170,7 +231,7 @@ describe("App", () => {
               ? timeline
               : path.endsWith("meta.json")
                 ? metadata
-                : events;
+                : dashboardEvents;
 
         return Promise.resolve({ ok: true, json: () => Promise.resolve(payload) });
       }),
@@ -184,23 +245,38 @@ describe("App", () => {
       "href",
       "https://etherscan.io/token/0x2",
     );
-    expect(screen.getByRole("link", { name: "0x1111...1111" })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: "0x1111...1111" })[0]).toHaveAttribute(
       "href",
       "https://etherscan.io/address/0x1111111111111111111111111111111111111111",
     );
-    expect(screen.getByText("contract")).toHaveAttribute(
+    expect(screen.getAllByText("contract")[0]).toHaveAttribute(
       "title",
       "Contract bytecode exists at the pinned Ethereum block",
     );
-    expect(screen.getByRole("link", { name: "View transaction on Etherscan" })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" })[0]).toHaveAttribute(
       "href",
       "https://etherscan.io/tx/0xaaa",
     );
     expect(screen.getByText("Recent Events")).toBeInTheDocument();
+    expect(screen.getByText("Top ERC-20 Counterparties")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "0x111...111" })).toHaveAttribute(
+      "href",
+      "https://etherscan.io/address/0x1111111111111111111111111111111111111111",
+    );
+    expect(screen.getByText("Token Flow")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Senders | Recipients" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Amount In / Out" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
+    expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
     expect(screen.getByLabelText("Maximum graph interactions")).toHaveValue("25");
-    expect(screen.getByText("1 of 1 events")).toBeInTheDocument();
-    expect(screen.getByLabelText("Include spam")).not.toBeChecked();
+    expect(screen.getByText("10 of 11 events")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Include spam")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show less" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(screen.getByText("11 of 11 events")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+    expect(screen.getByText("10 of 11 events")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Status (2)"));
     const trustedStatus = screen.getByRole("checkbox", { name: "trusted" });
     const unverifiedStatus = screen.getByRole("checkbox", { name: "unverified" });
@@ -208,24 +284,23 @@ describe("App", () => {
     const spamStatus = screen.getByRole("checkbox", { name: "spam" });
     expect(trustedStatus).toBeChecked();
     expect(unverifiedStatus).toBeChecked();
-    expect(suspectedStatus).toBeDisabled();
-    expect(spamStatus).toBeDisabled();
+    expect(suspectedStatus).toBeEnabled();
+    expect(suspectedStatus).not.toBeChecked();
+    expect(spamStatus).toBeEnabled();
+    expect(spamStatus).not.toBeChecked();
     fireEvent.click(trustedStatus);
     expect(screen.queryByText("USDC")).not.toBeInTheDocument();
     fireEvent.click(trustedStatus);
     expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Include spam"));
-    expect(suspectedStatus).toBeEnabled();
-    expect(suspectedStatus).toBeChecked();
-    expect(spamStatus).toBeEnabled();
+    fireEvent.click(spamStatus);
     expect(spamStatus).toBeChecked();
     expect(screen.getAllByText("SPAM").length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "contract" } });
-    expect(screen.getByRole("link", { name: "0x1111...1111" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "0x1111...1111" }).length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0x1111" } });
-    expect(screen.getByText("0x1111...1111")).toBeInTheDocument();
+    expect(screen.getAllByText("0x1111...1111").length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0xaaa" } });
     expect(screen.getByText("2 nodes / 1 edges")).toBeInTheDocument();

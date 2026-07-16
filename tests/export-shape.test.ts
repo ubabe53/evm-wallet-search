@@ -26,7 +26,9 @@ describe("dashboard export shape", () => {
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.event_export_limit_per_status * 4);
     expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.graph_interaction_export_limit_per_status * 4);
     expect(metadata.exported_token_summary_count).toBeLessThanOrEqual(metadata.token_summary_export_limit_per_status * 4);
-    expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(metadata.counterparty_summary_export_limit);
+    expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(
+      metadata.counterparty_ranking_limit_per_status_combination * 15 * 4,
+    );
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_export_limit);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.transfer_count);
     expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.interaction_count);
@@ -36,8 +38,35 @@ describe("dashboard export shape", () => {
     expect(graph.edges.length).toBe(metadata.exported_interaction_count * 2);
     expect(typeof summaries.tokens[0].value_raw_sum).toBe("string");
     expect(["trusted", "unverified", "suspected_spam", "spam"]).toContain(summaries.tokens[0].token_status);
-    expect(summaries.tokens.every((row: { token_reputation_score: number; interaction_legitimacy_score: number }) =>
-      row.token_reputation_score >= 0 && row.interaction_legitimacy_score >= 0)).toBe(true);
+    expect(summaries.tokens.every((row: {
+      token_reputation_score: number;
+      transfer_count: number;
+      inbound_transfer_count: number;
+      outbound_transfer_count: number;
+      counterparty_count: number;
+      sender_account_count: number;
+      recipient_account_count: number;
+    }) =>
+      row.token_reputation_score >= 0 &&
+      row.counterparty_count >= 0 &&
+      row.sender_account_count >= 0 &&
+      row.recipient_account_count >= 0 &&
+      row.counterparty_count >= row.sender_account_count &&
+      row.counterparty_count >= row.recipient_account_count &&
+      row.counterparty_count <= row.sender_account_count + row.recipient_account_count &&
+      row.transfer_count === row.inbound_transfer_count + row.outbound_transfer_count)).toBe(true);
+    expect(summaries.counterparties.every((row: {
+      counterparty_address: string;
+      wallet_address: string;
+      token_status: string;
+      transfer_count: number;
+      inbound_transfer_count: number;
+      outbound_transfer_count: number;
+    }) =>
+      row.counterparty_address !== "0x0000000000000000000000000000000000000000" &&
+      row.counterparty_address !== row.wallet_address &&
+      ["trusted", "unverified", "suspected_spam", "spam"].includes(row.token_status) &&
+      row.transfer_count === row.inbound_transfer_count + row.outbound_transfer_count)).toBe(true);
     expect(graph.edges.every((edge: { data: { tokenStatus: string } }) =>
       ["trusted", "unverified", "suspected_spam", "spam"].includes(edge.data.tokenStatus))).toBe(true);
     expect(metadata.non_spam_transfer_count + metadata.spam_transfer_count).toBe(metadata.transfer_count);

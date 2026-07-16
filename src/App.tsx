@@ -5,6 +5,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   ChevronDown,
+  ChevronUp,
   Database,
   ExternalLink,
   Moon,
@@ -14,12 +15,14 @@ import {
   Sun,
   type LucideIcon,
 } from "lucide-react";
-import { AddressType, DashboardData, DashboardGraph, GraphEdge, loadDashboardData, TokenStatus, TokenSummary, WalletEvent } from "./data";
+import { AddressType, CounterpartySummary, DashboardData, DashboardGraph, GraphEdge, loadDashboardData, TokenStatus, TokenSummary, WalletEvent } from "./data";
 
 type Theme = "light" | "dark";
 const EVENT_PAGE_SIZE = 10;
 const DEFAULT_GRAPH_INTERACTION_LIMIT = 25;
 const GRAPH_INTERACTION_LIMITS = [10, 25, 50, 100] as const;
+const DEFAULT_COUNTERPARTY_LIMIT = 10;
+const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
 const TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified", "suspected_spam", "spam"];
 const DEFAULT_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -66,11 +69,46 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function compactAddress(address: string): string {
+  return `${address.slice(0, 5)}...${address.slice(-3)}`;
+}
+
 function amountLabel(value: number | null | undefined): string {
   if (value == null) {
-    return "raw only";
+    return "amount unavailable";
   }
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value);
+}
+
+type RankedCounterparty = Omit<CounterpartySummary, "token_status">;
+
+export function aggregateCounterparties(rows: CounterpartySummary[]): RankedCounterparty[] {
+  const grouped = new Map<string, RankedCounterparty>();
+
+  for (const row of rows) {
+    const existing = grouped.get(row.counterparty_address);
+    if (!existing) {
+      const { token_status: _tokenStatus, ...summary } = row;
+      grouped.set(row.counterparty_address, { ...summary });
+      continue;
+    }
+
+    existing.transfer_count += row.transfer_count;
+    existing.inbound_transfer_count += row.inbound_transfer_count;
+    existing.outbound_transfer_count += row.outbound_transfer_count;
+    existing.token_count += row.token_count;
+    existing.first_seen_at = existing.first_seen_at < row.first_seen_at ? existing.first_seen_at : row.first_seen_at;
+    existing.last_seen_at = existing.last_seen_at > row.last_seen_at ? existing.last_seen_at : row.last_seen_at;
+    if (existing.counterparty_type === "unknown" && row.counterparty_type !== "unknown") {
+      existing.counterparty_type = row.counterparty_type;
+    }
+  }
+
+  return [...grouped.values()].sort((left, right) =>
+    right.transfer_count - left.transfer_count ||
+    right.last_seen_at.localeCompare(left.last_seen_at) ||
+    left.counterparty_address.localeCompare(right.counterparty_address),
+  );
 }
 
 export function counterpartyNodeSize(transferCount: number): number {
@@ -392,9 +430,9 @@ function TokenTable({ rows }: { rows: TokenSummary[] }) {
         <tr>
           <th>Token</th>
           <th>Status</th>
-          <th>Direction</th>
           <th>Transfers</th>
-          <th>Amount</th>
+          <th>Senders | Recipients</th>
+          <th>Counterparties</th>
         </tr>
       </thead>
       <tbody>
@@ -404,7 +442,7 @@ function TokenTable({ rows }: { rows: TokenSummary[] }) {
           </tr>
         )}
         {rows.map((row) => (
-          <tr key={`${row.token_address}-${row.direction}`}>
+          <tr key={row.token_address}>
             <td>
               <EtherscanLink
                 className="etherscanLink"
@@ -419,17 +457,19 @@ function TokenTable({ rows }: { rows: TokenSummary[] }) {
               source={row.metadata_source}
               reputationScore={row.token_reputation_score}
               reputationReasons={row.token_reputation_reasons}
-              interactionScore={row.interaction_legitimacy_score}
-              interactionReasons={row.interaction_legitimacy_reasons}
             /></td>
+            <td>{row.transfer_count.toLocaleString("en-US")}</td>
             <td>
-              <span className={`direction ${row.direction}`}>
-                {row.direction === "in" ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                {row.direction}
+              <span
+                className="flowIndicator"
+                title={`${row.sender_account_count.toLocaleString("en-US")} distinct non-zero sender accounts, ${row.recipient_account_count.toLocaleString("en-US")} distinct non-zero recipient accounts`}
+              >
+                <span className="direction in"><ArrowDownLeft size={13} />{row.sender_account_count.toLocaleString("en-US")}</span>
+                <i aria-hidden="true">|</i>
+                <span className="direction out"><ArrowUpRight size={13} />{row.recipient_account_count.toLocaleString("en-US")}</span>
               </span>
             </td>
-            <td>{row.transfer_count}</td>
-            <td>{amountLabel(row.amount_decimal_sum)}</td>
+            <td>{row.counterparty_count.toLocaleString("en-US")}</td>
           </tr>
         ))}
       </tbody>
@@ -437,8 +477,74 @@ function TokenTable({ rows }: { rows: TokenSummary[] }) {
   );
 }
 
-function EventList({ events, limit, onShowMore }: { events: WalletEvent[]; limit: number; onShowMore: () => void }) {
+function CounterpartyTable({ rows }: { rows: RankedCounterparty[] }) {
+  return (
+    <table className="counterpartyTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Account</th>
+          <th>Activity</th>
+          <th title="ERC-20 transfer-event counts relative to the tracked wallet">Amount In / Out</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td className="tableEmpty" colSpan={4}>No counterparties match</td>
+          </tr>
+        )}
+        {rows.map((row, index) => (
+          <tr key={row.counterparty_address}>
+            <td className="rankCell">{index + 1}</td>
+            <td className="accountCell">
+              <div>
+                <EtherscanLink
+                  className="addressLink"
+                  href={etherscanAddressUrl(row.counterparty_address)}
+                  title={`View ${row.counterparty_address} on Etherscan`}
+                >
+                  <code>{compactAddress(row.counterparty_address)}</code>
+                </EtherscanLink>
+                <AddressTypeBadge type={row.counterparty_type} />
+              </div>
+              <small>Last active {new Date(row.last_seen_at).toLocaleDateString()}</small>
+            </td>
+            <td className="activityCell">
+              <strong>{row.transfer_count.toLocaleString("en-US")}</strong>
+              <small>{row.token_count.toLocaleString("en-US")} {row.token_count === 1 ? "token" : "tokens"}</small>
+            </td>
+            <td>
+              <span
+                className="flowIndicator"
+                title={`${row.inbound_transfer_count.toLocaleString("en-US")} inbound, ${row.outbound_transfer_count.toLocaleString("en-US")} outbound transfers`}
+              >
+                <span className="direction in"><ArrowDownLeft size={13} />{row.inbound_transfer_count.toLocaleString("en-US")}</span>
+                <i aria-hidden="true">|</i>
+                <span className="direction out"><ArrowUpRight size={13} />{row.outbound_transfer_count.toLocaleString("en-US")}</span>
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function EventList({
+  events,
+  limit,
+  onShowMore,
+  onShowLess,
+}: {
+  events: WalletEvent[];
+  limit: number;
+  onShowMore: () => void;
+  onShowLess: () => void;
+}) {
   const visibleEvents = events.slice(0, limit);
+  const canShowLess = limit > EVENT_PAGE_SIZE && events.length > EVENT_PAGE_SIZE;
+  const canShowMore = visibleEvents.length < events.length;
 
   return (
     <div className="events">
@@ -490,11 +596,21 @@ function EventList({ events, limit, onShowMore }: { events: WalletEvent[]; limit
           </div>
         </article>
       ))}
-      {visibleEvents.length < events.length && (
-        <button className="showMore" type="button" onClick={onShowMore}>
-          <ChevronDown size={16} />
-          Show more
-        </button>
+      {(canShowLess || canShowMore) && (
+        <div className="eventControls">
+          {canShowLess && (
+            <button className="eventPageButton" type="button" onClick={onShowLess}>
+              <ChevronUp size={16} />
+              Show less
+            </button>
+          )}
+          {canShowMore && (
+            <button className="eventPageButton" type="button" onClick={onShowMore}>
+              <ChevronDown size={16} />
+              Show more
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -506,7 +622,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [eventLimit, setEventLimit] = useState(EVENT_PAGE_SIZE);
   const [graphInteractionLimit, setGraphInteractionLimit] = useState(DEFAULT_GRAPH_INTERACTION_LIMIT);
-  const [includeSpam, setIncludeSpam] = useState(false);
+  const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
   const [selectedStatuses, setSelectedStatuses] = useState<TokenStatus[]>(DEFAULT_TOKEN_STATUSES);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("theme");
@@ -532,19 +648,19 @@ export function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, includeSpam, selectedStatuses]);
+  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, selectedStatuses]);
+  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [data, query, selectedStatuses]);
 
   const filtered = useMemo(() => {
     if (!data) {
       return null;
     }
 
-    const isSpamLike = (status: TokenSummary["token_status"]) =>
-      status === "suspected_spam" || status === "spam";
     const statusVisible = (status: TokenSummary["token_status"]) =>
-      selectedStatuses.includes(status) && (includeSpam || !isSpamLike(status));
+      selectedStatuses.includes(status);
     const visibleEvents = data.events.filter((event) => statusVisible(event.token_status));
     const visibleTokens = data.summaries.tokens.filter((row) => statusVisible(row.token_status));
+    const visibleCounterparties = data.summaries.counterparties.filter((row) => statusVisible(row.token_status));
     const visibleGraphEdges = data.graph.edges.filter((edge) => statusVisible(edge.data.tokenStatus));
     const visibleNodeIds = new Set(visibleGraphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
     const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
@@ -553,7 +669,7 @@ export function App() {
       ...data,
       events: visibleEvents,
       graph: { nodes: visibleGraphNodes, edges: visibleGraphEdges },
-      summaries: { ...data.summaries, tokens: visibleTokens },
+      summaries: { tokens: visibleTokens, counterparties: visibleCounterparties },
       timeline: visibleTimeline,
     };
 
@@ -581,21 +697,20 @@ export function App() {
         event.interaction_legitimacy,
         event.interaction_legitimacy_reasons,
         event.metadata_source,
-        event.value_raw,
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const tokenMatches = (row: TokenSummary) =>
-      [row.token_symbol, row.token_name, row.token_address, row.direction, row.token_status, row.metadata_source,
-        row.token_reputation, row.token_reputation_reasons, row.interaction_legitimacy, row.interaction_legitimacy_reasons]
+      [row.token_symbol, row.token_name, row.token_address, row.token_status, row.metadata_source,
+        row.token_reputation, row.token_reputation_reasons]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const events = visibleData.events.filter(eventMatches);
     const directlyMatchedTokens = visibleData.summaries.tokens.filter(tokenMatches);
-    const directlyMatchedCounterparties = data.summaries.counterparties.filter((row) =>
-      [row.counterparty_address, row.counterparty_type, row.direction]
+    const directlyMatchedCounterparties = visibleData.summaries.counterparties.filter((row) =>
+      [row.counterparty_address, row.counterparty_type, row.token_status]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
 
@@ -619,7 +734,7 @@ export function App() {
     const tokens = visibleData.summaries.tokens.filter(
       (row) => tokenAddresses.has(row.token_address) || tokenMatches(row),
     );
-    const counterparties = data.summaries.counterparties.filter(
+    const counterparties = visibleData.summaries.counterparties.filter(
       (row) => counterpartyAddresses.has(row.counterparty_address),
     );
 
@@ -650,7 +765,12 @@ export function App() {
             .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
       ),
     };
-  }, [data, includeSpam, query, selectedStatuses]);
+  }, [data, query, selectedStatuses]);
+
+  const rankedCounterparties = useMemo(
+    () => filtered ? aggregateCounterparties(filtered.summaries.counterparties) : [],
+    [filtered],
+  );
 
   const stats = useMemo(() => {
     if (!filtered || !data) {
@@ -780,21 +900,6 @@ export function App() {
           </div>
         </div>
         <div className="toolbar">
-          <label className="spamToggle">
-            <input
-              type="checkbox"
-              checked={includeSpam}
-              onChange={(event) => {
-                const checked = event.target.checked;
-                setIncludeSpam(checked);
-                setSelectedStatuses((current) => checked
-                  ? [...current.filter((status) => status !== "suspected_spam" && status !== "spam"), "suspected_spam", "spam"]
-                  : current.filter((status) => status !== "suspected_spam" && status !== "spam"));
-              }}
-            />
-            <span className="toggleTrack" aria-hidden="true"><i /></span>
-            Include spam
-          </label>
           <details className="statusFilter">
             <summary>
               Status ({selectedStatuses.length})
@@ -806,7 +911,6 @@ export function App() {
                   <input
                     type="checkbox"
                     checked={selectedStatuses.includes(status)}
-                    disabled={(status === "suspected_spam" || status === "spam") && !includeSpam}
                     onChange={(event) => setSelectedStatuses((current) => event.target.checked
                       ? [...current.filter((value) => value !== status), status]
                       : current.filter((value) => value !== status))}
@@ -866,13 +970,27 @@ export function App() {
           <Graph data={displayedGraph} theme={theme} />
         </div>
 
-        <div className="panel">
+        <div className="panel counterpartyPanel">
           <div className="panelHeader">
-            <h2>Token Flow</h2>
-            <span>{filtered.summaries.tokens.length} rows</span>
+            <div className="panelTitle">
+              <h2>Top ERC-20 Counterparties</h2>
+              <p>Direct transfers; mint/burn, self, and token contracts excluded.</p>
+            </div>
+            <label className="graphLimit">
+              <span>Top</span>
+              <select
+                aria-label="Maximum counterparties"
+                value={counterpartyLimit}
+                onChange={(event) => setCounterpartyLimit(Number(event.target.value))}
+              >
+                {COUNTERPARTY_LIMITS.map((limit) => (
+                  <option key={limit} value={limit}>{limit}</option>
+                ))}
+              </select>
+            </label>
           </div>
-          <div className="tokenTableScroll">
-            <TokenTable rows={filtered.summaries.tokens} />
+          <div className="counterpartyTableScroll">
+            <CounterpartyTable rows={rankedCounterparties.slice(0, counterpartyLimit)} />
           </div>
         </div>
       </section>
@@ -888,7 +1006,21 @@ export function App() {
           events={filtered.events}
           limit={eventLimit}
           onShowMore={() => setEventLimit((current) => current + EVENT_PAGE_SIZE)}
+          onShowLess={() => setEventLimit((current) => Math.max(EVENT_PAGE_SIZE, current - EVENT_PAGE_SIZE))}
         />
+      </section>
+
+      <section className="panel lowerPanel">
+        <div className="panelHeader">
+          <div className="panelTitle">
+            <h2>Token Flow</h2>
+            <p>One row per token across inbound and outbound transfers.</p>
+          </div>
+          <span>{filtered.summaries.tokens.length} tokens</span>
+        </div>
+        <div className="tokenTableScroll compact">
+          <TokenTable rows={filtered.summaries.tokens} />
+        </div>
       </section>
     </main>
   );

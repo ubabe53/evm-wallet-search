@@ -59,7 +59,7 @@ export type DashboardGraph = {
   edges: GraphEdge[];
 };
 
-export type TokenSummary = ClassificationEvidence & {
+export type TokenSummary = {
   wallet_id: string;
   wallet_address: string;
   token_address: string;
@@ -70,8 +70,15 @@ export type TokenSummary = ClassificationEvidence & {
   metadata_source: string | null;
   metadata_source_url: string | null;
   token_label_reason: string | null;
-  direction: "in" | "out";
+  token_reputation: TokenReputation;
+  token_reputation_score: number;
+  token_reputation_reasons: string;
   transfer_count: number;
+  inbound_transfer_count: number;
+  outbound_transfer_count: number;
+  counterparty_count: number;
+  sender_account_count: number;
+  recipient_account_count: number;
   amount_decimal_sum: number | null;
   value_raw_sum: string;
 };
@@ -81,8 +88,10 @@ export type CounterpartySummary = {
   wallet_address: string;
   counterparty_address: string;
   counterparty_type: AddressType;
-  direction: "in" | "out";
+  token_status: TokenStatus;
   transfer_count: number;
+  inbound_transfer_count: number;
+  outbound_transfer_count: number;
   token_count: number;
   first_seen_at: string;
   last_seen_at: string;
@@ -166,7 +175,7 @@ export type PipelineMetadata = {
   event_export_limit_per_status: number;
   graph_interaction_export_limit_per_status: number;
   token_summary_export_limit_per_status: number;
-  counterparty_summary_export_limit: number;
+  counterparty_ranking_limit_per_status_combination: number;
   timeline_row_export_limit: number;
   is_sampled: boolean;
 };

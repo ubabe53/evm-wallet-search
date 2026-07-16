@@ -49,7 +49,7 @@ Each manual `suspected_spam` or `spam` entry must include a reason and evidence 
 
 Classification runs during every dbt build and makes no network calls. Inspect contract-level evidence in `int_token_reputation`, wallet-token behavior in `int_wallet_token_interactions`, and the effective event status in `wallet_events`. Scores, reason codes, and classifier versions are exported to the dashboard; hovering a suspected badge displays the evidence.
 
-The Include spam control hides or reveals both `suspected_spam` and reviewed `spam`. The Status menu can then select either independently. To change a threshold or reason rule, update the corresponding intermediate model, its version string, dbt tests, and `docs/architecture.md` in the same change.
+The Status menu independently controls visibility for `trusted`, `unverified`, `suspected_spam`, and reviewed `spam`; trusted and unverified are selected by default. To change a threshold or reason rule, update the corresponding intermediate model, its version string, dbt tests, and `docs/architecture.md` in the same change.
 
 ## RPC Metadata Enrichment
 
@@ -119,7 +119,7 @@ This creates:
 - `public/data/events.json`
 - `public/data/meta.json`
 
-The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status; 500 counterparties and 5,000 timeline rows overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for full status-combination counts, complete and exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
+The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status. Counterparty export takes the union of the exact top 50 addresses for all 15 non-empty status combinations and includes every status row for those candidates; timeline rows are capped at 5,000 overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for full status-combination counts, complete and exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
 
 ## Verification
 

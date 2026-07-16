@@ -163,6 +163,7 @@ models:
         tests:
           - not_null
   - name: token_summary
+    description: One row per wallet and ERC20 token, aggregating inbound and outbound transfer events without mixing token units.
     columns:
       - name: wallet_address
         tests:
@@ -176,12 +177,43 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: inbound_transfer_count
+        tests:
+          - not_null
+      - name: outbound_transfer_count
+        tests:
+          - not_null
+      - name: counterparty_count
+        tests:
+          - not_null
+      - name: sender_account_count
+        tests:
+          - not_null
+      - name: recipient_account_count
+        tests:
+          - not_null
   - name: counterparty_summary
+    description: Eligible direct ERC20 counterparties by wallet, token status, and address; excludes mint/burn, self, and token-contract addresses.
     columns:
       - name: wallet_address
         tests:
           - not_null
       - name: counterparty_address
+        tests:
+          - not_null
+      - name: token_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: transfer_count
+        tests:
+          - not_null
+      - name: inbound_transfer_count
+        tests:
+          - not_null
+      - name: outbound_transfer_count
         tests:
           - not_null
   - name: timeline_daily

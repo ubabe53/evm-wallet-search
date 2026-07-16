@@ -27,9 +27,9 @@ The static export contains at most 250 ranked interactions, while the dashboard 
 
 Each exported interaction also carries the counterparty's complete wallet-level ERC20 transfer count across tokens and directions. The client uses a fixed base-10 logarithmic scale: 1 transfer is 26px, each tenfold increase adds 10.5px, and 10,000 or more caps at 68px. Sizing therefore remains based on full indexed history and stays stable across interaction limits, searches, and status filters.
 
-The Ethereum zero address is excluded only from the rendered interaction graph because it represents token mint/burn mechanics rather than a navigable counterparty. Its transfers remain in `wallet_events`, summaries, totals, and recent-event JSON so analytics counts stay complete.
+The Ethereum zero address is excluded from the rendered interaction graph and the ranked counterparty summary because it represents token mint/burn mechanics rather than a navigable counterparty. The ranked summary also excludes the configured wallet itself and addresses observed as ERC20 token contracts. Their transfers remain in `wallet_events`, token summaries, totals, and recent-event JSON so the underlying analytics stay complete.
 
-The token-flow panel has a 13-row viewport with a sticky header and scrolling. Recent events are paginated client-side in groups of 10.
+The Top ERC-20 Counterparties panel ranks the sheer number of transfer events—not distinct transactions—and aggregates selected token-status rows into one address. It shows address type, token breadth, `Amount In / Out` event counts, and recency. The token-flow panel sits below recent events and combines both directions into one row per token. Its `Senders | Recipients` indicator counts distinct non-zero, non-self event counterparties rather than directional event frequency; raw token amounts are not presented. Recent events are paginated client-side in groups of 10.
 
 Theme changes update the existing Cytoscape stylesheet in place. They do not recreate the graph or rerun its layout, so node positions, pan, and zoom remain stable. The graph container owns explicit light and dark palette variables to prevent effect-order races from applying the previous theme's label color.
 
@@ -62,10 +62,10 @@ The live wallet history is much larger than a useful in-browser graph. The expor
 - The 1,000 newest transfer events per token status.
 - Both edge legs for the top 250 interactions per token status, ranked by transfer count then recency.
 - Only the endpoint nodes used by those graph edges.
-- The top 500 token summary rows per status and top 500 counterparty rows overall.
+- The top 500 token summary rows per status, plus the union of address candidates needed to calculate the exact top 50 counterparties for every non-empty status combination.
 - The 5,000 newest daily timeline rows, written back in chronological order.
 
-Combined status-balanced rows are sorted globally after selection, preserving activity and recency ordering. These bounds affect only `public/data/*.json`. dbt models in `analytics/wallet_analytics.duckdb` retain the complete indexed dataset and remain the source for full-history analysis.
+Combined status-balanced rows are sorted globally after selection, preserving activity and recency ordering. Counterparty candidates are ranked by their combined transfer-event count before limiting, then every status row for each selected address is exported so browser-side filtering can reconstruct the same ranking. These bounds affect only `public/data/*.json`. dbt models in `analytics/wallet_analytics.duckdb` retain the complete indexed dataset and remain the source for full-history analysis.
 
 ## Scope Boundaries
 

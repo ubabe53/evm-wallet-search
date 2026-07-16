@@ -26,8 +26,9 @@ PUBLIC_DATA = ROOT / "public" / "data"
 EVENT_LIMIT_PER_STATUS = 1_000
 GRAPH_INTERACTION_LIMIT_PER_STATUS = 250
 TOKEN_SUMMARY_LIMIT_PER_STATUS = 500
-COUNTERPARTY_SUMMARY_LIMIT = 500
+COUNTERPARTY_RANKING_LIMIT_PER_STATUS_COMBINATION = 50
 TIMELINE_ROW_LIMIT = 5_000
+TOKEN_STATUSES = ("trusted", "unverified", "suspected_spam", "spam")
 
 
 def ensure_duckdb() -> Any:
@@ -210,6 +211,48 @@ def graph_rows(connection: Any) -> tuple[list[dict[str, Any]], list[dict[str, An
     return nodes, edges
 
 
+def counterparty_rows(
+    connection: Any,
+    statuses: tuple[str, ...] = TOKEN_STATUSES,
+    ranking_limit: int = COUNTERPARTY_RANKING_LIMIT_PER_STATUS_COMBINATION,
+) -> list[dict[str, Any]]:
+    """Export the rows needed for an exact top-N ranking for every status selection."""
+
+    candidate_addresses: set[str] = set()
+    for mask in range(1, 1 << len(statuses)):
+        selected = [status for index, status in enumerate(statuses) if mask & (1 << index)]
+        placeholders = ", ".join("?" for _ in selected)
+        candidates = query_rows(
+            connection,
+            f"""
+              select counterparty_address
+              from counterparty_summary
+              where token_status in ({placeholders})
+              group by counterparty_address
+              order by sum(transfer_count) desc, max(last_seen_at) desc, counterparty_address
+              limit {ranking_limit}
+            """,
+            selected,
+        )
+        candidate_addresses.update(row["counterparty_address"] for row in candidates)
+
+    if not candidate_addresses:
+        return []
+
+    ordered_addresses = sorted(candidate_addresses)
+    placeholders = ", ".join("?" for _ in ordered_addresses)
+    return query_rows(
+        connection,
+        f"""
+          select *
+          from counterparty_summary
+          where counterparty_address in ({placeholders})
+          order by transfer_count desc, last_seen_at desc, counterparty_address, token_status
+        """,
+        ordered_addresses,
+    )
+
+
 def main() -> None:
     if not DB_PATH.exists():
         subprocess.run([sys.executable, str(ROOT / "scripts" / "run_dbt.py"), "build"], check=True)
@@ -241,20 +284,15 @@ def main() -> None:
               from (
                 select *, row_number() over (
                   partition by token_status
-                  order by transfer_count desc, token_symbol, direction
+                  order by transfer_count desc, token_symbol, token_address
                 ) as status_rank
                 from token_summary
               )
               where status_rank <= {TOKEN_SUMMARY_LIMIT_PER_STATUS}
-              order by transfer_count desc, token_symbol, direction
+              order by transfer_count desc, token_symbol, token_address
             """,
         )
-        counterparty_summaries = rows(
-            connection,
-            "counterparty_summary",
-            "transfer_count desc, last_seen_at desc, counterparty_address",
-            COUNTERPARTY_SUMMARY_LIMIT,
-        )
+        counterparty_summaries = counterparty_rows(connection)
         timeline = query_rows(
             connection,
             f"""
@@ -281,10 +319,9 @@ def main() -> None:
             """,
         )[0]
 
-        statuses = ("trusted", "unverified", "suspected_spam", "spam")
         status_counts: dict[str, dict[str, int]] = {}
-        for mask in range(1, 1 << len(statuses)):
-            selected = [status for index, status in enumerate(statuses) if mask & (1 << index)]
+        for mask in range(1, 1 << len(TOKEN_STATUSES)):
+            selected = [status for index, status in enumerate(TOKEN_STATUSES) if mask & (1 << index)]
             placeholders = ", ".join("?" for _ in selected)
             metrics = query_rows(
                 connection,
@@ -312,7 +349,7 @@ def main() -> None:
             "event_export_limit_per_status": EVENT_LIMIT_PER_STATUS,
             "graph_interaction_export_limit_per_status": GRAPH_INTERACTION_LIMIT_PER_STATUS,
             "token_summary_export_limit_per_status": TOKEN_SUMMARY_LIMIT_PER_STATUS,
-            "counterparty_summary_export_limit": COUNTERPARTY_SUMMARY_LIMIT,
+            "counterparty_ranking_limit_per_status_combination": COUNTERPARTY_RANKING_LIMIT_PER_STATUS_COMBINATION,
             "timeline_row_export_limit": TIMELINE_ROW_LIMIT,
         }
         meta["is_sampled"] = export_is_sampled(meta)

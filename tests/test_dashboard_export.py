@@ -7,6 +7,47 @@ import scripts.export_dashboard as dashboard_export
 
 
 class DashboardExportTest(unittest.TestCase):
+    def test_counterparty_candidates_cover_combined_status_rankings(self) -> None:
+        duckdb = dashboard_export.ensure_duckdb()
+        connection = duckdb.connect(":memory:")
+        try:
+            connection.execute(
+                """
+                create table counterparty_summary (
+                    counterparty_address varchar,
+                    token_status varchar,
+                    transfer_count integer,
+                    last_seen_at timestamp
+                )
+                """
+            )
+            connection.executemany(
+                "insert into counterparty_summary values (?, ?, ?, ?)",
+                [
+                    ("0xaaa", "trusted", 90, "2024-01-01"),
+                    ("0xaaa", "unverified", 90, "2024-01-01"),
+                    ("0xbbb", "trusted", 100, "2024-01-02"),
+                    ("0xccc", "unverified", 100, "2024-01-02"),
+                ],
+            )
+
+            exported = dashboard_export.counterparty_rows(
+                connection,
+                statuses=("trusted", "unverified"),
+                ranking_limit=1,
+            )
+        finally:
+            connection.close()
+
+        exported_addresses = [row["counterparty_address"] for row in exported]
+        self.assertEqual(exported_addresses.count("0xaaa"), 2)
+        combined_counts: dict[str, int] = {}
+        for row in exported:
+            combined_counts[row["counterparty_address"]] = (
+                combined_counts.get(row["counterparty_address"], 0) + row["transfer_count"]
+            )
+        self.assertEqual(max(combined_counts, key=combined_counts.get), "0xaaa")
+
     def test_sampling_covers_every_bounded_export(self) -> None:
         metadata = {
             "exported_event_count": 10,

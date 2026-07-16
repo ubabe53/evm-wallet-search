@@ -84,13 +84,17 @@ Graph edges carry effective status, metadata provenance, and both evidence layer
 
 ### `token_summary`
 
-Transfer counts and token-flow totals by wallet, token, and direction.
+One row per wallet and token across inbound and outbound activity. It records total, inbound, and outbound ERC20 transfer-event counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
 
-`amount_decimal_sum` is null when token metadata is missing, so the dashboard can show that only raw units are available instead of implying a decimal-adjusted zero. `value_raw_sum` uses DuckDB `BIGNUM` and is serialized as a JSON string to preserve integer precision beyond JavaScript's safe-number range.
+`sender_account_count` counts distinct non-zero, non-self counterparties on inbound events. `recipient_account_count` applies the same exclusions on outbound events. `counterparty_count` is their distinct union, so it must not be calculated by adding the other two counts. These are event-address roles, not proof of human wallets or transaction initiation.
+
+`amount_decimal_sum` is null when token metadata is missing rather than implying a decimal-adjusted zero. `value_raw_sum` uses DuckDB `BIGNUM` and is serialized as a JSON string to preserve integer precision beyond JavaScript's safe-number range. Both fields remain in the data contract, but the current dashboard table does not display amounts.
 
 ### `counterparty_summary`
 
-Counts and first/last seen timestamps by wallet, counterparty, and direction.
+One row per wallet, eligible counterparty, address type, and effective token status. `transfer_count` is the sheer number of ERC20 `Transfer` events, not a distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-token count and first/last timestamps.
+
+The ranking-serving mart excludes the zero address, the tracked wallet itself, and any counterparty address observed as an ERC20 token contract in the indexed wallet dataset. These exclusions do not delete rows from `wallet_events` or alter token totals.
 
 ### `timeline_daily`
 
@@ -100,7 +104,7 @@ Daily transfer counts and token-flow aggregates by wallet, token, and direction.
 
 One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, and first/last event timestamps.
 
-The exporter enriches this row in `meta.json` with complete token-summary and counterparty-summary row counts; per-status event, interaction, and token-summary limits; global limits for other files; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. `is_sampled` covers every bounded export, including both summary files. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard status-filter statistics. The JSON subsets do not change any dbt mart grain.
+The exporter enriches this row in `meta.json` with complete token-summary and counterparty-summary row counts; per-status event, interaction, and token-summary limits; the per-status-combination counterparty ranking limit; the global timeline limit; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. Counterparty candidate selection ranks combined address activity before limiting and exports every status row for each candidate, preserving exact top-50 browser rankings for every status combination. `is_sampled` covers every bounded export, including both summary files. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard status-filter statistics. The JSON subsets do not change any dbt mart grain.
 
 ## Tests
 
@@ -117,6 +121,7 @@ dbt tests enforce:
 - Manual override precedence and unverified fallback behavior.
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.
 - Exact graph counterparty transfer counts across tokens and directions.
+- Counterparty-summary totals that reconcile with inbound plus outbound counts, with ranking exclusions enforced.
 - Classification scores constrained to 0-100 with non-empty reasons.
 - Manual-spam, automated-suspicion, and trusted-status precedence.
 - Valid pinned-block address types, fetch statuses, and bytecode-size consistency.

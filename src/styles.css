@@ -172,56 +172,6 @@ h2 {
   gap: 8px;
 }
 
-.spamToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.spamToggle input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.toggleTrack {
-  display: inline-flex;
-  align-items: center;
-  width: 34px;
-  height: 20px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--control-bg);
-  padding: 2px;
-  transition: background 140ms ease;
-}
-
-.toggleTrack i {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--muted);
-  transition: transform 140ms ease, background 140ms ease;
-}
-
-.spamToggle input:checked + .toggleTrack {
-  background: var(--spam-bg);
-}
-
-.spamToggle input:checked + .toggleTrack i {
-  background: var(--spam);
-  transform: translateX(14px);
-}
-
-.spamToggle input:focus-visible + .toggleTrack {
-  outline: 2px solid var(--graph-wallet);
-  outline-offset: 2px;
-}
-
 .statusFilter {
   position: relative;
 }
@@ -357,7 +307,7 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(420px, 0.95fr);
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -376,6 +326,17 @@ h2 {
   gap: 12px;
   border-bottom: 1px solid var(--subtle-border);
   padding: 14px 16px;
+}
+
+.panelTitle {
+  min-width: 0;
+}
+
+.panelTitle p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .graphHeaderControls,
@@ -511,6 +472,88 @@ table {
 .tokenTableScroll {
   height: 520px;
   overflow: auto;
+}
+
+.tokenTableScroll.compact {
+  height: auto;
+  max-height: 420px;
+}
+
+.counterpartyTableScroll {
+  height: 520px;
+  overflow: auto;
+}
+
+.counterpartyTable {
+  min-width: 450px;
+}
+
+.counterpartyTableScroll th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel-bg);
+}
+
+.counterpartyTable td {
+  height: 52px;
+  padding-right: 10px;
+  padding-left: 10px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.counterpartyTable th {
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.rankCell {
+  width: 34px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.numericCell {
+  font-variant-numeric: tabular-nums;
+}
+
+.accountCell > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.accountCell small,
+.activityCell small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.activityCell strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.flowIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.flowIndicator > i {
+  color: var(--border);
+  font-style: normal;
+}
+
+.flowIndicator .direction {
+  min-width: 0;
+}
+
+.lowerPanel {
+  margin-top: 16px;
 }
 
 .tokenTableScroll th {
@@ -701,21 +744,29 @@ code {
   color: var(--code-text);
 }
 
-.showMore {
+.eventControls {
+  display: flex;
+  border-top: 1px solid var(--row-border);
+}
+
+.eventPageButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 100%;
+  flex: 1;
   border: 0;
-  border-top: 1px solid var(--row-border);
   background: var(--control-bg);
   padding: 11px 16px;
   color: var(--text);
   cursor: pointer;
 }
 
-.showMore:hover {
+.eventPageButton + .eventPageButton {
+  border-left: 1px solid var(--row-border);
+}
+
+.eventPageButton:hover {
   background: var(--page-bg);
 }
 
