@@ -8,6 +8,7 @@ where (token_reputation = 'spam' and token_status != 'spam')
   )
   or (
     token_quality = 'high_confidence'
+    and token_reputation not in ('spam', 'suspected_spam')
     and interaction_legitimacy != 'suspicious'
     and token_status != 'trusted'
   )

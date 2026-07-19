@@ -1292,7 +1292,7 @@ export function App() {
                   <span className={`accountType ${accountType}`}>{ACCOUNT_LABELS[accountType]}</span>
                 </label>
               ))}
-              <small>Applies to account-dependent views. Safe and ERC-4337 evidence can overlap.</small>
+              <small>Applies to every view. Safe and ERC-4337 evidence can overlap without double counting.</small>
             </div>
           </details>
           <details className="statusFilter">
