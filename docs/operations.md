@@ -78,7 +78,7 @@ Collect pinned account evidence for the next 500 high-activity counterparties:
 bun run addresses:enrich --limit 500
 ```
 
-The command ranks eligible counterparties by complete ERC-20 transfer count, verifies Ethereum mainnet, pins one block and timestamp, and writes `analytics/seeds/counterparty_code_metadata.csv` atomically. It batches `eth_getCode`, Safe storage/interface reads, and filtered `UserOperationEvent` lookups against the versioned canonical EntryPoints in `account_evidence_manifest.json`. It uses the same `ETHEREUM_RPC_URL` / `config.yaml` / public-fallback precedence as token enrichment.
+The command ranks eligible counterparties by complete ERC-20 transfer count, verifies Ethereum mainnet, pins one block and timestamp, and writes `analytics/seeds/counterparty_code_metadata.csv` atomically. It batches `eth_getCode`, Safe storage/interface reads, and filtered `UserOperationEvent` lookups against the versioned canonical EntryPoints in `account_evidence_manifest.json`. The manifest pins each Ethereum deployment block and transaction. The log scan clamps each EntryPoint to its deployment block, groups sender topics, and splits the remaining range into bounded chunks instead of issuing one full-history request per address. It uses the same `ETHEREUM_RPC_URL` / `config.yaml` / public-fallback precedence as token enrichment.
 
 By default, ERC-4337 evidence coverage begins at the earliest indexed ERC-20 event block and ends at the pinned observation block. Override the lower bound only when the intended coverage is explicit:
 
@@ -86,7 +86,18 @@ By default, ERC-4337 evidence coverage begins at the earliest indexed ERC-20 eve
 bun run addresses:enrich --limit 500 --erc4337-start-block 17000000
 ```
 
-The equivalent configuration is `ethereum.account_evidence.erc4337_start_block` or `ACCOUNT_EVIDENCE_START_BLOCK`. A positive result proves only that the address appeared as a canonical EntryPoint event sender in that range. A negative result is bounded by the recorded range and fetch status.
+The equivalent configuration is `ethereum.account_evidence.erc4337_start_block` or `ACCOUNT_EVIDENCE_START_BLOCK`. The requested lower bound is distinct from per-EntryPoint effective coverage because an EntryPoint cannot be checked before its deployment. A positive result proves only that the address appeared as a canonical EntryPoint event sender in a recorded successful range. A negative result is bounded by merged effective coverage and fetch status; it never silently includes a failed chunk.
+
+The default work unit is 100,000 blocks by 50 sender topics with two retries per failed chunk. Providers with smaller limits can override these values without changing the evidence semantics:
+
+```sh
+bun run addresses:enrich --limit 500 \
+  --erc4337-block-chunk-size 10000 \
+  --erc4337-address-batch-size 25 \
+  --erc4337-max-retries 3
+```
+
+Use `ethereum.account_evidence.erc4337_block_chunk_size`, `erc4337_address_batch_size`, and `erc4337_max_retries`, or the corresponding `ACCOUNT_EVIDENCE_BLOCK_CHUNK_SIZE`, `ACCOUNT_EVIDENCE_ADDRESS_BATCH_SIZE`, and `ACCOUNT_EVIDENCE_MAX_RETRIES` environment variables. Successful chunks are retained across in-process retries. If a chunk still fails, every affected address records that exact EntryPoint/range in `erc4337_failed_ranges`, retains the other successful ranges in `erc4337_effective_coverage`, and receives `fetch_status = partial` unless the code lookup itself failed.
 
 ```sh
 bun run addresses:enrich --limit 500 --retry-failed

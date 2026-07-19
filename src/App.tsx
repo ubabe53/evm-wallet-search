@@ -192,6 +192,8 @@ type BadgeEvidence = {
   safeThreshold: number | null;
   isErc4337Account: boolean;
   erc4337Version: string | null;
+  erc4337EffectiveCoverage: string | null;
+  erc4337FailedRanges: string | null;
   coverageStartBlock: number | null;
   coverageEndBlock: number | null;
 };
@@ -204,7 +206,7 @@ function AccountTypeBadge({ evidence, type = evidence.accountType }: { evidence:
       : type === "safe"
         ? `Verified Safe address evidence${evidence.safeVersion ? ` v${evidence.safeVersion}` : ""} at pinned block ${evidence.observationBlock ?? "unknown"}; threshold ${evidence.safeThreshold ?? "?"} of ${evidence.safeOwnerCount ?? "?"} addresses`
         : type === "erc4337_account"
-          ? `Observed as UserOperationEvent.sender at canonical EntryPoint${evidence.erc4337Version ? ` v${evidence.erc4337Version}` : ""} within blocks ${evidence.coverageStartBlock ?? "?"}-${evidence.coverageEndBlock ?? "?"}`
+          ? `Observed as UserOperationEvent.sender at canonical EntryPoint${evidence.erc4337Version ? ` v${evidence.erc4337Version}` : ""}; effective checked coverage ${evidence.erc4337EffectiveCoverage ?? `${evidence.coverageStartBlock ?? "?"}-${evidence.coverageEndBlock ?? "?"}`}${evidence.erc4337FailedRanges ? `; failed chunks ${evidence.erc4337FailedRanges}` : ""}`
           : type === "contract"
             ? `Non-delegation contract bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}`
             : "Account evidence is unavailable or the pinned code lookup failed";
@@ -235,6 +237,8 @@ function summaryBadgeEvidence(row: CounterpartySummary | RankedCounterparty): Ba
     safeThreshold: row.safe_threshold,
     isErc4337Account: row.is_erc4337_account,
     erc4337Version: row.erc4337_entrypoint_version,
+    erc4337EffectiveCoverage: row.erc4337_effective_coverage,
+    erc4337FailedRanges: row.erc4337_failed_ranges,
     coverageStartBlock: row.evidence_coverage_start_block,
     coverageEndBlock: row.evidence_coverage_end_block,
   };
@@ -251,6 +255,8 @@ function eventBadgeEvidence(event: WalletEvent): BadgeEvidence {
     safeThreshold: event.counterparty_safe_threshold,
     isErc4337Account: event.counterparty_is_erc4337_account,
     erc4337Version: event.counterparty_erc4337_entrypoint_version,
+    erc4337EffectiveCoverage: event.counterparty_erc4337_effective_coverage,
+    erc4337FailedRanges: event.counterparty_erc4337_failed_ranges,
     coverageStartBlock: event.counterparty_evidence_coverage_start_block,
     coverageEndBlock: event.counterparty_evidence_coverage_end_block,
   };

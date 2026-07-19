@@ -81,6 +81,11 @@ seeds:
         erc4337_entrypoint_address: varchar
         erc4337_entrypoint_version: varchar
         erc4337_entrypoint_source: varchar
+        erc4337_entrypoint_deployment_block: varchar
+        erc4337_effective_coverage: varchar
+        erc4337_failed_ranges: varchar
+        erc4337_block_chunk_size: bigint
+        erc4337_address_batch_size: integer
         fetch_status: varchar
         reason_codes: varchar
         coverage_scope: varchar
@@ -111,6 +116,11 @@ seeds:
         erc4337_entrypoint_address: varchar
         erc4337_entrypoint_version: varchar
         erc4337_entrypoint_source: varchar
+        erc4337_entrypoint_deployment_block: varchar
+        erc4337_effective_coverage: varchar
+        erc4337_failed_ranges: varchar
+        erc4337_block_chunk_size: bigint
+        erc4337_address_batch_size: integer
         fetch_status: varchar
         reason_codes: varchar
         coverage_scope: varchar

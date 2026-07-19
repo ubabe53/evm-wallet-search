@@ -97,7 +97,14 @@ describe("dashboard export shape", () => {
       is_erc4337_account: true,
       safe_owner_count: 3,
       safe_threshold: 2,
+      erc4337_entrypoint_deployment_block: "19274877",
+      erc4337_failed_ranges: null,
+      erc4337_block_chunk_size: 100000,
+      erc4337_address_batch_size: 50,
     });
+    expect(overlappingSafe.erc4337_effective_coverage).toContain(":19274877-20000000");
+    const failedEvidence = summaries.counterparties.find((row: { account_type: string }) => row.account_type === "unknown");
+    expect(failedEvidence.erc4337_failed_ranges).toContain(":17012204-17112203");
     expect(events.every((event: {
       from_address: string;
       to_address: string;

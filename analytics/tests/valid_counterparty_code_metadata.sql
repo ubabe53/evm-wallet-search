@@ -10,8 +10,13 @@ where chain_id != 1
     and (
       safe_verification_status = 'not_checked'
       or contains(reason_codes, 'erc4337_not_checked')
+      or erc4337_effective_coverage is null
+      or erc4337_failed_ranges is not null
+      or coalesce(erc4337_block_chunk_size, 0) <= 0
+      or coalesce(erc4337_address_batch_size, 0) <= 0
     )
   )
+  or (erc4337_failed_ranges is not null and fetch_status = 'complete')
   or (code_state = 'no_code' and (account_type != 'eoa_candidate' or code_size_bytes != 0))
   or (code_state = 'contract_code' and coalesce(code_size_bytes, 0) <= 0)
   or (
@@ -46,5 +51,7 @@ where chain_id != 1
       or erc4337_entrypoint_address is null
       or erc4337_entrypoint_version is null
       or erc4337_entrypoint_source is null
+      or erc4337_entrypoint_deployment_block is null
+      or erc4337_effective_coverage is null
     )
   )

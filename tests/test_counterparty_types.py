@@ -9,6 +9,7 @@ from scripts.enrich_counterparty_types import (
     decode_address_array,
     decode_code,
     fetch_account_evidence,
+    fetch_erc4337_evidence,
     load_manifest,
     safe_evidence,
     select_candidates,
@@ -43,9 +44,25 @@ class FakeEvidenceClient:
     SAFE_ADDRESS = "0x3333333333333333333333333333333333333333"
     EOA_ADDRESS = "0x2222222222222222222222222222222222222222"
 
+    def __init__(self):
+        self.log_filters = []
+
     def batch(self, requests):
         results = {}
         for method, _params, key in requests:
+            if method == "eth_getLogs":
+                log_filter = _params[0]
+                self.log_filters.append(log_filter)
+                sender_topics = log_filter["topics"][2]
+                results[key] = [{
+                    "blockNumber": "0x5a",
+                    "topics": [
+                        log_filter["topics"][0],
+                        "0x" + "00" * 32,
+                        "0x" + address_word(self.SAFE_ADDRESS),
+                    ],
+                }] if "0x" + address_word(self.SAFE_ADDRESS) in sender_topics else []
+                continue
             address, field = key
             if field == "code":
                 results[key] = "0x6001" if address == self.SAFE_ADDRESS else "0x"
@@ -58,9 +75,26 @@ class FakeEvidenceClient:
                 )
             elif field == "threshold":
                 results[key] = "0x" + word(1)
-            elif method == "eth_getLogs" and field == "erc4337:0.7" and address == self.SAFE_ADDRESS:
-                results[key] = [{"blockNumber": "0x5a"}]
-            elif method == "eth_getLogs":
+        return results
+
+
+class RetryingLogClient:
+    def __init__(self, fail_once=None, fail_always=None):
+        self.fail_once = set(fail_once or [])
+        self.fail_always = set(fail_always or [])
+        self.attempts = {}
+
+    def batch(self, requests):
+        results = {}
+        for _method, params, key in requests:
+            log_filter = params[0]
+            block_range = (int(log_filter["fromBlock"], 16), int(log_filter["toBlock"], 16))
+            self.attempts[block_range] = self.attempts.get(block_range, 0) + 1
+            if block_range in self.fail_always or (
+                block_range in self.fail_once and self.attempts[block_range] == 1
+            ):
+                results[key] = None
+            else:
                 results[key] = []
         return results
 
@@ -121,22 +155,83 @@ class CounterpartyTypeTest(unittest.TestCase):
         self.assertIsNone(decode_address_array(owners + "00"))
 
     def test_retains_safe_and_erc4337_evidence_independently(self) -> None:
+        manifest = load_manifest()
+        manifest["erc4337"]["entrypoints"] = [{
+            **manifest["erc4337"]["entrypoints"][1],
+            "deployment_block": 85,
+        }]
+        client = FakeEvidenceClient()
         rows = fetch_account_evidence(
-            FakeEvidenceClient(),
+            client,
             [FakeEvidenceClient.SAFE_ADDRESS, FakeEvidenceClient.EOA_ADDRESS],
             "0x64",
             "2023-11-18T12:00:00+00:00",
             80,
-            load_manifest(),
+            manifest,
+            erc4337_block_chunk_size=10,
+            erc4337_address_batch_size=2,
+            erc4337_max_retries=1,
         )
         safe = rows[0]
         self.assertEqual(safe["account_type"], "safe")
         self.assertTrue(safe["safe_verified"])
         self.assertTrue(safe["erc4337_observed"])
         self.assertEqual(safe["erc4337_entrypoint_version"], "0.7")
+        self.assertEqual(safe["erc4337_entrypoint_deployment_block"], "85")
+        self.assertIn(":85-100", safe["erc4337_effective_coverage"])
         self.assertEqual(safe["coverage_start_block"], 80)
         self.assertEqual(safe["coverage_end_block"], 100)
         self.assertEqual(rows[1]["account_type"], "eoa_candidate")
+        self.assertEqual(
+            [(int(item["fromBlock"], 16), int(item["toBlock"], 16)) for item in client.log_filters],
+            [(85, 94), (95, 100)],
+        )
+        self.assertTrue(all(len(item["topics"][2]) == 2 for item in client.log_filters))
+
+    def test_retries_failed_chunks_without_losing_successful_coverage(self) -> None:
+        manifest = load_manifest()
+        manifest["erc4337"]["entrypoints"] = [{
+            **manifest["erc4337"]["entrypoints"][0],
+            "deployment_block": 90,
+        }]
+        client = RetryingLogClient(fail_once={(90, 99)})
+        evidence = fetch_erc4337_evidence(
+            client,
+            [FakeEvidenceClient.EOA_ADDRESS],
+            80,
+            109,
+            manifest,
+            block_chunk_size=10,
+            address_batch_size=1,
+            max_retries=1,
+        )[FakeEvidenceClient.EOA_ADDRESS]
+        self.assertTrue(evidence["complete"])
+        self.assertEqual(evidence["failed_ranges"], "")
+        self.assertIn(":90-109", evidence["effective_coverage"])
+        self.assertEqual(client.attempts[(90, 99)], 2)
+        self.assertEqual(client.attempts[(100, 109)], 1)
+
+    def test_records_partial_evidence_after_chunk_retries_are_exhausted(self) -> None:
+        manifest = load_manifest()
+        manifest["erc4337"]["entrypoints"] = [{
+            **manifest["erc4337"]["entrypoints"][0],
+            "deployment_block": 90,
+        }]
+        client = RetryingLogClient(fail_always={(100, 109)})
+        evidence = fetch_erc4337_evidence(
+            client,
+            [FakeEvidenceClient.EOA_ADDRESS],
+            80,
+            109,
+            manifest,
+            block_chunk_size=10,
+            address_batch_size=1,
+            max_retries=1,
+        )[FakeEvidenceClient.EOA_ADDRESS]
+        self.assertFalse(evidence["complete"])
+        self.assertIn(":90-99", evidence["effective_coverage"])
+        self.assertIn(":100-109", evidence["failed_ranges"])
+        self.assertEqual(client.attempts[(100, 109)], 2)
 
     def test_selects_ranked_unattempted_and_retry_candidates(self) -> None:
         connection = FakeConnection([("0x1", 100), ("0x2", 50), ("0x3", 25)])

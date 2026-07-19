@@ -21,6 +21,9 @@ export type GraphNode = {
     erc4337EntrypointAddress: string | null;
     erc4337EntrypointVersion: string | null;
     erc4337EntrypointSource: string | null;
+    erc4337EntrypointDeploymentBlock: string | null;
+    erc4337EffectiveCoverage: string | null;
+    erc4337FailedRanges: string | null;
     evidenceFetchStatus: EvidenceFetchStatus | null;
     evidenceReasonCodes: string | null;
     evidenceCoverageStartBlock: number | null;
@@ -89,6 +92,11 @@ export type AccountEvidence = {
   erc4337_entrypoint_address: string | null;
   erc4337_entrypoint_version: string | null;
   erc4337_entrypoint_source: string | null;
+  erc4337_entrypoint_deployment_block: string | null;
+  erc4337_effective_coverage: string | null;
+  erc4337_failed_ranges: string | null;
+  erc4337_block_chunk_size: number | null;
+  erc4337_address_batch_size: number | null;
   evidence_fetch_status: EvidenceFetchStatus;
   evidence_reason_codes: string;
   evidence_coverage_scope: string | null;
@@ -206,6 +214,11 @@ export type WalletEvent = ClassificationEvidence & {
   counterparty_erc4337_entrypoint_address: string | null;
   counterparty_erc4337_entrypoint_version: string | null;
   counterparty_erc4337_entrypoint_source: string | null;
+  counterparty_erc4337_entrypoint_deployment_block: string | null;
+  counterparty_erc4337_effective_coverage: string | null;
+  counterparty_erc4337_failed_ranges: string | null;
+  counterparty_erc4337_block_chunk_size: number | null;
+  counterparty_erc4337_address_batch_size: number | null;
   counterparty_evidence_fetch_status: EvidenceFetchStatus;
   counterparty_evidence_reason_codes: string;
   counterparty_evidence_coverage_scope: string | null;

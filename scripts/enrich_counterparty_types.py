@@ -25,6 +25,9 @@ DB_PATH = ROOT / "analytics" / "wallet_analytics.duckdb"
 OUTPUT_PATH = ROOT / "analytics" / "seeds" / "counterparty_code_metadata.csv"
 MANIFEST_PATH = ROOT / "analytics" / "seeds" / "account_evidence_manifest.json"
 EVIDENCE_SCHEMA_VERSION = "account-evidence-v1"
+DEFAULT_ERC4337_BLOCK_CHUNK_SIZE = 100_000
+DEFAULT_ERC4337_ADDRESS_BATCH_SIZE = 50
+DEFAULT_ERC4337_MAX_RETRIES = 2
 SAFE_METHOD_SELECTORS = {
     "owners": "0xa0e67e2b",
     "threshold": "0xe75235b8",
@@ -51,6 +54,11 @@ FIELDNAMES = [
     "erc4337_entrypoint_address",
     "erc4337_entrypoint_version",
     "erc4337_entrypoint_source",
+    "erc4337_entrypoint_deployment_block",
+    "erc4337_effective_coverage",
+    "erc4337_failed_ranges",
+    "erc4337_block_chunk_size",
+    "erc4337_address_batch_size",
     "fetch_status",
     "reason_codes",
     "coverage_scope",
@@ -71,6 +79,15 @@ def load_manifest(path: Path = MANIFEST_PATH) -> dict[str, Any]:
         raise ValueError("Account evidence manifest addresses must be unique")
     if any(len(address) != 42 for address in safe_addresses + entrypoint_addresses):
         raise ValueError("Account evidence manifest contains a malformed address")
+    if any(
+        not isinstance(item.get("deployment_block"), int)
+        or item["deployment_block"] <= 0
+        or not isinstance(item.get("deployment_transaction"), str)
+        or len(item["deployment_transaction"]) != 66
+        or not item.get("deployment_source_url")
+        for item in payload["erc4337"]["entrypoints"]
+    ):
+        raise ValueError("Account evidence manifest contains malformed EntryPoint deployment provenance")
     topic = payload["erc4337"]["event_topic"]
     if not isinstance(topic, str) or len(topic) != 66:
         raise ValueError("Account evidence manifest contains a malformed event topic")
@@ -219,61 +236,145 @@ def sender_topic(address: str) -> str:
     return "0x" + address.lower().removeprefix("0x").rjust(64, "0")
 
 
+def bounded_ranges(start_block: int, end_block: int, chunk_size: int) -> list[tuple[int, int]]:
+    if start_block > end_block:
+        return []
+    return [
+        (start, min(start + chunk_size - 1, end_block))
+        for start in range(start_block, end_block + 1, chunk_size)
+    ]
+
+
+def address_batches(addresses: list[str], batch_size: int) -> list[list[str]]:
+    return [addresses[offset : offset + batch_size] for offset in range(0, len(addresses), batch_size)]
+
+
+def merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(set(ranges)):
+        if merged and start <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def log_sender(log: Any) -> str | None:
+    if not isinstance(log, dict):
+        return None
+    topics = log.get("topics")
+    if not isinstance(topics, list) or len(topics) < 3 or not isinstance(topics[2], str):
+        return None
+    topic = topics[2].lower()
+    if len(topic) != 66 or not topic.startswith("0x"):
+        return None
+    return "0x" + topic[-40:]
+
+
 def fetch_erc4337_evidence(
     client: JsonRpcClient,
     addresses: list[str],
     start_block: int,
     end_block: int,
     manifest: dict[str, Any],
+    block_chunk_size: int = DEFAULT_ERC4337_BLOCK_CHUNK_SIZE,
+    address_batch_size: int = DEFAULT_ERC4337_ADDRESS_BATCH_SIZE,
+    max_retries: int = DEFAULT_ERC4337_MAX_RETRIES,
 ) -> dict[str, dict[str, Any]]:
     event_topic = manifest["erc4337"]["event_topic"]
     entrypoints = manifest["erc4337"]["entrypoints"]
-    calls = [
-        (
-            "eth_getLogs",
-            [{
-                "address": entrypoint["address"],
-                "fromBlock": hex(start_block),
-                "toBlock": hex(end_block),
-                "topics": [event_topic, None, sender_topic(address)],
-            }],
-            (address, f"erc4337:{entrypoint['version']}"),
-        )
-        for address in addresses
-        for entrypoint in entrypoints
-    ]
-    results: dict[tuple[str, str], Any] = {}
-    for offset in range(0, len(calls), 40):
-        results.update(client.batch(calls[offset : offset + 40]))
+    batches = address_batches(addresses, address_batch_size)
+    call_metadata: dict[tuple[str, str], tuple[dict[str, Any], tuple[int, int], list[str]]] = {}
+    calls = []
+    for entrypoint in entrypoints:
+        effective_start = max(start_block, entrypoint["deployment_block"])
+        for range_start, range_end in bounded_ranges(effective_start, end_block, block_chunk_size):
+            for batch_index, batch in enumerate(batches):
+                key = (f"erc4337:{entrypoint['version']}:{range_start}:{range_end}", str(batch_index))
+                call_metadata[key] = (entrypoint, (range_start, range_end), batch)
+                calls.append((
+                    "eth_getLogs",
+                    [{
+                        "address": entrypoint["address"],
+                        "fromBlock": hex(range_start),
+                        "toBlock": hex(range_end),
+                        "topics": [event_topic, None, [sender_topic(address) for address in batch]],
+                    }],
+                    key,
+                ))
+
+    results: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    pending = calls
+    for _attempt in range(max_retries + 1):
+        if not pending:
+            break
+        next_pending = []
+        for offset in range(0, len(pending), 40):
+            request_batch = pending[offset : offset + 40]
+            try:
+                batch_results = client.batch(request_batch)
+            except (OSError, RuntimeError, TimeoutError):
+                batch_results = {}
+            for request in request_batch:
+                value = batch_results.get(request[2])
+                if isinstance(value, list):
+                    results[request[2]] = value
+                else:
+                    next_pending.append(request)
+        pending = next_pending
+
+    matches: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {address: [] for address in addresses}
+    successful_ranges: dict[str, dict[str, list[tuple[int, int]]]] = {
+        address: {entrypoint["version"]: [] for entrypoint in entrypoints} for address in addresses
+    }
+    failed_ranges: dict[str, list[tuple[dict[str, Any], tuple[int, int]]]] = {address: [] for address in addresses}
+    for key, (entrypoint, block_range, batch) in call_metadata.items():
+        logs = results.get(key)
+        if logs is None:
+            for address in batch:
+                failed_ranges[address].append((entrypoint, block_range))
+            continue
+        for address in batch:
+            successful_ranges[address][entrypoint["version"]].append(block_range)
+        batch_addresses = set(batch)
+        for log in logs:
+            sender = log_sender(log)
+            if sender in batch_addresses:
+                matches[sender].append((entrypoint, log))
 
     evidence: dict[str, dict[str, Any]] = {}
     for address in addresses:
-        matched: list[tuple[dict[str, str], dict[str, Any]]] = []
-        complete = True
-        for entrypoint in entrypoints:
-            logs = results.get((address, f"erc4337:{entrypoint['version']}"))
-            if logs is None:
-                complete = False
-                continue
-            if not isinstance(logs, list):
-                complete = False
-                continue
-            matched.extend((entrypoint, log) for log in logs if isinstance(log, dict))
-
+        matched = matches[address]
         blocks = [int(log["blockNumber"], 16) for _entrypoint, log in matched if log.get("blockNumber")]
         matched_entrypoints = sorted(
             {entrypoint["address"].lower(): entrypoint for entrypoint, _log in matched}.values(),
             key=lambda item: item["version"],
         )
+        coverage_parts = []
+        for entrypoint in entrypoints:
+            for range_start, range_end in merge_ranges(successful_ranges[address][entrypoint["version"]]):
+                coverage_parts.append(
+                    f"{entrypoint['version']}@{entrypoint['address'].lower()}@{entrypoint['deployment_block']}@"
+                    f"{entrypoint['deployment_source_url']}:{range_start}-{range_end}"
+                )
+        failed_parts = [
+            f"{entrypoint['version']}@{entrypoint['address'].lower()}:{range_start}-{range_end}"
+            for entrypoint, (range_start, range_end) in failed_ranges[address]
+        ]
         evidence[address] = {
             "observed": bool(matched),
-            "complete": complete,
+            "complete": not failed_parts,
             "count": len(matched),
             "first_block": min(blocks) if blocks else "",
             "last_block": max(blocks) if blocks else "",
             "addresses": "|".join(item["address"].lower() for item in matched_entrypoints),
             "versions": "|".join(item["version"] for item in matched_entrypoints),
             "sources": "|".join(item["source_url"] for item in matched_entrypoints),
+            "deployment_blocks": "|".join(str(item["deployment_block"]) for item in matched_entrypoints),
+            "effective_coverage": "|".join(coverage_parts),
+            "failed_ranges": "|".join(failed_parts),
+            "block_chunk_size": block_chunk_size,
+            "address_batch_size": address_batch_size,
         }
     return evidence
 
@@ -285,6 +386,9 @@ def fetch_account_evidence(
     block_timestamp: str,
     coverage_start_block: int,
     manifest: dict[str, Any],
+    erc4337_block_chunk_size: int = DEFAULT_ERC4337_BLOCK_CHUNK_SIZE,
+    erc4337_address_batch_size: int = DEFAULT_ERC4337_ADDRESS_BATCH_SIZE,
+    erc4337_max_retries: int = DEFAULT_ERC4337_MAX_RETRIES,
 ) -> list[dict[str, Any]]:
     code_calls = [("eth_getCode", [address, block_tag], (address, "code")) for address in addresses]
     code_results: dict[tuple[str, str], Any] = {}
@@ -313,6 +417,9 @@ def fetch_account_evidence(
         coverage_start_block,
         observation_block,
         manifest,
+        erc4337_block_chunk_size,
+        erc4337_address_batch_size,
+        erc4337_max_retries,
     )
     safe_singletons = {item["address"].lower(): item for item in manifest["safe_singletons"]}
     fetched_at = datetime.now(timezone.utc).isoformat()
@@ -394,6 +501,11 @@ def fetch_account_evidence(
                 "erc4337_entrypoint_address": erc["addresses"],
                 "erc4337_entrypoint_version": erc["versions"],
                 "erc4337_entrypoint_source": erc["sources"],
+                "erc4337_entrypoint_deployment_block": erc["deployment_blocks"],
+                "erc4337_effective_coverage": erc["effective_coverage"],
+                "erc4337_failed_ranges": erc["failed_ranges"],
+                "erc4337_block_chunk_size": erc["block_chunk_size"],
+                "erc4337_address_batch_size": erc["address_batch_size"],
                 "fetch_status": status,
                 "reason_codes": "|".join(sorted(set(reasons))),
                 "coverage_scope": "ranked_counterparties",
@@ -432,6 +544,9 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="First block checked for canonical EntryPoint sender evidence; defaults to the indexed event start",
     )
+    parser.add_argument("--erc4337-block-chunk-size", type=int)
+    parser.add_argument("--erc4337-address-batch-size", type=int)
+    parser.add_argument("--erc4337-max-retries", type=int)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--retry-failed", action="store_true")
     mode.add_argument("--refresh", action="store_true")
@@ -472,6 +587,32 @@ def main() -> None:
         if configured_start is not None
         else int(indexed_start_block)
     )
+    configured_block_chunk_size = runtime.get("account_evidence_block_chunk_size")
+    configured_address_batch_size = runtime.get("account_evidence_address_batch_size")
+    configured_max_retries = runtime.get("account_evidence_max_retries")
+    block_chunk_size = int(
+        args.erc4337_block_chunk_size
+        if args.erc4337_block_chunk_size is not None
+        else configured_block_chunk_size
+        if configured_block_chunk_size is not None
+        else DEFAULT_ERC4337_BLOCK_CHUNK_SIZE
+    )
+    address_batch_size = int(
+        args.erc4337_address_batch_size
+        if args.erc4337_address_batch_size is not None
+        else configured_address_batch_size
+        if configured_address_batch_size is not None
+        else DEFAULT_ERC4337_ADDRESS_BATCH_SIZE
+    )
+    max_retries = int(
+        args.erc4337_max_retries
+        if args.erc4337_max_retries is not None
+        else configured_max_retries
+        if configured_max_retries is not None
+        else DEFAULT_ERC4337_MAX_RETRIES
+    )
+    if block_chunk_size <= 0 or address_batch_size <= 0 or max_retries < 0:
+        raise SystemExit("ERC-4337 chunk sizes must be positive and max retries cannot be negative")
     client = JsonRpcClient(rpc_url)
     chain_id = int(client.call("eth_chainId", []), 16)
     if chain_id != 1:
@@ -494,6 +635,9 @@ def main() -> None:
         block_timestamp,
         coverage_start_block,
         manifest,
+        block_chunk_size,
+        address_batch_size,
+        max_retries,
     )
     write_rows(existing, rows)
     counts = {status: sum(row["fetch_status"] == status for row in rows) for status in ("complete", "partial", "failed")}

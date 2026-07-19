@@ -41,10 +41,11 @@ Reads the fixture or live `counterparty_code_metadata` seed at one row per `(cha
 - `code_state`, exact byte length, observation block/time, and the EIP-7702 target only when code is exactly `0xef0100` plus 20 bytes.
 - Independent `safe_verified` and `erc4337_observed` fields so overlapping evidence is not lost.
 - Safe singleton/version, verification status, owner-address count, and threshold. The addresses themselves are not exported and counts do not imply people.
-- ERC-4337 matched event count, first/last observation blocks, and pipe-delimited canonical EntryPoint address/version/source provenance when multiple versions match.
+- ERC-4337 matched event count, first/last observation blocks, and pipe-delimited canonical EntryPoint address/version/source/deployment-block provenance when multiple versions match.
+- Deployment-clamped effective coverage, exhausted chunk ranges, and the block-chunk and sender-batch sizes used for bounded `eth_getLogs` work. Effective coverage merges adjacent successful chunks; it never spans a failed chunk.
 - `fetch_status`, stable `reason_codes`, evidence schema version, fetch time, coverage scope, and coverage start/end blocks.
 
-Primary account-type precedence is delegated EOA, verified Safe, canonical EntryPoint sender, other contract code, no-code EOA candidate, then unknown. A failed code read is unknown. `partial` means some evidence source was unavailable or inconsistent even when code still supports a bounded primary type.
+Primary account-type precedence is delegated EOA, verified Safe, canonical EntryPoint sender, other contract code, no-code EOA candidate, then unknown. A failed code read is unknown. `partial` means some evidence source was unavailable or inconsistent even when code still supports a bounded primary type; for ERC-4337 it preserves successful effective coverage and names every exhausted block chunk.
 
 ## Intermediate
 

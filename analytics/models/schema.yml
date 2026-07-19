@@ -41,7 +41,7 @@ models:
               arguments:
                 values: ["manual", "trustwallet", "uniswap", "coingecko", "trustwallet+uniswap", "trustwallet+coingecko", "uniswap+coingecko", "trustwallet+uniswap+coingecko", "ethereum_rpc"]
   - name: stg_counterparty_metadata
-    description: Pinned-block account evidence for enriched Ethereum counterparty addresses, including independent Safe and canonical EntryPoint sender observations.
+    description: Pinned-block account evidence for enriched Ethereum counterparty addresses, including independent Safe observations and deployment-clamped, chunked canonical EntryPoint sender evidence with explicit successful and failed ranges.
     columns:
       - name: address
         tests:
