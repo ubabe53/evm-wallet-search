@@ -12,6 +12,12 @@ tokens as (
     metadata.token_status as base_token_status,
     metadata.metadata_source,
     metadata.token_label_reason,
+    coalesce(metadata.token_quality, 'unknown') as token_quality,
+    coalesce(metadata.token_quality_sources, []::varchar[]) as token_quality_sources,
+    coalesce(metadata.token_quality_source_count, 0) as token_quality_source_count,
+    coalesce(metadata.token_quality_reason, 'no_registry_or_reviewed_approval') as token_quality_reason,
+    coalesce(metadata.token_quality_provenance, 'no_recorded_source') as token_quality_provenance,
+    coalesce(metadata.token_quality_version, 'token-quality-v1') as token_quality_version,
     lower(coalesce(metadata.name, '') || ' ' || coalesce(metadata.symbol, '')) as metadata_text
   from token_addresses as addresses
   left join {{ ref('stg_token_metadata') }} as metadata using (token_address)
@@ -94,21 +100,27 @@ scored as (
 select
   token_address,
   case
-    when metadata_source = 'manual' then coalesce(base_token_status, 'unverified')
-    when base_token_status = 'trusted' then 'trusted'
+    when metadata_source = 'manual' and base_token_status = 'spam' then 'spam'
     when automated_reputation_score >= 60 then 'suspected_spam'
+    when token_quality = 'high_confidence' then 'trusted'
     else 'unverified'
   end as token_reputation,
   case
     when metadata_source = 'manual' and base_token_status = 'spam' then 100
-    when metadata_source = 'manual' or base_token_status = 'trusted' then 0
     else automated_reputation_score
   end as token_reputation_score,
   case
-    when metadata_source = 'manual' then coalesce(token_label_reason, 'manual_override')
-    when base_token_status = 'trusted' then 'exact_curated_registry_match'
+    when metadata_source = 'manual' and base_token_status = 'spam'
+      then coalesce(token_label_reason, 'reviewed_spam')
     when automated_reputation_reasons != '' then automated_reputation_reasons
+    when token_quality = 'high_confidence' then token_quality_reason
     else 'no_reputation_signal'
   end as token_reputation_reasons,
-  'token-reputation-v1' as token_reputation_version
+  'token-reputation-v2' as token_reputation_version,
+  token_quality,
+  token_quality_sources,
+  token_quality_source_count,
+  token_quality_reason,
+  token_quality_provenance,
+  token_quality_version
 from scored

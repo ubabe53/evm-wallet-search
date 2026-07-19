@@ -47,6 +47,7 @@ select
   any_value(counterparty_evidence_coverage_end_block) as evidence_coverage_end_block,
   any_value(counterparty_evidence_schema_version) as evidence_schema_version,
   token_status,
+  token_quality,
   count(*) as transfer_count,
   count(*) filter (where direction = 'in') as inbound_transfer_count,
   count(*) filter (where direction = 'out') as outbound_transfer_count,
@@ -54,4 +55,4 @@ select
   min(block_timestamp) as first_seen_at,
   max(block_timestamp) as last_seen_at
 from eligible_events
-group by wallet_id, wallet_address, chain_id, counterparty_address, token_status
+group by wallet_id, wallet_address, chain_id, counterparty_address, token_status, token_quality

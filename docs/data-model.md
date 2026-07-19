@@ -19,15 +19,19 @@ Configured wallets. The MVP contains one pinned wallet:
 
 ### `stg_token_metadata`
 
-Combines the generated Trust Wallet/Uniswap/CoinGecko registry with reviewed manual overrides. Overrides take precedence for symbol, name, decimals, status, reason, and source URL.
+Combines the generated Trust Wallet/Uniswap/CoinGecko registry with reviewed manual overrides. Overrides take precedence for symbol, name, decimals, base status, reason, and source URL, while exact-address registry membership remains separately available to quality classification.
 
 The final metadata precedence is manual override, curated registry, then pinned-block Ethereum RPC metadata. RPC-derived fields may supply labels and decimals, but their status remains `unverified` because contracts self-declare these values.
 
 The normalized fields are:
 
-- `token_status`: base metadata status before behavioral classification.
+- `token_status`: reviewed manual base status; the generated registry's legacy status does not establish effective trust.
 - `metadata_source`: `trustwallet`, `uniswap`, `coingecko`, their combined value, `manual`, or `ethereum_rpc`.
 - `metadata_source_url`: upstream provenance for the label.
+- `metadata_availability`: `complete`, `partial`, or `unavailable` based only on name, symbol, and decimals availability.
+- `token_quality`: `high_confidence`, `listed`, or `unknown`.
+- `token_quality_sources` and `token_quality_source_count`: exact-address registry evidence only; manual approval is recorded in the reason/provenance rather than inflated into a registry count.
+- `token_quality_reason`, `token_quality_provenance`, and `token_quality_version`: reproducible evidence with version `token-quality-v1`.
 - `token_label_reason`: required human context for manual classifications.
 - `rpc_block_number`, `rpc_fetch_status`, and `rpc_error_code`: audit fields for RPC enrichment attempts.
 
@@ -65,7 +69,7 @@ Filters staged transfers to configured wallets and adds:
 
 ### `int_token_reputation`
 
-One row per observed or labeled token contract. It produces `token_reputation`, a 0-100 `token_reputation_score`, semicolon-delimited `token_reputation_reasons`, and `token_reputation_version`. Address-based registry matches and manual overrides take precedence over deterministic metadata heuristics. Missing registry membership contributes no score.
+One row per observed or labeled token contract. It produces `token_reputation`, a 0-100 `token_reputation_score`, semicolon-delimited `token_reputation_reasons`, and `token_reputation_version`, while carrying the separate quality evidence. `token-reputation-v2` records the quality-aware precedence introduced here. Reviewed spam takes precedence over deterministic metadata heuristics; automated suspicion precedes high-confidence trust. Missing registry membership contributes no score.
 
 ### `int_wallet_token_interactions`
 
@@ -73,13 +77,13 @@ One row per wallet and token. It records transfer and distinct-counterparty coun
 
 ### `int_classified_wallet_transfer_events`
 
-Joins both evidence layers back to one-row-per-transfer events. Its effective `token_status` is one of `trusted`, `unverified`, `suspected_spam`, or `spam`. Manual spam has final precedence, followed by automated suspicion, then exact-address trust.
+Joins both evidence layers back to one-row-per-transfer events. Its effective `token_status` is one of `trusted`, `unverified`, `suspected_spam`, or `spam`. Reviewed manual spam has final precedence, followed by automated suspicion, then `high_confidence` quality; every other case is unverified.
 
 ## Marts
 
 ### `wallet_events`
 
-Dashboard-ready event table. This preserves the one-transfer grain and carries emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, effective token status, metadata provenance, both classification scores, reason codes, and classifier versions to every transfer.
+Dashboard-ready event table. This preserves the immutable one-transfer grain and event-time block fields while carrying emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, metadata availability, token quality evidence, effective status, both classification scores, reason codes, and classifier versions. Enrichment observation time never replaces event block number or timestamp.
 
 ### `graph_nodes`
 
@@ -99,7 +103,7 @@ Graph edges carry effective status, metadata provenance, and both evidence layer
 
 ### `token_summary`
 
-One row per wallet and token across inbound and outbound activity. It records total, inbound, and outbound ERC20 transfer-event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
+One row per wallet, token, effective status, quality, and exact counterparty account-evidence signature across inbound and outbound activity. This serving grain supports inclusive account filtering. The browser filters cell rows first and then aggregates them back to one row per wallet and token before ranking and rendering. It records total, inbound, and outbound ERC20 transfer-event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
 
 `indirect_inbound_transfer_count` and `indirect_outbound_transfer_count` count only `is_indirect = true`. Legacy nulls are excluded rather than treated as direct or indirect, so each indirect count is bounded by its corresponding direction total.
 
@@ -109,19 +113,19 @@ One row per wallet and token across inbound and outbound activity. It records to
 
 ### `counterparty_summary`
 
-One row per wallet, chain, eligible counterparty, and effective token status. `transfer_count` is the sheer number of ERC20 `Transfer` events, not a distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-token count, first/last timestamps, primary account type, pinned code observation, independent Safe/ERC-4337 evidence, provenance, fetch status/reasons, and coverage bounds.
+One row per wallet, chain, eligible counterparty, effective token status, and token quality. `transfer_count` is the sheer number of ERC20 `Transfer` events, not a distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-token count, first/last event timestamps, primary account type, pinned code observation, independent Safe/ERC-4337 evidence, provenance, fetch status/reasons, and coverage bounds.
 
 The ranking-serving mart excludes the zero address, the tracked wallet itself, and any counterparty address observed as an ERC20 token contract in the indexed wallet dataset. These exclusions do not delete rows from `wallet_events` or alter token totals.
 
 ### `timeline_daily`
 
-Daily transfer counts and token-flow aggregates by wallet, token, and direction. Token addresses are part of the grain because decimal amounts from different assets cannot be meaningfully summed together. Raw totals are exact strings and decimal totals remain null without metadata.
+Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. The browser applies the inclusive account predicate and aggregates matching cells back to wallet-date-token-status-quality-direction before use. Token addresses remain part of the displayed grain because decimal amounts from different assets cannot be meaningfully summed together. Raw totals are exact strings and decimal totals remain null without metadata.
 
 ### `pipeline_metadata`
 
 One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Equal bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch.
 
-The exporter enriches this row in `meta.json` with complete token-summary and counterparty-summary row counts; per-status event, interaction, and token-summary limits; the per-filter-selection counterparty ranking limit; the global timeline limit; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. Counterparty candidate selection ranks combined address activity before limiting for all 15 token-status combinations crossed with all 63 non-empty subsets of the six inclusive account filters. Safe and ERC-4337 predicates use their independent flags, so overlap is retained. Every status row for the resulting candidate union is exported, preserving exact top-50 browser rankings for all 945 selections. Metadata records the `15`, `63`, and `945` counts, exported candidate-address count, and exact-ranking guarantee. `is_sampled` covers every bounded export, including both summary files. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard filter statistics. The JSON subsets do not change any dbt mart grain.
+The exporter enriches this row in `meta.json` with complete mart row counts; status-quality-account-evidence cell counts and per-cell limits for events, interactions, and timeline; actual exported counts; and `is_sampled`. It also records exact transfer/token/counterparty statistics for all 6,615 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 63 non-empty inclusive account selections. Token and counterparty candidate selection ranks combined activity before limiting for the same 6,615 selections and exports every account cell for the resulting candidate unions, preserving exact top-500 token and top-50 counterparty browser rankings. Safe and ERC-4337 membership is inclusive and independent. `is_sampled` is true whenever any exported mart is smaller than its complete mart; it does not negate the separately recorded exact candidate-union guarantees. These fields distinguish complete DuckDB marts from bounded static views.
 
 ## Tests
 
@@ -135,6 +139,8 @@ dbt tests enforce:
 - Valid graph edge roles and metadata source values.
 - Valid `direction` and node type values.
 - Valid non-null token statuses throughout event, graph, token-summary, and timeline models.
+- Valid metadata-availability and token-quality values, source-count reconciliation, non-empty provenance, `token-quality-v1`, and quality-aware `token-reputation-v2`.
+- Explicit CoinGecko-only OSCAR and PUPPIES coverage proving `listed`/`unverified`, not trusted.
 - Manual override precedence and unverified fallback behavior.
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.
 - Exact graph counterparty transfer counts across tokens and directions.
@@ -149,3 +155,5 @@ dbt tests enforce:
 - Mixed-source results become partial when one RPC source fails but another yields usable evidence.
 - Account-evidence fixture observations occur after Pectra without changing event-time transfer blocks or timestamps.
 - Partial EntryPoint fixtures reconcile every deployment-clamped range into either effective coverage or an explicit failed chunk.
+- Reviewed-spam, automated-suspicion, high-confidence-trust, and unverified fallback precedence.
+- Exact 6,615-selection token/counterparty candidate unions plus browser aggregation from account cells back to displayed token and timeline grains.

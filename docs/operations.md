@@ -45,13 +45,13 @@ bun run labels:sync
 
 The command validates Ethereum addresses and decimals, fails on cross-source decimal conflicts, and rewrites `analytics/seeds/token_metadata.csv` plus `token_metadata_manifest.json`. Naming precedence is Trust Wallet, Uniswap, then CoinGecko; manual entries in `token_label_overrides.csv` override every generated source.
 
-Each manual `suspected_spam` or `spam` entry must include a reason and evidence URL. Unknown tokens should be left unlisted and will receive `unverified` automatically; CoinGecko absence never implies spam. After a seed schema change, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
+Each reviewed manual `trusted` approval or `spam` entry must include a reason and evidence URL. Suspected spam is automated rather than manually assigned. Unknown tokens should be left unlisted and will receive `unknown` quality plus `unverified` status automatically; CoinGecko absence never implies spam. After a seed schema change, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
 
 ## Spam Classification
 
 Classification runs during every dbt build and makes no network calls. Inspect contract-level evidence in `int_token_reputation`, wallet-token behavior in `int_wallet_token_interactions`, and the effective event status in `wallet_events`. Scores, reason codes, and classifier versions are exported to the dashboard; hovering a suspected badge displays the evidence.
 
-The Status menu independently controls visibility for `trusted`, `unverified`, `suspected_spam`, and reviewed `spam`; trusted and unverified are selected by default. To change a threshold or reason rule, update the corresponding intermediate model, its version string, dbt tests, and `docs/architecture.md` in the same change.
+The Status menu independently controls visibility for `trusted`, `unverified`, `suspected_spam`, and reviewed `spam`; trusted and unverified are selected by default. The separate Quality menu defaults to `high_confidence`, while `listed` and `unknown` remain selectable. To change a threshold or reason rule, update the corresponding model, its version string, dbt tests, and `docs/architecture.md` in the same change.
 
 ## RPC Metadata Enrichment
 
@@ -154,7 +154,7 @@ This creates:
 - `public/data/events.json`
 - `public/data/meta.json`
 
-The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status. Event rows include raw Transfer participants, nullable top-level transaction evidence, the indirect marker, and observed-at account evidence; token summaries include indirect inbound/outbound counts. Counterparty export takes the union of exact top-50 candidates for all 945 selections formed by 15 non-empty token-status combinations crossed with 63 non-empty inclusive account-filter combinations, then includes every status row for those addresses. Timeline rows are capped at 5,000 overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for the exact-ranking guarantee, combination/candidate counts, account-evidence min/max observation range and scan coverage, complete/exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
+The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 5,000 daily timeline rows per status-quality-account-evidence cell. Event rows preserve raw Transfer participants, event block/time, nullable top-level transaction evidence, the indirect marker, and observed-at account evidence. Token and counterparty exports take exact candidate unions across all 6,615 non-empty status-quality-account selections, then include every account cell for the selected top-500 tokens and top-50 counterparties. Browser filtering aggregates token and timeline cells back to their displayed grains. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for exact-ranking guarantees, selection/candidate counts, account-evidence min/max observation range and scan coverage, complete/exported row counts, per-cell limits, and `is_sampled` before publishing or debugging a dashboard snapshot. `is_sampled` describes overall export completeness; it does not invalidate the separately proven ranking candidate unions.
 
 ## Verification
 

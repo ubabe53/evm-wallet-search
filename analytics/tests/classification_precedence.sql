@@ -7,7 +7,9 @@ where (token_reputation = 'spam' and token_status != 'spam')
     and token_status != 'suspected_spam'
   )
   or (
-    token_reputation = 'trusted'
+    token_quality = 'high_confidence'
+    and token_reputation not in ('spam', 'suspected_spam')
     and interaction_legitimacy != 'suspicious'
     and token_status != 'trusted'
   )
+  or (token_quality != 'high_confidence' and token_status = 'trusted')

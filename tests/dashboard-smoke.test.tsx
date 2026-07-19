@@ -6,6 +6,8 @@ import {
   accountEvidenceObservationTimeLabel,
   accountMatches,
   aggregateCounterparties,
+  aggregateTimelineRows,
+  aggregateTokenSummaries,
   counterpartyNodeSize,
   etherscanAddressUrl,
   etherscanTokenUrl,
@@ -14,7 +16,7 @@ import {
   interactionEdgeLabel,
   INDIRECT_TRANSFER_EXPLANATION,
 } from "../src/App";
-import type { CounterpartySummary } from "../src/data";
+import type { CounterpartySummary, TimelineRow, TokenSummary } from "../src/data";
 
 const contractAccountEvidence = {
   account_type: "contract",
@@ -100,6 +102,62 @@ const eoaEventEvidence = {
   counterparty_evidence_reason_codes: "erc4337_sender_not_observed|no_code_observed|safe_not_applicable",
 } as const;
 
+const highQualityGraph = {
+  metadataAvailability: "complete",
+  tokenQuality: "high_confidence",
+  tokenQualitySources: ["trustwallet", "uniswap", "coingecko"],
+  tokenQualitySourceCount: 3,
+  tokenQualityReason: "reviewed_manual_approval",
+  tokenQualityProvenance: "https://example.com/usdc",
+  tokenQualityVersion: "token-quality-v1",
+  tokenReputationVersion: "token-reputation-v2",
+  counterpartyAccountType: "contract",
+  counterpartyIsSafe: false,
+  counterpartyIsErc4337Account: false,
+} as const;
+
+const unknownQualityGraph = {
+  metadataAvailability: "complete",
+  tokenQuality: "unknown",
+  tokenQualitySources: [],
+  tokenQualitySourceCount: 0,
+  tokenQualityReason: "no_registry_or_reviewed_approval",
+  tokenQualityProvenance: "https://example.com/spam",
+  tokenQualityVersion: "token-quality-v1",
+  tokenReputationVersion: "token-reputation-v2",
+  counterpartyAccountType: "eoa_candidate",
+  counterpartyIsSafe: false,
+  counterpartyIsErc4337Account: false,
+} as const;
+
+const highQuality = {
+  metadata_availability: "complete",
+  token_quality: "high_confidence",
+  token_quality_sources: ["trustwallet", "uniswap", "coingecko"],
+  token_quality_source_count: 3,
+  token_quality_reason: "reviewed_manual_approval",
+  token_quality_provenance: "https://example.com/usdc",
+  token_quality_version: "token-quality-v1",
+  token_reputation_version: "token-reputation-v2",
+  counterparty_account_type: "contract",
+  counterparty_is_safe: false,
+  counterparty_is_erc4337_account: false,
+} as const;
+
+const unknownQuality = {
+  metadata_availability: "complete",
+  token_quality: "unknown",
+  token_quality_sources: [],
+  token_quality_source_count: 0,
+  token_quality_reason: "no_registry_or_reviewed_approval",
+  token_quality_provenance: "https://example.com/spam",
+  token_quality_version: "token-quality-v1",
+  token_reputation_version: "token-reputation-v2",
+  counterparty_account_type: "eoa_candidate",
+  counterparty_is_safe: false,
+  counterparty_is_erc4337_account: false,
+} as const;
+
 const graph = {
   nodes: [
     { data: { id: "wallet:0x1", label: "vitalik.eth", type: "wallet", address: "0x1", tokenAddress: null, symbol: null, accountType: null } },
@@ -109,10 +167,10 @@ const graph = {
     { data: { id: "counterparty:0x2222222222222222222222222222222222222222", label: "0x2222...2222\nEOA candidate", type: "counterparty", address: "0x2222222222222222222222222222222222222222", tokenAddress: null, symbol: null, accountType: "eoa_candidate", isSafe: false, isErc4337Account: false } },
   ],
   edges: [
-    { data: { id: "edge:1", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "token_counterparty", source: "counterparty:0x1111111111111111111111111111111111111111", target: "token:0x2", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
-    { data: { id: "edge:2", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "wallet_token", source: "token:0x2", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
-    { data: { id: "edge:3", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "token_counterparty", source: "counterparty:0x2222222222222222222222222222222222222222", target: "token:0x3", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 1 } },
-    { data: { id: "edge:4", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "wallet_token", source: "token:0x3", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 1 } },
+    { data: { ...highQualityGraph, id: "edge:1", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "token_counterparty", source: "counterparty:0x1111111111111111111111111111111111111111", target: "token:0x2", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
+    { data: { ...highQualityGraph, id: "edge:2", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "wallet_token", source: "token:0x2", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
+    { data: { ...unknownQualityGraph, id: "edge:3", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "token_counterparty", source: "counterparty:0x2222222222222222222222222222222222222222", target: "token:0x3", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 1 } },
+    { data: { ...unknownQualityGraph, id: "edge:4", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "wallet_token", source: "token:0x3", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 1 } },
   ],
 };
 
@@ -129,6 +187,7 @@ const summaries = {
       metadata_source: "manual",
       metadata_source_url: "https://example.com/usdc",
       token_label_reason: "Canonical metadata",
+      ...highQuality,
       token_reputation: "trusted",
       token_reputation_score: 0,
       token_reputation_reasons: "curated_registry",
@@ -147,6 +206,7 @@ const summaries = {
       wallet_id: "vitalik", wallet_address: "0x1", token_address: "0x3", token_symbol: "SPAM",
       token_name: "Spam Token", token_decimals: 18, token_status: "spam", metadata_source: "manual",
       metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
+      ...unknownQuality,
       token_reputation: "spam", token_reputation_score: 100, token_reputation_reasons: "reviewed_spam",
       transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
       indirect_inbound_transfer_count: 0, indirect_outbound_transfer_count: 0,
@@ -159,7 +219,7 @@ const summaries = {
       ...contractAccountEvidence,
       wallet_id: "vitalik", wallet_address: "0x1",
       counterparty_address: "0x1111111111111111111111111111111111111111",
-      token_status: "trusted", transfer_count: 3,
+      token_status: "trusted", token_quality: "high_confidence", transfer_count: 3,
       inbound_transfer_count: 2, outbound_transfer_count: 1, token_count: 2,
       first_seen_at: "2023-11-01T00:00:00+00:00", last_seen_at: "2023-11-14T22:15:00+00:00",
     },
@@ -167,14 +227,14 @@ const summaries = {
       ...eoaAccountEvidence,
       wallet_id: "vitalik", wallet_address: "0x1",
       counterparty_address: "0x2222222222222222222222222222222222222222",
-      token_status: "spam", transfer_count: 1,
+      token_status: "spam", token_quality: "unknown", transfer_count: 1,
       inbound_transfer_count: 1, outbound_transfer_count: 0, token_count: 1,
       first_seen_at: "2023-11-14T22:16:00+00:00", last_seen_at: "2023-11-14T22:16:00+00:00",
     },
   ],
 };
 
-const timeline = [{ wallet_id: "vitalik", wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, amount_decimal_sum: 125, value_raw_sum: "125000000" }];
+const timeline = [{ ...highQuality, wallet_id: "vitalik", wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, amount_decimal_sum: 125, value_raw_sum: "125000000" }];
 
 const events = [
   {
@@ -207,6 +267,7 @@ const events = [
     metadata_source: "manual",
     metadata_source_url: "https://example.com/usdc",
     token_label_reason: "Canonical metadata",
+    ...highQuality,
     value_raw: "125000000",
     amount_decimal: 125,
   },
@@ -222,6 +283,7 @@ const events = [
     counterparty_address: "0x2222222222222222222222222222222222222222", token_address: "0x3",
     token_symbol: "SPAM", token_name: "Spam Token", token_decimals: 18, token_status: "spam",
     metadata_source: "manual", metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
+    ...unknownQuality,
     value_raw: "1000000000000000000", amount_decimal: 1,
   },
 ];
@@ -279,21 +341,50 @@ const metadata = {
     "unverified+spam": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
     "trusted+unverified+spam": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
   },
+  quality_counts: {
+    high_confidence: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
+    listed: { transfer_count: 0, token_count: 0, counterparty_count: 0 },
+    unknown: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
+  },
+  status_quality_counts: {
+    "trusted+unverified|high_confidence": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
+    "trusted|high_confidence": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
+    "unverified|high_confidence": { transfer_count: 0, token_count: 0, counterparty_count: 0 },
+    "trusted+unverified+spam|high_confidence": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
+    "trusted+unverified+spam|high_confidence+unknown": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
+  },
+  status_quality_account_counts: {
+    "trusted+unverified|high_confidence|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
+      transfer_count: 1,
+      token_count: 1,
+      counterparty_count: 1,
+    },
+    "trusted+unverified+spam|high_confidence|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
+      transfer_count: 1,
+      token_count: 1,
+      counterparty_count: 1,
+    },
+  },
   exported_event_count: 2,
   exported_interaction_count: 2,
   exported_token_summary_count: 2,
   exported_counterparty_summary_count: 2,
   exported_timeline_row_count: 1,
-  event_export_limit_per_status: 1000,
-  graph_interaction_export_limit_per_status: 250,
-  token_summary_export_limit_per_status: 500,
-  counterparty_ranking_limit_per_filter_selection: 50,
+  status_quality_account_evidence_cell_count: 2,
+  event_export_limit_per_status_quality_account_evidence: 1000,
+  graph_interaction_export_limit_per_status_quality_account_evidence: 250,
+  token_summary_ranking_limit_per_status_quality_account_selection: 500,
+  token_summary_ranking_selection_count: 6615,
+  token_summary_ranking_candidate_token_count: 2,
+  token_summary_rankings_exact_for_all_filter_selections: true,
+  counterparty_ranking_limit_per_status_quality_account_selection: 50,
   counterparty_token_status_combination_count: 15,
+  counterparty_token_quality_combination_count: 7,
   counterparty_account_filter_combination_count: 63,
-  counterparty_ranking_selection_count: 945,
+  counterparty_ranking_selection_count: 6615,
   counterparty_ranking_candidate_address_count: 2,
   counterparty_rankings_exact_for_all_filter_selections: true,
-  timeline_row_export_limit: 5000,
+  timeline_row_export_limit_per_status_quality_account_evidence: 5000,
   is_sampled: false,
 };
 
@@ -339,6 +430,7 @@ describe("App", () => {
       {
         ...base,
         token_status: "unverified" as const,
+        token_quality: "listed" as const,
         transfer_count: 2,
         inbound_transfer_count: 0,
         outbound_transfer_count: 2,
@@ -353,6 +445,51 @@ describe("App", () => {
       outbound_transfer_count: 3,
       token_count: 3,
     });
+  });
+
+  it("aggregates matching account cells back to token grain before ranking", () => {
+    const base = summaries.tokens[0] as unknown as TokenSummary;
+    const rows = aggregateTokenSummaries([
+      { ...base, counterparty_account_type: "contract", transfer_count: 60, value_raw_sum: "60" },
+      {
+        ...base,
+        counterparty_account_type: "safe",
+        counterparty_is_safe: true,
+        transfer_count: 60,
+        value_raw_sum: "60",
+      },
+      {
+        ...base,
+        token_address: "0xbbb",
+        token_symbol: "BBB",
+        counterparty_account_type: "contract",
+        transfer_count: 100,
+        value_raw_sum: "100",
+      },
+    ]);
+
+    expect(rows.map((row) => [row.token_address, row.transfer_count])).toEqual([
+      ["0x2", 120],
+      ["0xbbb", 100],
+    ]);
+    expect(rows[0].value_raw_sum).toBe("120");
+  });
+
+  it("aggregates account cells back to the displayed daily token-direction grain", () => {
+    const base = timeline[0] as unknown as TimelineRow;
+    const rows = aggregateTimelineRows([
+      { ...base, counterparty_account_type: "contract", transfer_count: 2, value_raw_sum: "10" },
+      {
+        ...base,
+        counterparty_account_type: "safe",
+        counterparty_is_safe: true,
+        transfer_count: 3,
+        value_raw_sum: "20",
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ transfer_count: 5, value_raw_sum: "30" });
   });
 
   it("builds canonical Etherscan routes", () => {
@@ -439,6 +576,15 @@ describe("App", () => {
     expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
     fireEvent.click(spamStatus);
     expect(spamStatus).toBeChecked();
+    expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Quality (1)"));
+    const highQualityCheckbox = screen.getByRole("checkbox", { name: "high confidence" });
+    const listedQualityCheckbox = screen.getByRole("checkbox", { name: "listed" });
+    const unknownQualityCheckbox = screen.getByRole("checkbox", { name: "unknown" });
+    expect(highQualityCheckbox).toBeChecked();
+    expect(listedQualityCheckbox).not.toBeChecked();
+    expect(unknownQualityCheckbox).not.toBeChecked();
+    fireEvent.click(unknownQualityCheckbox);
     expect(screen.getAllByText("SPAM").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText("Account evidence (6)"));

@@ -1,3 +1,4 @@
+import csv
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -7,6 +8,18 @@ from scripts.sync_token_registry import merge_registries, normalize_tokens
 
 
 class TokenRegistryTest(unittest.TestCase):
+    def test_coingecko_only_oscar_and_puppies_are_single_source_listings(self) -> None:
+        seed_path = Path(__file__).parents[1] / "analytics" / "seeds" / "token_metadata.csv"
+        with seed_path.open(newline="") as source:
+            rows = {row["token_address"]: row for row in csv.DictReader(source)}
+
+        for address in (
+            "0xebb66a88cedd12bfe3a289df6dfee377f2963f12",
+            "0xcf91b70017eabde82c9671e30e5502d312ea6eb2",
+        ):
+            with self.subTest(address=address):
+                self.assertEqual(rows[address]["metadata_source"], "coingecko")
+
     def test_configuration_prefers_environment_then_yaml_then_public_fallback(self) -> None:
         config = {"ethereum": {"rpc_url": "https://yaml.example", "public_rpc_url": "https://public.example"}}
         self.assertEqual(
