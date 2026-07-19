@@ -4,7 +4,7 @@ select
     when reputation.token_reputation = 'spam' then 'spam'
     when reputation.token_reputation = 'suspected_spam'
       or interactions.interaction_legitimacy = 'suspicious' then 'suspected_spam'
-    when reputation.token_reputation = 'trusted' then 'trusted'
+    when events.token_quality = 'high_confidence' then 'trusted'
     else 'unverified'
   end as token_status,
   coalesce(reputation.token_reputation, 'unverified') as token_reputation,

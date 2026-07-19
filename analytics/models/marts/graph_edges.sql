@@ -6,14 +6,25 @@ with interaction_counts as (
     token_address,
     coalesce(token_symbol, substr(token_address, 1, 10)) as token_symbol,
     token_status,
+    metadata_availability,
+    token_quality,
+    token_quality_sources,
+    token_quality_source_count,
+    token_quality_reason,
+    token_quality_provenance,
+    token_quality_version,
     metadata_source,
     metadata_source_url,
     token_reputation,
     token_reputation_score,
     token_reputation_reasons,
+    token_reputation_version,
     interaction_legitimacy,
     interaction_legitimacy_score,
     interaction_legitimacy_reasons,
+    counterparty_account_type,
+    counterparty_is_safe,
+    counterparty_is_erc4337_account,
     direction,
     count(*) as transfer_count,
     case
@@ -24,9 +35,12 @@ with interaction_counts as (
     max(block_timestamp) as last_seen_at
   from {{ ref('wallet_events') }}
   group by wallet_address, counterparty_address, token_address, token_symbol,
-    token_status, metadata_source, metadata_source_url, token_reputation,
-    token_reputation_score, token_reputation_reasons, interaction_legitimacy,
-    interaction_legitimacy_score, interaction_legitimacy_reasons, direction
+    token_status, metadata_availability, token_quality, token_quality_sources,
+    token_quality_source_count, token_quality_reason, token_quality_provenance,
+    token_quality_version, metadata_source, metadata_source_url, token_reputation,
+    token_reputation_score, token_reputation_reasons, token_reputation_version, interaction_legitimacy,
+    interaction_legitimacy_score, interaction_legitimacy_reasons,
+    counterparty_account_type, counterparty_is_safe, counterparty_is_erc4337_account, direction
 ),
 
 interactions as (

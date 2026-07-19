@@ -47,14 +47,25 @@ export type GraphEdge = {
     tokenSymbol: string;
     label?: string;
     tokenStatus: TokenStatus;
+    metadataAvailability: MetadataAvailability;
+    tokenQuality: TokenQuality;
+    tokenQualitySources: string[];
+    tokenQualitySourceCount: number;
+    tokenQualityReason: string;
+    tokenQualityProvenance: string;
+    tokenQualityVersion: "token-quality-v1";
     metadataSource: string | null;
     metadataSourceUrl: string | null;
     tokenReputation: TokenReputation;
     tokenReputationScore: number;
     tokenReputationReasons: string;
+    tokenReputationVersion: "token-reputation-v2";
     interactionLegitimacy: InteractionLegitimacy;
     interactionLegitimacyScore: number;
     interactionLegitimacyReasons: string;
+    counterpartyAccountType: AccountType;
+    counterpartyIsSafe: boolean;
+    counterpartyIsErc4337Account: boolean;
     transferCount: number;
     counterpartyTransferCount: number;
     amountDecimalSum: number | null;
@@ -63,6 +74,8 @@ export type GraphEdge = {
 
 export type TokenStatus = "trusted" | "unverified" | "suspected_spam" | "spam";
 export type TokenReputation = TokenStatus;
+export type TokenQuality = "high_confidence" | "listed" | "unknown";
+export type MetadataAvailability = "complete" | "partial" | "unavailable";
 export type InteractionLegitimacy = "not_suspicious" | "uncertain" | "suspicious";
 export type TransactionSenderRelation = "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 export type TransactionTargetRelation = "token_contract" | "transfer_sender" | "transfer_recipient" | "other" | "unknown";
@@ -106,9 +119,17 @@ export type AccountEvidence = {
 };
 
 export type ClassificationEvidence = {
+  metadata_availability: MetadataAvailability;
+  token_quality: TokenQuality;
+  token_quality_sources: string[];
+  token_quality_source_count: number;
+  token_quality_reason: string;
+  token_quality_provenance: string;
+  token_quality_version: "token-quality-v1";
   token_reputation: TokenReputation;
   token_reputation_score: number;
   token_reputation_reasons: string;
+  token_reputation_version: "token-reputation-v2";
   interaction_legitimacy: InteractionLegitimacy;
   interaction_legitimacy_score: number;
   interaction_legitimacy_reasons: string;
@@ -130,9 +151,20 @@ export type TokenSummary = {
   metadata_source: string | null;
   metadata_source_url: string | null;
   token_label_reason: string | null;
+  metadata_availability: MetadataAvailability;
+  token_quality: TokenQuality;
+  token_quality_sources: string[];
+  token_quality_source_count: number;
+  token_quality_reason: string;
+  token_quality_provenance: string;
+  token_quality_version: "token-quality-v1";
   token_reputation: TokenReputation;
   token_reputation_score: number;
   token_reputation_reasons: string;
+  token_reputation_version: "token-reputation-v2";
+  counterparty_account_type: AccountType;
+  counterparty_is_safe: boolean;
+  counterparty_is_erc4337_account: boolean;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -151,6 +183,7 @@ export type CounterpartySummary = AccountEvidence & {
   wallet_address: string;
   counterparty_address: string;
   token_status: TokenStatus;
+  token_quality: TokenQuality;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -168,6 +201,9 @@ export type TimelineRow = ClassificationEvidence & {
   token_status: TokenStatus;
   metadata_source: string | null;
   metadata_source_url: string | null;
+  counterparty_account_type: AccountType;
+  counterparty_is_safe: boolean;
+  counterparty_is_erc4337_account: boolean;
   direction: "in" | "out";
   transfer_count: number;
   amount_decimal_sum: number | null;
@@ -277,21 +313,41 @@ export type PipelineMetadata = {
     token_count: number;
     counterparty_count: number;
   }>;
+  quality_counts: Record<string, {
+    transfer_count: number;
+    token_count: number;
+    counterparty_count: number;
+  }>;
+  status_quality_counts: Record<string, {
+    transfer_count: number;
+    token_count: number;
+    counterparty_count: number;
+  }>;
+  status_quality_account_counts: Record<string, {
+    transfer_count: number;
+    token_count: number;
+    counterparty_count: number;
+  }>;
   exported_event_count: number;
   exported_interaction_count: number;
   exported_token_summary_count: number;
   exported_counterparty_summary_count: number;
   exported_timeline_row_count: number;
-  event_export_limit_per_status: number;
-  graph_interaction_export_limit_per_status: number;
-  token_summary_export_limit_per_status: number;
-  counterparty_ranking_limit_per_filter_selection: number;
+  status_quality_account_evidence_cell_count: number;
+  event_export_limit_per_status_quality_account_evidence: number;
+  graph_interaction_export_limit_per_status_quality_account_evidence: number;
+  token_summary_ranking_limit_per_status_quality_account_selection: number;
+  token_summary_ranking_selection_count: number;
+  token_summary_ranking_candidate_token_count: number;
+  token_summary_rankings_exact_for_all_filter_selections: boolean;
+  counterparty_ranking_limit_per_status_quality_account_selection: number;
   counterparty_token_status_combination_count: number;
+  counterparty_token_quality_combination_count: number;
   counterparty_account_filter_combination_count: number;
   counterparty_ranking_selection_count: number;
   counterparty_ranking_candidate_address_count: number;
   counterparty_rankings_exact_for_all_filter_selections: boolean;
-  timeline_row_export_limit: number;
+  timeline_row_export_limit_per_status_quality_account_evidence: number;
   is_sampled: boolean;
 };
 

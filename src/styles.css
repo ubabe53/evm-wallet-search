@@ -708,6 +708,36 @@ th {
   color: var(--suspected-spam);
 }
 
+.tokenQuality {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--unverified-bg);
+  padding: 3px 6px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.statusMenu .tokenQuality {
+  margin-left: 0;
+}
+
+.tokenQuality.high_confidence {
+  border-color: var(--live-text);
+  background: var(--live-bg);
+  color: var(--live-text);
+}
+
+.tokenQuality.listed {
+  border-color: var(--graph-wallet);
+  color: var(--graph-wallet);
+}
+
 .accountType {
   display: inline-flex;
   align-items: center;

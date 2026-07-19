@@ -22,7 +22,7 @@ models:
       - name: transaction_to_address
         description: Nullable top-level transaction target; null for legacy rows without envelope evidence or an unavailable target.
   - name: stg_token_metadata
-    description: Curated Trust Wallet, Uniswap, and CoinGecko registry plus reviewed manual token-label overrides.
+    description: Token display metadata, metadata availability, independent registry evidence, and reviewed manual overrides.
     columns:
       - name: token_address
         tests:
@@ -40,6 +40,33 @@ models:
           - accepted_values:
               arguments:
                 values: ["manual", "trustwallet", "uniswap", "coingecko", "trustwallet+uniswap", "trustwallet+coingecko", "uniswap+coingecko", "trustwallet+uniswap+coingecko", "ethereum_rpc"]
+      - name: metadata_availability
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["complete", "partial", "unavailable"]
+      - name: token_quality
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["high_confidence", "listed", "unknown"]
+      - name: token_quality_source_count
+        tests:
+          - not_null
+      - name: token_quality_reason
+        tests:
+          - not_null
+      - name: token_quality_provenance
+        tests:
+          - not_null
+      - name: token_quality_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-quality-v1"]
   - name: stg_counterparty_metadata
     description: Pinned-block account evidence for enriched Ethereum counterparty addresses, including independent Safe observations and deployment-clamped, chunked canonical EntryPoint sender evidence with explicit successful and failed ranges.
     columns:
@@ -87,6 +114,26 @@ models:
       - name: token_reputation_score
         tests:
           - not_null
+      - name: token_reputation_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-reputation-v2"]
+      - name: token_quality
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["high_confidence", "listed", "unknown"]
+      - name: token_quality_source_count
+        tests:
+          - not_null
+      - name: token_quality_version
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["token-quality-v1"]
   - name: int_wallet_token_interactions
     description: Behavioral legitimacy evidence at wallet and token grain.
     columns:
@@ -150,6 +197,30 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: metadata_availability
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["complete", "partial", "unavailable"]
+      - name: token_quality
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["high_confidence", "listed", "unknown"]
+      - name: token_reputation_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-reputation-v2"]
+      - name: token_quality_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-quality-v1"]
       - name: counterparty_account_type
         tests:
           - not_null
@@ -205,11 +276,35 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: token_quality
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["high_confidence", "listed", "unknown"]
+      - name: token_reputation_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-reputation-v2"]
+      - name: counterparty_account_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
+      - name: counterparty_is_safe
+        tests:
+          - not_null
+      - name: counterparty_is_erc4337_account
+        tests:
+          - not_null
       - name: counterparty_transfer_count
         tests:
           - not_null
   - name: token_summary
-    description: One row per wallet and ERC20 token, aggregating inbound and outbound transfer events without mixing token units.
+    description: One row per wallet, ERC20 token, effective status, quality, and exact counterparty account-evidence signature, without mixing token units.
     columns:
       - name: wallet_address
         tests:
@@ -223,6 +318,30 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: token_quality
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["high_confidence", "listed", "unknown"]
+      - name: token_reputation_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-reputation-v2"]
+      - name: counterparty_account_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
+      - name: counterparty_is_safe
+        tests:
+          - not_null
+      - name: counterparty_is_erc4337_account
+        tests:
+          - not_null
       - name: inbound_transfer_count
         tests:
           - not_null
@@ -245,7 +364,7 @@ models:
         tests:
           - not_null
   - name: counterparty_summary
-    description: Eligible direct ERC20 counterparties by wallet, token status, and address with pinned-block account evidence; excludes mint/burn, self, and token-contract addresses.
+    description: Eligible direct ERC20 counterparties by wallet, effective token status, token quality, and address with observed-at account evidence; excludes mint/burn, self, and token-contract addresses.
     columns:
       - name: wallet_address
         tests:
@@ -265,6 +384,12 @@ models:
           - accepted_values:
               arguments:
                 values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
+      - name: token_quality
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["high_confidence", "listed", "unknown"]
       - name: is_safe
         tests:
           - not_null
@@ -281,7 +406,7 @@ models:
         tests:
           - not_null
   - name: timeline_daily
-    description: Daily token flow at wallet, token, and direction grain; token units are never mixed.
+    description: Daily token flow at wallet, token, status, quality, exact counterparty account-evidence signature, and direction grain; token units are never mixed.
     columns:
       - name: wallet_address
         tests:
@@ -298,6 +423,30 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: token_quality
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["high_confidence", "listed", "unknown"]
+      - name: token_reputation_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-reputation-v2"]
+      - name: counterparty_account_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
+      - name: counterparty_is_safe
+        tests:
+          - not_null
+      - name: counterparty_is_erc4337_account
+        tests:
+          - not_null
   - name: pipeline_metadata
     description: Export provenance and complete mart counts for each configured wallet, including minimum and maximum account-evidence observation block/time across mixed enrichment batches.
     columns:

@@ -37,6 +37,13 @@ matched as (
     tokens.metadata_source,
     tokens.metadata_source_url,
     tokens.token_label_reason,
+    coalesce(tokens.metadata_availability, 'unavailable') as metadata_availability,
+    coalesce(tokens.token_quality, 'unknown') as token_quality,
+    coalesce(tokens.token_quality_sources, []::varchar[]) as token_quality_sources,
+    coalesce(tokens.token_quality_source_count, 0) as token_quality_source_count,
+    coalesce(tokens.token_quality_reason, 'no_registry_or_reviewed_approval') as token_quality_reason,
+    coalesce(tokens.token_quality_provenance, 'no_recorded_source') as token_quality_provenance,
+    coalesce(tokens.token_quality_version, 'token-quality-v1') as token_quality_version,
     transfers.from_address,
     transfers.to_address,
     case
