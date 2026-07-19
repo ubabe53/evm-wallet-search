@@ -31,7 +31,7 @@ Fixture mode is the default so the project can be built and tested without a liv
 bun run analytics:build
 ```
 
-The five fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Exported `meta.json` records `data_source: fixture`, and the dashboard displays a fixture badge.
+The five fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Exported `meta.json` records `data_source: fixture`, and the dashboard displays a fixture badge. After changing fixture columns, use `python3 scripts/run_dbt.py build --full-refresh` once so dbt recreates the seed schema.
 
 ## Token Registry
 
@@ -93,7 +93,9 @@ Run the indexer locally:
 bun run indexer:dev
 ```
 
-Local HyperIndex requires Docker and an `ENVIO_API_TOKEN`. The indexer uses Envio wildcard indexing with topic filters for the configured wallet and writes `Erc20Transfer` entities to Postgres. Raw event duplication is disabled.
+Local HyperIndex requires Docker and an `ENVIO_API_TOKEN`. The indexer uses Envio wildcard indexing with topic filters for the configured wallet and writes `Erc20Transfer` entities to Postgres. Its event field selection includes top-level transaction `from` and `to`; the entity columns are nullable so existing rows can remain readable during migration. Raw event duplication is disabled.
+
+Run `bun run indexer:codegen` after changing the Envio field selection or entity schema. Adding the nullable columns does not retroactively populate already-processed entities: use the appropriate Envio replay/reindex procedure for the intended block range before claiming complete transaction-initiation coverage. Until replay, dbt preserves missing senders/targets as null, relation evidence as `unknown`, and `is_indirect` as null. A normal fixture build, export, or dashboard run never starts that backfill.
 
 After the indexer has created and populated `public."Erc20Transfer"`, export its Postgres connection URI and build in live mode:
 
@@ -119,7 +121,7 @@ This creates:
 - `public/data/events.json`
 - `public/data/meta.json`
 
-The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status. Counterparty export takes the union of the exact top 50 addresses for all 15 non-empty status combinations and includes every status row for those candidates; timeline rows are capped at 5,000 overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for full status-combination counts, complete and exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
+The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status. Event rows include raw Transfer participants plus nullable top-level transaction evidence and the indirect marker; token summaries include indirect inbound/outbound counts. Counterparty export takes the union of the exact top 50 addresses for all 15 non-empty status combinations and includes every status row for those candidates; timeline rows are capped at 5,000 overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for full status-combination counts, complete and exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
 
 ## Verification
 

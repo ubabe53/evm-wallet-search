@@ -43,6 +43,8 @@ describe("dashboard export shape", () => {
       transfer_count: number;
       inbound_transfer_count: number;
       outbound_transfer_count: number;
+      indirect_inbound_transfer_count: number;
+      indirect_outbound_transfer_count: number;
       counterparty_count: number;
       sender_account_count: number;
       recipient_account_count: number;
@@ -54,6 +56,8 @@ describe("dashboard export shape", () => {
       row.counterparty_count >= row.sender_account_count &&
       row.counterparty_count >= row.recipient_account_count &&
       row.counterparty_count <= row.sender_account_count + row.recipient_account_count &&
+      row.indirect_inbound_transfer_count <= row.inbound_transfer_count &&
+      row.indirect_outbound_transfer_count <= row.outbound_transfer_count &&
       row.transfer_count === row.inbound_transfer_count + row.outbound_transfer_count)).toBe(true);
     expect(summaries.counterparties.every((row: {
       counterparty_address: string;
@@ -80,6 +84,25 @@ describe("dashboard export shape", () => {
       node.data.type === "token" || ["contract", "wallet", "unknown"].includes(node.data.addressType ?? ""))).toBe(true);
     expect(events.every((event: { counterparty_type: string }) =>
       ["contract", "wallet", "unknown"].includes(event.counterparty_type))).toBe(true);
+    expect(events.every((event: {
+      from_address: string;
+      to_address: string;
+      transaction_from_address: string | null;
+      transaction_to_address: string | null;
+      transaction_sender_relation: string;
+      transaction_target_relation: string;
+      is_indirect: boolean | null;
+    }) =>
+      typeof event.from_address === "string" &&
+      typeof event.to_address === "string" &&
+      ["transfer_sender", "transfer_recipient", "other", "unknown"].includes(event.transaction_sender_relation) &&
+      ["token_contract", "transfer_sender", "transfer_recipient", "other", "unknown"].includes(event.transaction_target_relation) &&
+      (event.transaction_from_address == null
+        ? event.transaction_sender_relation === "unknown" && event.is_indirect == null
+        : event.transaction_sender_relation !== "unknown" && typeof event.is_indirect === "boolean") &&
+      (event.transaction_to_address == null
+        ? event.transaction_target_relation === "unknown"
+        : event.transaction_target_relation !== "unknown"))).toBe(true);
     expect(graph.edges.every((edge: { data: { transferCount: number; counterpartyTransferCount: number } }) =>
       edge.data.counterpartyTransferCount >= edge.data.transferCount)).toBe(true);
   });

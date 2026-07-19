@@ -5,7 +5,7 @@ The MVP is intentionally batch-oriented. HyperIndex captures a narrow event set,
 ## Flow
 
 1. `indexer/` runs Envio HyperIndex on Ethereum mainnet.
-2. The HyperIndex handler stores one `Erc20Transfer` entity per ERC20 transfer involving the configured wallet. HyperIndex raw-event storage is disabled because the normalized entity is the pipeline input and duplicate raw storage adds overhead.
+2. The HyperIndex handler stores one `Erc20Transfer` entity per ERC20 transfer involving the configured wallet. It selects the top-level transaction `from` and `to` fields and stores them as nullable envelope evidence alongside the emitted Transfer `from`, `to`, and raw value. HyperIndex raw-event storage is disabled because the normalized entity is the pipeline input and duplicate raw storage adds overhead.
 3. `analytics/` reads local fixture seeds by default. In live mode, dbt-duckdb attaches HyperIndex Postgres read-only as the `hyperindex` catalog and reads `public."Erc20Transfer"`.
 4. dbt joins offline token and counterparty-bytecode snapshots, calculates explainable token-reputation and interaction-legitimacy evidence, then builds marts into `analytics/wallet_analytics.duckdb`.
 5. `scripts/export_dashboard.py` exports deterministic, bounded mart views to `public/data/*.json`. The complete marts remain in DuckDB.
@@ -29,7 +29,9 @@ Each exported interaction also carries the counterparty's complete wallet-level 
 
 The Ethereum zero address is excluded from the rendered interaction graph and the ranked counterparty summary because it represents token mint/burn mechanics rather than a navigable counterparty. The ranked summary also excludes the configured wallet itself and addresses observed as ERC20 token contracts. Their transfers remain in `wallet_events`, token summaries, totals, and recent-event JSON so the underlying analytics stay complete.
 
-The Top ERC-20 Counterparties panel ranks the sheer number of transfer events—not distinct transactions—and aggregates selected token-status rows into one address. It shows address type, token breadth, `Amount In / Out` event counts, and recency. The token-flow panel sits below recent events and combines both directions into one row per token. Its `Senders | Recipients` indicator counts distinct non-zero, non-self event counterparties rather than directional event frequency; raw token amounts are not presented. Recent events are paginated client-side in groups of 10.
+The Top ERC-20 Counterparties panel ranks the sheer number of transfer events—not distinct transactions—and aggregates selected token-status rows into one address. It shows address type, token breadth, `Amount In / Out` event counts, and recency. The token-flow panel sits below recent events and combines both directions into one row per token. Its `Senders | Recipients` indicator counts distinct non-zero, non-self event counterparties rather than directional event frequency; raw token amounts are not presented. It also shows exact confirmed-indirect inbound and outbound counts. Recent events are paginated client-side in groups of 10.
+
+Transaction initiation remains a separate evidence layer. `direction` is still derived only from emitted Transfer `from`/`to` relative to the configured wallet. An event is `is_indirect = true` only when a selected top-level transaction sender exists and differs from Transfer `from`; it is false on an observed match and null for legacy rows without sender evidence. Sender and target relation codes describe exact address equality against Transfer participants and the emitting token contract. Recent events append `*` to `in` or `out` for confirmed mismatches, with a tooltip covering `transferFrom`, routers, Safe/account abstraction, and synthetic or spam emission. The mismatch is not a spam signal by itself and does not establish execution path, intent, standards compliance, or economic ownership.
 
 Theme changes update the existing Cytoscape stylesheet in place. They do not recreate the graph or rerun its layout, so node positions, pan, and zoom remain stable. The graph container owns explicit light and dark palette variables to prevent effect-order races from applying the previous theme's label color.
 
@@ -49,9 +51,9 @@ Token reputation and interaction legitimacy are modeled independently, then comb
 
 Contract-level reputation signals in `token-reputation-v1` are URL-bearing metadata (70), claim language (30), configured-wallet impersonation (60), native BTC/ETH impersonation (65), Trust Wallet/Uniswap identity collision (65), and CoinGecko-only identity collision (35). Scores are capped at 100 and require 60 for `suspected_spam`. The weaker CoinGecko collision therefore cannot classify a token by itself.
 
-Wallet-token behavior in `interaction-legitimacy-v1` detects at least 100 counterparties with no more than 1.25 transfers per counterparty (45). It adds evidence for a distribution completed within 72 hours (20), at least 98% one-direction activity (15), and at least 98% apparent outbound activity (20). Scores of 60 or more are `suspicious`, 20-59 are `uncertain`, and lower scores are `not_suspicious`.
+Wallet-token behavior in `interaction-legitimacy-v2` detects at least 100 counterparties with no more than 1.25 transfers per counterparty (45). It adds evidence for a distribution completed within 72 hours (20) and at least 98% one-direction activity (15). The outbound-initiator component (20) is added only when at least 98% of activity is outbound and every outbound row has selected transaction-sender evidence matching the configured wallet as Transfer sender. Scores of 60 or more are `suspicious`, 20-59 are `uncertain`, and lower scores are `not_suspicious`.
 
-Every score has stable reason codes and a classifier version. `not_suspicious` means no current heuristic fired; it does not prove that the wallet initiated the transaction. The indexer currently stores event `from` and `to`, not transaction initiator, so apparent outbound mass activity is explicitly labeled `mass_outbound_without_initiator_proof`. Capturing transaction sender is the next stronger interaction-legitimacy signal and requires an indexer schema migration and backfill.
+Every score has stable reason codes and a classifier version. `not_suspicious` means no current heuristic fired; it does not prove benign intent. The evidence-backed outbound reason is `mass_outbound_transaction_sender_matches_wallet`; it is never emitted for missing or mismatched transaction senders. Indirect counts and relation codes remain descriptive evidence and do not add a spam score on their own.
 
 Runtime settings resolve from shell environment first, git-ignored `config.yaml` second, and the configured public RPC fallback last. The fallback is allowed only for read-only Ethereum metadata. Envio and live Postgres credentials remain required for their respective operations.
 
@@ -70,8 +72,9 @@ Combined status-balanced rows are sorted globally after selection, preserving ac
 ## Scope Boundaries
 
 - Included: ERC20 `Transfer` events on Ethereum mainnet.
+- Included: nullable top-level transaction sender and target fields selected on those events.
 - Included: raw token units and decimal-adjusted token amounts when token metadata exists.
-- Excluded: native ETH transfers, approvals, swaps, NFT transfers, USD pricing, and arbitrary wallet lookup.
+- Excluded: traces, internal calls, state deltas, native ETH transfers, approvals, swaps, NFT transfers, USD pricing, and arbitrary wallet lookup.
 
 ## Documentation Rule
 

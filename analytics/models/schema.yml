@@ -17,6 +17,10 @@ models:
       - name: to_address
         tests:
           - not_null
+      - name: transaction_from_address
+        description: Nullable top-level transaction sender; null for legacy rows without envelope evidence.
+      - name: transaction_to_address
+        description: Nullable top-level transaction target; null for legacy rows without envelope evidence or an unavailable target.
   - name: stg_token_metadata
     description: Curated Trust Wallet, Uniswap, and CoinGecko registry plus reviewed manual token-label overrides.
     columns:
@@ -83,6 +87,12 @@ models:
       - name: interaction_legitimacy_score
         tests:
           - not_null
+      - name: indirect_inbound_transfer_count
+        tests:
+          - not_null
+      - name: indirect_outbound_transfer_count
+        tests:
+          - not_null
   - name: wallet_events
     description: Dashboard event table, one row per wallet-relevant ERC20 transfer.
     columns:
@@ -91,6 +101,12 @@ models:
           - unique
           - not_null
       - name: wallet_address
+        tests:
+          - not_null
+      - name: from_address
+        tests:
+          - not_null
+      - name: to_address
         tests:
           - not_null
       - name: counterparty_address
@@ -104,6 +120,18 @@ models:
           - accepted_values:
               arguments:
                 values: ["in", "out"]
+      - name: transaction_sender_relation
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["transfer_sender", "transfer_recipient", "other", "unknown"]
+      - name: transaction_target_relation
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token_contract", "transfer_sender", "transfer_recipient", "other", "unknown"]
       - name: token_status
         tests:
           - not_null
@@ -181,6 +209,12 @@ models:
         tests:
           - not_null
       - name: outbound_transfer_count
+        tests:
+          - not_null
+      - name: indirect_inbound_transfer_count
+        tests:
+          - not_null
+      - name: indirect_outbound_transfer_count
         tests:
           - not_null
       - name: counterparty_count

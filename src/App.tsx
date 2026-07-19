@@ -29,6 +29,7 @@ const TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified", "suspected_spam"
 const DEFAULT_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
+export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic/spam event emission; the mismatch alone does not prove spam.";
 
 export function etherscanAddressUrl(address: string): string {
   return `${ETHERSCAN_BASE_URL}/address/${address}`;
@@ -446,6 +447,7 @@ function TokenTable({ rows }: { rows: TokenSummary[] }) {
           <th>Token</th>
           <th>Status</th>
           <th>Transfers</th>
+          <th>Indirect In / Out</th>
           <th>Senders | Recipients</th>
           <th>Counterparties</th>
         </tr>
@@ -453,7 +455,7 @@ function TokenTable({ rows }: { rows: TokenSummary[] }) {
       <tbody>
         {rows.length === 0 && (
           <tr>
-            <td className="tableEmpty" colSpan={5}>No token flows match</td>
+            <td className="tableEmpty" colSpan={6}>No token flows match</td>
           </tr>
         )}
         {rows.map((row) => (
@@ -474,6 +476,13 @@ function TokenTable({ rows }: { rows: TokenSummary[] }) {
               reputationReasons={row.token_reputation_reasons}
             /></td>
             <td>{row.transfer_count.toLocaleString("en-US")}</td>
+            <td>
+              <span className="flowIndicator" title={INDIRECT_TRANSFER_EXPLANATION}>
+                <span className="direction in"><ArrowDownLeft size={13} />in* {row.indirect_inbound_transfer_count.toLocaleString("en-US")}</span>
+                <i aria-hidden="true">|</i>
+                <span className="direction out"><ArrowUpRight size={13} />out* {row.indirect_outbound_transfer_count.toLocaleString("en-US")}</span>
+              </span>
+            </td>
             <td>
               <span
                 className="flowIndicator"
@@ -595,9 +604,12 @@ function EventList({
             </EtherscanLink>
           </div>
           <div>
-            <span className={`direction ${event.direction}`}>
+            <span
+              className={`direction ${event.direction}`}
+              title={event.is_indirect ? INDIRECT_TRANSFER_EXPLANATION : undefined}
+            >
               {event.direction === "in" ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-              {event.direction}
+              {event.direction}{event.is_indirect ? "*" : ""}
             </span>
             <span>{amountLabel(event.amount_decimal)}</span>
             <EtherscanLink
@@ -717,8 +729,12 @@ export function App() {
       [
         event.transfer_id,
         event.transaction_hash,
+        event.transaction_from_address,
+        event.transaction_to_address,
         event.block_date,
         event.direction,
+        event.transaction_sender_relation,
+        event.transaction_target_relation,
         event.ens,
         event.wallet_address,
         event.counterparty_address,

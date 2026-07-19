@@ -31,6 +31,8 @@ seeds:
         block_timestamp: bigint
         transaction_hash: varchar
         transaction_index: integer
+        transaction_from_address: varchar
+        transaction_to_address: varchar
         log_index: integer
         token_address: varchar
         from_address: varchar

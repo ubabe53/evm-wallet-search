@@ -11,6 +11,8 @@ with raw_transfers as (
       block_timestamp,
       transaction_hash,
       transaction_index,
+      transaction_from_address,
+      transaction_to_address,
       log_index,
       token_address,
       from_address,
@@ -18,7 +20,7 @@ with raw_transfers as (
       value_raw
     from postgres_query(
       'hyperindex',
-      'select id, chain_id, block_number, block_timestamp, transaction_hash, transaction_index, log_index, token_address, from_address, to_address, value_raw::text as value_raw from public."Erc20Transfer"'
+      'select id, chain_id, block_number, block_timestamp, transaction_hash, transaction_index, transaction_from_address, transaction_to_address, log_index, token_address, from_address, to_address, value_raw::text as value_raw from public."Erc20Transfer"'
     )
   {% endif %}
 ),
@@ -31,6 +33,8 @@ normalized as (
     to_timestamp(cast(block_timestamp as bigint)) as block_timestamp,
     lower(cast(transaction_hash as varchar)) as transaction_hash,
     cast(transaction_index as integer) as transaction_index,
+    lower(nullif(cast(transaction_from_address as varchar), '')) as transaction_from_address,
+    lower(nullif(cast(transaction_to_address as varchar), '')) as transaction_to_address,
     cast(log_index as integer) as log_index,
     lower(cast(token_address as varchar)) as token_address,
     lower(cast(from_address as varchar)) as from_address,
