@@ -241,6 +241,22 @@ h2 {
   accent-color: var(--graph-wallet);
 }
 
+.accountFilter summary {
+  min-width: 156px;
+}
+
+.accountMenu {
+  min-width: 245px;
+}
+
+.accountMenu small {
+  padding: 7px;
+  border-top: 1px solid var(--subtle-border);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .searchbox {
   display: inline-flex;
   align-items: center;
@@ -490,6 +506,24 @@ h2 {
   background: var(--graph-counterparty);
 }
 
+.graphLegend .delegatedSwatch {
+  border-radius: 1px;
+  background: var(--graph-counterparty);
+  transform: rotate(45deg);
+}
+
+.graphLegend .safeSwatch {
+  border-radius: 2px;
+  background: var(--graph-counterparty);
+  box-shadow: 0 0 0 2px var(--live-text);
+}
+
+.graphLegend .erc4337Swatch {
+  border: 2px dotted var(--graph-wallet);
+  border-radius: 2px;
+  background: transparent;
+}
+
 .graphLegend .unknownSwatch {
   border-style: dashed;
   background: transparent;
@@ -674,7 +708,7 @@ th {
   color: var(--suspected-spam);
 }
 
-.addressType {
+.accountType {
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--border);
@@ -688,18 +722,35 @@ th {
   text-transform: uppercase;
 }
 
-.addressType.contract {
+.accountType.contract,
+.accountType.eip7702_delegated {
   border-color: var(--out);
   color: var(--out);
 }
 
-.addressType.wallet {
+.accountType.eoa_candidate {
   border-color: var(--in);
   color: var(--in);
 }
 
-.addressType.unknown {
+.accountType.safe {
+  border-color: var(--live-text);
+  color: var(--live-text);
+}
+
+.accountType.erc4337_account {
+  border-color: var(--graph-wallet);
+  color: var(--graph-wallet);
+}
+
+.accountType.unknown {
   border-style: dashed;
+}
+
+.accountBadges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .etherscanLink,

@@ -3,9 +3,30 @@ select
   'wallet' as node_type,
   coalesce(ens, wallet_address) as label,
   wallet_address as address,
-  null as token_address,
-  null as symbol,
-  'wallet' as address_type
+  cast(null as varchar) as token_address,
+  cast(null as varchar) as symbol,
+  cast(null as varchar) as account_type,
+  cast(null as varchar) as code_state,
+  cast(null as bigint) as observation_block_number,
+  cast(null as varchar) as observation_block_timestamp,
+  cast(null as varchar) as eip7702_delegation_target,
+  cast(null as boolean) as is_safe,
+  cast(null as varchar) as safe_verification_status,
+  cast(null as varchar) as safe_version,
+  cast(null as varchar) as safe_singleton_address,
+  cast(null as integer) as safe_owner_count,
+  cast(null as integer) as safe_threshold,
+  cast(null as boolean) as is_erc4337_account,
+  cast(null as varchar) as erc4337_entrypoint_address,
+  cast(null as varchar) as erc4337_entrypoint_version,
+  cast(null as varchar) as erc4337_entrypoint_source,
+  cast(null as varchar) as erc4337_entrypoint_deployment_block,
+  cast(null as varchar) as erc4337_effective_coverage,
+  cast(null as varchar) as erc4337_failed_ranges,
+  cast(null as varchar) as evidence_fetch_status,
+  cast(null as varchar) as evidence_reason_codes,
+  cast(null as bigint) as evidence_coverage_start_block,
+  cast(null as bigint) as evidence_coverage_end_block
 from {{ ref('wallet_events') }}
 group by wallet_address, ens
 
@@ -16,11 +37,32 @@ select
   'counterparty' as node_type,
   counterparty_address as label,
   counterparty_address as address,
-  null as token_address,
-  null as symbol,
-  counterparty_type as address_type
+  cast(null as varchar) as token_address,
+  cast(null as varchar) as symbol,
+  any_value(counterparty_account_type) as account_type,
+  any_value(counterparty_code_state) as code_state,
+  any_value(counterparty_observation_block_number) as observation_block_number,
+  any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
+  any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
+  bool_or(counterparty_is_safe) as is_safe,
+  any_value(counterparty_safe_verification_status) as safe_verification_status,
+  any_value(counterparty_safe_version) as safe_version,
+  any_value(counterparty_safe_singleton_address) as safe_singleton_address,
+  any_value(counterparty_safe_owner_count) as safe_owner_count,
+  any_value(counterparty_safe_threshold) as safe_threshold,
+  bool_or(counterparty_is_erc4337_account) as is_erc4337_account,
+  any_value(counterparty_erc4337_entrypoint_address) as erc4337_entrypoint_address,
+  any_value(counterparty_erc4337_entrypoint_version) as erc4337_entrypoint_version,
+  any_value(counterparty_erc4337_entrypoint_source) as erc4337_entrypoint_source,
+  any_value(counterparty_erc4337_entrypoint_deployment_block) as erc4337_entrypoint_deployment_block,
+  any_value(counterparty_erc4337_effective_coverage) as erc4337_effective_coverage,
+  any_value(counterparty_erc4337_failed_ranges) as erc4337_failed_ranges,
+  any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
+  any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
+  any_value(counterparty_evidence_coverage_start_block) as evidence_coverage_start_block,
+  any_value(counterparty_evidence_coverage_end_block) as evidence_coverage_end_block
 from {{ ref('wallet_events') }}
-group by counterparty_address, counterparty_type
+group by counterparty_address
 
 union all
 
@@ -28,9 +70,30 @@ select
   'token:' || token_address as node_id,
   'token' as node_type,
   coalesce(token_symbol, substr(token_address, 1, 10)) as label,
-  null as address,
+  cast(null as varchar) as address,
   token_address,
   token_symbol as symbol,
-  null as address_type
+  cast(null as varchar) as account_type,
+  cast(null as varchar) as code_state,
+  cast(null as bigint) as observation_block_number,
+  cast(null as varchar) as observation_block_timestamp,
+  cast(null as varchar) as eip7702_delegation_target,
+  cast(null as boolean) as is_safe,
+  cast(null as varchar) as safe_verification_status,
+  cast(null as varchar) as safe_version,
+  cast(null as varchar) as safe_singleton_address,
+  cast(null as integer) as safe_owner_count,
+  cast(null as integer) as safe_threshold,
+  cast(null as boolean) as is_erc4337_account,
+  cast(null as varchar) as erc4337_entrypoint_address,
+  cast(null as varchar) as erc4337_entrypoint_version,
+  cast(null as varchar) as erc4337_entrypoint_source,
+  cast(null as varchar) as erc4337_entrypoint_deployment_block,
+  cast(null as varchar) as erc4337_effective_coverage,
+  cast(null as varchar) as erc4337_failed_ranges,
+  cast(null as varchar) as evidence_fetch_status,
+  cast(null as varchar) as evidence_reason_codes,
+  cast(null as bigint) as evidence_coverage_start_block,
+  cast(null as bigint) as evidence_coverage_end_block
 from {{ ref('wallet_events') }}
 group by token_address, token_symbol

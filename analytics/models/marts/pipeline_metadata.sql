@@ -30,6 +30,23 @@ timeline_metrics as (
   select wallet_id, count(*) as timeline_row_count
   from {{ ref('timeline_daily') }}
   group by wallet_id
+),
+
+account_evidence_metrics as (
+  select
+    count(*) as account_evidence_address_count,
+    count(*) filter (where fetch_status = 'complete') as account_evidence_complete_count,
+    count(*) filter (where safe_verified) as safe_evidence_address_count,
+    count(*) filter (where erc4337_observed) as erc4337_evidence_address_count,
+    min(observation_block_number) as account_evidence_observation_block_number_min,
+    max(observation_block_number) as account_evidence_observation_block_number_max,
+    min(cast(observation_block_timestamp as timestamptz)) as account_evidence_observation_block_timestamp_min,
+    max(cast(observation_block_timestamp as timestamptz)) as account_evidence_observation_block_timestamp_max,
+    string_agg(distinct coverage_scope, '|') as account_evidence_coverage_scope,
+    min(coverage_start_block) as account_evidence_coverage_start_block,
+    max(coverage_end_block) as account_evidence_coverage_end_block,
+    any_value(evidence_schema_version) as account_evidence_schema_version
+  from {{ ref('stg_counterparty_metadata') }}
 )
 
 select
@@ -51,9 +68,22 @@ select
   coalesce(events.suspected_spam_token_count, 0) as suspected_spam_token_count,
   coalesce(interactions.interaction_count, 0) as interaction_count,
   coalesce(timeline.timeline_row_count, 0) as timeline_row_count,
+  evidence.account_evidence_address_count,
+  evidence.account_evidence_complete_count,
+  evidence.safe_evidence_address_count,
+  evidence.erc4337_evidence_address_count,
+  evidence.account_evidence_observation_block_number_min,
+  evidence.account_evidence_observation_block_number_max,
+  evidence.account_evidence_observation_block_timestamp_min,
+  evidence.account_evidence_observation_block_timestamp_max,
+  evidence.account_evidence_coverage_scope,
+  evidence.account_evidence_coverage_start_block,
+  evidence.account_evidence_coverage_end_block,
+  evidence.account_evidence_schema_version,
   events.first_event_at,
   events.last_event_at
 from {{ ref('stg_wallets') }} as wallets
 left join event_metrics as events using (wallet_id)
 left join interaction_metrics as interactions using (wallet_id)
 left join timeline_metrics as timeline using (wallet_id)
+cross join account_evidence_metrics as evidence

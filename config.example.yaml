@@ -8,3 +8,12 @@ analytics:
 ethereum:
   rpc_url: ""
   public_rpc_url: "https://ethereum-rpc.publicnode.com"
+  account_evidence:
+    # Optional lower bound for canonical EntryPoint sender evidence. When empty,
+    # enrichment starts at the earliest indexed ERC-20 event block.
+    erc4337_start_block: ""
+    # Bounded eth_getLogs work units. Defaults: 100000 blocks, 50 sender topics,
+    # and 2 retries for an individual failed chunk.
+    erc4337_block_chunk_size: 100000
+    erc4337_address_batch_size: 50
+    erc4337_max_retries: 2

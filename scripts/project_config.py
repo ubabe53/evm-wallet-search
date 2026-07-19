@@ -71,4 +71,32 @@ def resolved_runtime(config: Mapping[str, Any] | None = None) -> dict[str, str |
             "rpc_url",
             default=nested_value(values, "ethereum", "public_rpc_url") or PUBLIC_RPC_FALLBACK,
         ),
+        "account_evidence_start_block": configured_value(
+            "ACCOUNT_EVIDENCE_START_BLOCK",
+            values,
+            "ethereum",
+            "account_evidence",
+            "erc4337_start_block",
+        ),
+        "account_evidence_block_chunk_size": configured_value(
+            "ACCOUNT_EVIDENCE_BLOCK_CHUNK_SIZE",
+            values,
+            "ethereum",
+            "account_evidence",
+            "erc4337_block_chunk_size",
+        ),
+        "account_evidence_address_batch_size": configured_value(
+            "ACCOUNT_EVIDENCE_ADDRESS_BATCH_SIZE",
+            values,
+            "ethereum",
+            "account_evidence",
+            "erc4337_address_batch_size",
+        ),
+        "account_evidence_max_retries": configured_value(
+            "ACCOUNT_EVIDENCE_MAX_RETRIES",
+            values,
+            "ethereum",
+            "account_evidence",
+            "erc4337_max_retries",
+        ),
     }
