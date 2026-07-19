@@ -122,7 +122,6 @@ export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSum
 
   return [...grouped.values()].sort((left, right) =>
     right.transfer_count - left.transfer_count ||
-    left.token_symbol.localeCompare(right.token_symbol) ||
     left.token_address.localeCompare(right.token_address),
   );
 }
