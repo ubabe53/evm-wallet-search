@@ -137,8 +137,8 @@ def display_label(node: dict[str, Any]) -> str:
     label = node["label"]
     if node["node_type"] == "counterparty" and isinstance(label, str) and len(label) == 42:
         label = f"{label[:6]}...{label[-4:]}"
-    if node["node_type"] in ("wallet", "counterparty") and node["address_type"]:
-        return f"{label}\n{node['address_type']}"
+    if node["node_type"] == "counterparty" and node["account_type"]:
+        return f"{label}\n{node['account_type']}"
     return label
 
 
@@ -153,7 +153,25 @@ def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dic
                     "address": node["address"],
                     "tokenAddress": node["token_address"],
                     "symbol": node["symbol"],
-                    "addressType": node["address_type"],
+                    "accountType": node["account_type"],
+                    "codeState": node["code_state"],
+                    "observationBlockNumber": node["observation_block_number"],
+                    "observationBlockTimestamp": node["observation_block_timestamp"],
+                    "eip7702DelegationTarget": node["eip7702_delegation_target"],
+                    "isSafe": node["is_safe"],
+                    "safeVerificationStatus": node["safe_verification_status"],
+                    "safeVersion": node["safe_version"],
+                    "safeSingletonAddress": node["safe_singleton_address"],
+                    "safeOwnerCount": node["safe_owner_count"],
+                    "safeThreshold": node["safe_threshold"],
+                    "isErc4337Account": node["is_erc4337_account"],
+                    "erc4337EntrypointAddress": node["erc4337_entrypoint_address"],
+                    "erc4337EntrypointVersion": node["erc4337_entrypoint_version"],
+                    "erc4337EntrypointSource": node["erc4337_entrypoint_source"],
+                    "evidenceFetchStatus": node["evidence_fetch_status"],
+                    "evidenceReasonCodes": node["evidence_reason_codes"],
+                    "evidenceCoverageStartBlock": node["evidence_coverage_start_block"],
+                    "evidenceCoverageEndBlock": node["evidence_coverage_end_block"],
                 }
             }
             for node in nodes

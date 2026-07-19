@@ -35,7 +35,16 @@ Unknown tokens remain in event marts as `unverified`, with `amount_decimal = nul
 
 ### `stg_counterparty_metadata`
 
-Reads the fixture or live `counterparty_code_metadata` seed at one row per enriched address. Fields include `address_type` (`contract`, `wallet`, or `unknown`), `code_size_bytes`, pinned RPC block, fetch timestamp/status, and error code. Complete zero-byte results are wallets; complete positive-byte results are contracts; failures are unknown.
+Reads the fixture or live `counterparty_code_metadata` seed at one row per `(chain_id, address)` evidence snapshot. The current scope fixes `chain_id = 1`. The row preserves:
+
+- `account_type`: `eoa_candidate`, `eip7702_delegated`, `safe`, `erc4337_account`, `contract`, or `unknown`.
+- `code_state`, exact byte length, observation block/time, and the EIP-7702 target only when code is exactly `0xef0100` plus 20 bytes.
+- Independent `safe_verified` and `erc4337_observed` fields so overlapping evidence is not lost.
+- Safe singleton/version, verification status, owner-address count, and threshold. The addresses themselves are not exported and counts do not imply people.
+- ERC-4337 matched event count, first/last observation blocks, and pipe-delimited canonical EntryPoint address/version/source provenance when multiple versions match.
+- `fetch_status`, stable `reason_codes`, evidence schema version, fetch time, coverage scope, and coverage start/end blocks.
+
+Primary account-type precedence is delegated EOA, verified Safe, canonical EntryPoint sender, other contract code, no-code EOA candidate, then unknown. A failed code read is unknown. `partial` means some evidence source was unavailable or inconsistent even when code still supports a bounded primary type.
 
 ## Intermediate
 
@@ -45,7 +54,7 @@ Filters staged transfers to configured wallets and adds:
 
 - `direction`: `in` when the wallet is the recipient, `out` when it is the sender.
 - `counterparty_address`: the other side of the transfer.
-- `counterparty_type`: bytecode classification when enriched, otherwise `unknown`.
+- `counterparty_account_type` plus the complete pinned observation, Safe evidence, ERC-4337 evidence, fetch status, reason codes, and coverage fields; unenriched counterparties remain `unknown` / `not_fetched`.
 - `amount_decimal`: `value_raw / 10 ^ decimals` when metadata exists.
 - `transaction_sender_relation`: `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `from` and the emitted Transfer participants.
 - `transaction_target_relation`: `token_contract`, `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `to`, the emitting token, and Transfer participants.
@@ -67,11 +76,11 @@ Joins both evidence layers back to one-row-per-transfer events. Its effective `t
 
 ### `wallet_events`
 
-Dashboard-ready event table. This preserves the one-transfer grain and carries emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, counterparty type, effective status, metadata provenance, both classification scores, reason codes, and classifier versions to every transfer.
+Dashboard-ready event table. This preserves the one-transfer grain and carries emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, effective token status, metadata provenance, both classification scores, reason codes, and classifier versions to every transfer.
 
 ### `graph_nodes`
 
-Nodes for wallets, counterparties, and tokens. Wallet and counterparty nodes carry `address_type`; token nodes leave it null.
+Nodes for tracked addresses, counterparties, and tokens. Counterparty nodes carry primary account type, code observation, independent Safe/ERC-4337 flags and display evidence, fetch status, reasons, and coverage bounds. Tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
 
 The dashboard export shortens counterparty labels for readability while keeping full addresses in the JSON node `address` field.
 
@@ -97,7 +106,7 @@ One row per wallet and token across inbound and outbound activity. It records to
 
 ### `counterparty_summary`
 
-One row per wallet, eligible counterparty, address type, and effective token status. `transfer_count` is the sheer number of ERC20 `Transfer` events, not a distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-token count and first/last timestamps.
+One row per wallet, chain, eligible counterparty, and effective token status. `transfer_count` is the sheer number of ERC20 `Transfer` events, not a distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-token count, first/last timestamps, primary account type, pinned code observation, independent Safe/ERC-4337 evidence, provenance, fetch status/reasons, and coverage bounds.
 
 The ranking-serving mart excludes the zero address, the tracked wallet itself, and any counterparty address observed as an ERC20 token contract in the indexed wallet dataset. These exclusions do not delete rows from `wallet_events` or alter token totals.
 
@@ -107,7 +116,7 @@ Daily transfer counts and token-flow aggregates by wallet, token, and direction.
 
 ### `pipeline_metadata`
 
-One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, and first/last event timestamps.
+One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, observation block/time, scan scope/range, and schema version.
 
 The exporter enriches this row in `meta.json` with complete token-summary and counterparty-summary row counts; per-status event, interaction, and token-summary limits; the per-status-combination counterparty ranking limit; the global timeline limit; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. Counterparty candidate selection ranks combined address activity before limiting and exports every status row for each candidate, preserving exact top-50 browser rankings for every status combination. `is_sampled` covers every bounded export, including both summary files. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard status-filter statistics. The JSON subsets do not change any dbt mart grain.
 
@@ -131,4 +140,6 @@ dbt tests enforce:
 - Exact transaction sender/target relation derivation, nullable legacy behavior, indirect direction aggregates, and evidence-backed interaction-legitimacy reasons.
 - Synthetic broad-outbound classifier cases proving the initiator component is added for complete sender matches and withheld for unknown or mismatched senders.
 - Manual-spam, automated-suspicion, and trusted-status precedence.
-- Valid pinned-block address types, fetch statuses, and bytecode-size consistency.
+- Valid account-type/code-state precedence, exact 23-byte EIP-7702 evidence, and pinned observation/coverage consistency.
+- Safe types backed by official-singleton and internally consistent owner-address/threshold evidence; interface-only fixtures cannot become Safe.
+- ERC-4337 types backed by positive canonical EntryPoint sender evidence, with Safe/ERC-4337 overlap retained.

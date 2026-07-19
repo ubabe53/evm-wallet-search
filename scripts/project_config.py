@@ -71,4 +71,11 @@ def resolved_runtime(config: Mapping[str, Any] | None = None) -> dict[str, str |
             "rpc_url",
             default=nested_value(values, "ethereum", "public_rpc_url") or PUBLIC_RPC_FALLBACK,
         ),
+        "account_evidence_start_block": configured_value(
+            "ACCOUNT_EVIDENCE_START_BLOCK",
+            values,
+            "ethereum",
+            "account_evidence",
+            "erc4337_start_block",
+        ),
     }

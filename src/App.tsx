@@ -17,7 +17,7 @@ import {
   Sun,
   type LucideIcon,
 } from "lucide-react";
-import { AddressType, CounterpartySummary, DashboardData, DashboardGraph, GraphEdge, loadDashboardData, TokenStatus, TokenSummary, WalletEvent } from "./data";
+import { AccountFilter, AccountType, CounterpartySummary, DashboardData, DashboardGraph, GraphEdge, loadDashboardData, TokenStatus, TokenSummary, WalletEvent } from "./data";
 
 type Theme = "light" | "dark";
 const EVENT_PAGE_SIZE = 10;
@@ -27,6 +27,7 @@ const DEFAULT_COUNTERPARTY_LIMIT = 10;
 const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
 const TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified", "suspected_spam", "spam"];
 const DEFAULT_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
+const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
 export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic/spam event emission; the mismatch alone does not prove spam.";
@@ -102,9 +103,6 @@ export function aggregateCounterparties(rows: CounterpartySummary[]): RankedCoun
     existing.token_count += row.token_count;
     existing.first_seen_at = existing.first_seen_at < row.first_seen_at ? existing.first_seen_at : row.first_seen_at;
     existing.last_seen_at = existing.last_seen_at > row.last_seen_at ? existing.last_seen_at : row.last_seen_at;
-    if (existing.counterparty_type === "unknown" && row.counterparty_type !== "unknown") {
-      existing.counterparty_type = row.counterparty_type;
-    }
   }
 
   return [...grouped.values()].sort((left, right) =>
@@ -164,13 +162,98 @@ function TokenStatusBadge({
   return <span className={`tokenStatus ${status}`} title={title}>{status.replace("_", " ")}</span>;
 }
 
-function AddressTypeBadge({ type }: { type: AddressType }) {
-  const title = type === "contract"
-    ? "Contract bytecode exists at the pinned Ethereum block"
-    : type === "wallet"
-      ? "No contract bytecode at the pinned Ethereum block"
-      : "Address has not been classified or the bytecode check failed";
-  return <span className={`addressType ${type}`} title={title}>{type}</span>;
+const ACCOUNT_LABELS: Record<AccountType, string> = {
+  eoa_candidate: "EOA candidate",
+  eip7702_delegated: "Delegated EOA",
+  safe: "Safe",
+  erc4337_account: "ERC-4337",
+  contract: "Contract",
+  unknown: "Unknown",
+};
+
+export function accountMatches(
+  accountType: AccountType,
+  isSafe: boolean,
+  isErc4337Account: boolean,
+  selected: AccountFilter[],
+): boolean {
+  return selected.includes(accountType) ||
+    (isSafe && selected.includes("safe")) ||
+    (isErc4337Account && selected.includes("erc4337_account"));
+}
+
+type BadgeEvidence = {
+  accountType: AccountType;
+  observationBlock: number | null;
+  delegationTarget: string | null;
+  isSafe: boolean;
+  safeVersion: string | null;
+  safeOwnerCount: number | null;
+  safeThreshold: number | null;
+  isErc4337Account: boolean;
+  erc4337Version: string | null;
+  coverageStartBlock: number | null;
+  coverageEndBlock: number | null;
+};
+
+function AccountTypeBadge({ evidence, type = evidence.accountType }: { evidence: BadgeEvidence; type?: AccountType }) {
+  const title = type === "eoa_candidate"
+    ? `No bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}; this does not establish personhood or permanent EOA status`
+    : type === "eip7702_delegated"
+      ? `Exact EIP-7702 delegation indicator observed at pinned block ${evidence.observationBlock ?? "unknown"}${evidence.delegationTarget ? `; target ${evidence.delegationTarget}` : ""}`
+      : type === "safe"
+        ? `Verified Safe address evidence${evidence.safeVersion ? ` v${evidence.safeVersion}` : ""} at pinned block ${evidence.observationBlock ?? "unknown"}; threshold ${evidence.safeThreshold ?? "?"} of ${evidence.safeOwnerCount ?? "?"} addresses`
+        : type === "erc4337_account"
+          ? `Observed as UserOperationEvent.sender at canonical EntryPoint${evidence.erc4337Version ? ` v${evidence.erc4337Version}` : ""} within blocks ${evidence.coverageStartBlock ?? "?"}-${evidence.coverageEndBlock ?? "?"}`
+          : type === "contract"
+            ? `Non-delegation contract bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}`
+            : "Account evidence is unavailable or the pinned code lookup failed";
+  const label = type === "safe" && evidence.safeThreshold != null && evidence.safeOwnerCount != null
+    ? `Safe ${evidence.safeThreshold}/${evidence.safeOwnerCount} addresses`
+    : ACCOUNT_LABELS[type];
+  return <span className={`accountType ${type}`} title={title}>{label}</span>;
+}
+
+function AccountBadges({ evidence }: { evidence: BadgeEvidence }) {
+  return (
+    <span className="accountBadges">
+      <AccountTypeBadge evidence={evidence} />
+      {evidence.isSafe && evidence.accountType !== "safe" && <AccountTypeBadge evidence={evidence} type="safe" />}
+      {evidence.isErc4337Account && evidence.accountType !== "erc4337_account" && <AccountTypeBadge evidence={evidence} type="erc4337_account" />}
+    </span>
+  );
+}
+
+function summaryBadgeEvidence(row: CounterpartySummary | RankedCounterparty): BadgeEvidence {
+  return {
+    accountType: row.account_type,
+    observationBlock: row.observation_block_number,
+    delegationTarget: row.eip7702_delegation_target,
+    isSafe: row.is_safe,
+    safeVersion: row.safe_version,
+    safeOwnerCount: row.safe_owner_count,
+    safeThreshold: row.safe_threshold,
+    isErc4337Account: row.is_erc4337_account,
+    erc4337Version: row.erc4337_entrypoint_version,
+    coverageStartBlock: row.evidence_coverage_start_block,
+    coverageEndBlock: row.evidence_coverage_end_block,
+  };
+}
+
+function eventBadgeEvidence(event: WalletEvent): BadgeEvidence {
+  return {
+    accountType: event.counterparty_account_type,
+    observationBlock: event.counterparty_observation_block_number,
+    delegationTarget: event.counterparty_eip7702_delegation_target,
+    isSafe: event.counterparty_is_safe,
+    safeVersion: event.counterparty_safe_version,
+    safeOwnerCount: event.counterparty_safe_owner_count,
+    safeThreshold: event.counterparty_safe_threshold,
+    isErc4337Account: event.counterparty_is_erc4337_account,
+    erc4337Version: event.counterparty_erc4337_entrypoint_version,
+    coverageStartBlock: event.counterparty_evidence_coverage_start_block,
+    coverageEndBlock: event.counterparty_evidence_coverage_end_block,
+  };
 }
 
 function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
@@ -210,11 +293,15 @@ function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
       style: { "background-color": walletColor, width: 44, height: 44, "border-width": 2 },
     },
     {
-      selector: 'node[addressType = "contract"]',
+      selector: 'node[accountType = "contract"], node[accountType = "safe"], node[accountType = "erc4337_account"]',
       style: { shape: "round-rectangle" },
     },
     {
-      selector: 'node[addressType = "unknown"]',
+      selector: 'node[accountType = "eip7702_delegated"]',
+      style: { shape: "diamond" },
+    },
+    {
+      selector: 'node[accountType = "unknown"]',
       style: { "border-style": "dashed" },
     },
     {
@@ -430,9 +517,12 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
       />
       {data.nodes.length === 0 && <div className="graphEmpty">No graph matches</div>}
       <div className="graphLegend" aria-label="Graph legend">
-        <span><i className="walletSwatch" />Tracked wallet</span>
-        <span><i className="contractSwatch" />Contract</span>
-        <span><i className="counterpartySwatch" />Wallet</span>
+        <span><i className="walletSwatch" />Tracked address</span>
+        <span><i className="counterpartySwatch" />EOA candidate</span>
+        <span><i className="delegatedSwatch" />Delegated EOA</span>
+        <span><i className="safeSwatch" />Safe evidence</span>
+        <span><i className="erc4337Swatch" />ERC-4337 evidence</span>
+        <span><i className="contractSwatch" />Other contract</span>
         <span><i className="unknownSwatch" />Unknown</span>
       </div>
     </div>
@@ -530,7 +620,7 @@ function CounterpartyTable({ rows }: { rows: RankedCounterparty[] }) {
                 >
                   <code>{compactAddress(row.counterparty_address)}</code>
                 </EtherscanLink>
-                <AddressTypeBadge type={row.counterparty_type} />
+                <AccountBadges evidence={summaryBadgeEvidence(row)} />
               </div>
               <small>Last active {new Date(row.last_seen_at).toLocaleDateString()}</small>
             </td>
@@ -619,7 +709,7 @@ function EventList({
             >
               <code>{shortAddress(event.counterparty_address)}</code>
             </EtherscanLink>
-            <AddressTypeBadge type={event.counterparty_type} />
+            <AccountBadges evidence={eventBadgeEvidence(event)} />
           </div>
         </article>
       ))}
@@ -652,6 +742,7 @@ export function App() {
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
   const [graphTheaterMode, setGraphTheaterMode] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<TokenStatus[]>(DEFAULT_TOKEN_STATUSES);
+  const [selectedAccountFilters, setSelectedAccountFilters] = useState<AccountFilter[]>(ACCOUNT_FILTERS);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("theme");
     if (saved === "light" || saved === "dark") {
@@ -676,8 +767,8 @@ export function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, selectedStatuses]);
-  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [data, query, selectedStatuses]);
+  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, selectedStatuses, selectedAccountFilters]);
+  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [data, query, selectedStatuses, selectedAccountFilters]);
 
   useEffect(() => {
     if (!graphTheaterMode) {
@@ -705,10 +796,26 @@ export function App() {
 
     const statusVisible = (status: TokenSummary["token_status"]) =>
       selectedStatuses.includes(status);
-    const visibleEvents = data.events.filter((event) => statusVisible(event.token_status));
+    const accountVisible = (accountType: AccountType, isSafe: boolean, isErc4337Account: boolean) =>
+      accountMatches(accountType, isSafe, isErc4337Account, selectedAccountFilters);
+    const visibleEvents = data.events.filter((event) =>
+      statusVisible(event.token_status) &&
+      accountVisible(event.counterparty_account_type, event.counterparty_is_safe, event.counterparty_is_erc4337_account));
     const visibleTokens = data.summaries.tokens.filter((row) => statusVisible(row.token_status));
-    const visibleCounterparties = data.summaries.counterparties.filter((row) => statusVisible(row.token_status));
-    const visibleGraphEdges = data.graph.edges.filter((edge) => statusVisible(edge.data.tokenStatus));
+    const visibleCounterparties = data.summaries.counterparties.filter((row) =>
+      statusVisible(row.token_status) && accountVisible(row.account_type, row.is_safe, row.is_erc4337_account));
+    const visibleCounterpartyNodeIds = new Set(
+      data.graph.nodes
+        .filter((node) => node.data.type === "counterparty" && node.data.accountType && accountVisible(
+          node.data.accountType,
+          node.data.isSafe ?? false,
+          node.data.isErc4337Account ?? false,
+        ))
+        .map((node) => node.data.id),
+    );
+    const visibleGraphEdges = data.graph.edges.filter((edge) =>
+      statusVisible(edge.data.tokenStatus) &&
+      visibleCounterpartyNodeIds.has(`counterparty:${edge.data.counterpartyAddress}`));
     const visibleNodeIds = new Set(visibleGraphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
     const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
     const visibleTimeline = data.timeline.filter((row) => statusVisible(row.token_status));
@@ -738,7 +845,11 @@ export function App() {
         event.ens,
         event.wallet_address,
         event.counterparty_address,
-        event.counterparty_type,
+        event.counterparty_account_type,
+        event.counterparty_code_state,
+        event.counterparty_safe_version,
+        event.counterparty_erc4337_entrypoint_version,
+        event.counterparty_evidence_reason_codes,
         event.token_address,
         event.token_symbol,
         event.token_name,
@@ -761,7 +872,8 @@ export function App() {
     const events = visibleData.events.filter(eventMatches);
     const directlyMatchedTokens = visibleData.summaries.tokens.filter(tokenMatches);
     const directlyMatchedCounterparties = visibleData.summaries.counterparties.filter((row) =>
-      [row.counterparty_address, row.counterparty_type, row.token_status]
+      [row.counterparty_address, row.account_type, row.code_state, row.safe_version,
+        row.erc4337_entrypoint_version, row.evidence_reason_codes, row.token_status]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
 
@@ -816,7 +928,7 @@ export function App() {
             .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
       ),
     };
-  }, [data, query, selectedStatuses]);
+  }, [data, query, selectedStatuses, selectedAccountFilters]);
 
   const rankedCounterparties = useMemo(
     () => filtered ? aggregateCounterparties(filtered.summaries.counterparties) : [],
@@ -969,6 +1081,9 @@ export function App() {
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
             <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
+            <span title={`Account evidence coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
+              account evidence at block {data.metadata.account_evidence_observation_block_number.toLocaleString()}
+            </span>
             {data.metadata.is_sampled && (
               <span>{data.metadata.exported_event_count.toLocaleString()} recent events shown</span>
             )}
@@ -993,6 +1108,27 @@ export function App() {
                   <TokenStatusBadge status={status} source={null} />
                 </label>
               ))}
+            </div>
+          </details>
+          <details className="statusFilter accountFilter">
+            <summary title="Filters the graph, counterparty ranking, and recent events by pinned-block account evidence">
+              Account evidence ({selectedAccountFilters.length})
+              <ChevronDown size={14} aria-hidden="true" />
+            </summary>
+            <div className="statusMenu accountMenu" role="group" aria-label="Account evidence filter">
+              {ACCOUNT_FILTERS.map((accountType) => (
+                <label key={accountType}>
+                  <input
+                    type="checkbox"
+                    checked={selectedAccountFilters.includes(accountType)}
+                    onChange={(event) => setSelectedAccountFilters((current) => event.target.checked
+                      ? [...current.filter((value) => value !== accountType), accountType]
+                      : current.filter((value) => value !== accountType))}
+                  />
+                  <span className={`accountType ${accountType}`}>{ACCOUNT_LABELS[accountType]}</span>
+                </label>
+              ))}
+              <small>Applies to account-dependent views. Safe and ERC-4337 evidence can overlap.</small>
             </div>
           </details>
           <label className="searchbox">

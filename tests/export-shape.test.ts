@@ -23,6 +23,9 @@ describe("dashboard export shape", () => {
     expect(Array.isArray(timeline)).toBe(true);
     expect(["fixture", "hyperindex"]).toContain(metadata.data_source);
     expect(typeof metadata.is_sampled).toBe("boolean");
+    expect(metadata.account_evidence_schema_version).toBe("account-evidence-v1");
+    expect(metadata.account_evidence_observation_block_number).toBe(metadata.account_evidence_coverage_end_block);
+    expect(metadata.account_evidence_complete_count).toBeLessThanOrEqual(metadata.account_evidence_address_count);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.event_export_limit_per_status * 4);
     expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.graph_interaction_export_limit_per_status * 4);
     expect(metadata.exported_token_summary_count).toBeLessThanOrEqual(metadata.token_summary_export_limit_per_status * 4);
@@ -80,10 +83,21 @@ describe("dashboard export shape", () => {
     const endpoints = new Set(graph.edges.flatMap((edge: { data: { source: string; target: string } }) => [edge.data.source, edge.data.target]));
     expect(graph.nodes.every((node: { data: { id: string } }) => endpoints.has(node.data.id))).toBe(true);
     expect(graph.edges.every((edge: { data: { amountDecimalSum: number | null } }) => edge.data.amountDecimalSum == null || typeof edge.data.amountDecimalSum === "number")).toBe(true);
-    expect(graph.nodes.every((node: { data: { type: string; addressType: string | null } }) =>
-      node.data.type === "token" || ["contract", "wallet", "unknown"].includes(node.data.addressType ?? ""))).toBe(true);
-    expect(events.every((event: { counterparty_type: string }) =>
-      ["contract", "wallet", "unknown"].includes(event.counterparty_type))).toBe(true);
+    const accountTypes = ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"];
+    expect(graph.nodes.every((node: { data: { type: string; accountType: string | null } }) =>
+      node.data.type !== "counterparty" || accountTypes.includes(node.data.accountType ?? ""))).toBe(true);
+    expect(events.every((event: { counterparty_account_type: string }) =>
+      accountTypes.includes(event.counterparty_account_type))).toBe(true);
+    expect(new Set(summaries.counterparties.map((row: { account_type: string }) => row.account_type))).toEqual(
+      new Set(accountTypes),
+    );
+    const overlappingSafe = summaries.counterparties.find((row: { account_type: string }) => row.account_type === "safe");
+    expect(overlappingSafe).toMatchObject({
+      is_safe: true,
+      is_erc4337_account: true,
+      safe_owner_count: 3,
+      safe_threshold: 2,
+    });
     expect(events.every((event: {
       from_address: string;
       to_address: string;

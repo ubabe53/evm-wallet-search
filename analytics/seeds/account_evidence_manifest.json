@@ -1,0 +1,71 @@
+{
+  "schema_version": "account-evidence-v1",
+  "chain_id": 1,
+  "generated_at": "2026-07-19T00:00:00Z",
+  "classification_precedence": [
+    "eip7702_delegated",
+    "safe",
+    "erc4337_account",
+    "contract",
+    "eoa_candidate",
+    "unknown"
+  ],
+  "safe_singletons": [
+    {
+      "version": "1.0.0",
+      "address": "0xb6029ea3b2c51d09a50b53ca8012feeb05bda35a",
+      "source_url": "https://github.com/safe-global/safe-deployments/blob/6264a9fb0c7196ed37e445ccbec1c5ecbc77d158/src/__tests__/assets/v1/v1.0.0/gnosis_safe.json"
+    },
+    {
+      "version": "1.1.1",
+      "address": "0x34cfac646f301356faa8b21e94227e3583fe3f5f",
+      "source_url": "https://github.com/safe-global/safe-deployments/blob/6264a9fb0c7196ed37e445ccbec1c5ecbc77d158/src/__tests__/assets/v1/v1.1.1/gnosis_safe.json"
+    },
+    {
+      "version": "1.2.0",
+      "address": "0x6851d6fdfafd08c0295c392436245e5bc78b0185",
+      "source_url": "https://github.com/safe-global/safe-deployments/blob/6264a9fb0c7196ed37e445ccbec1c5ecbc77d158/src/__tests__/assets/v1/v1.2.0/gnosis_safe.json"
+    },
+    {
+      "version": "1.3.0",
+      "address": "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
+      "source_url": "https://github.com/safe-global/safe-deployments/blob/6264a9fb0c7196ed37e445ccbec1c5ecbc77d158/src/__tests__/assets/v1/v1.3.0/gnosis_safe.json"
+    },
+    {
+      "version": "1.4.1",
+      "address": "0x41675c099f32341bf84bfc5382af534df5c7461a",
+      "source_url": "https://github.com/safe-global/safe-deployments/blob/06021f40739266f21a9ec083cf19827ab48b5dc7/src/assets/v1.4.1/safe.json"
+    },
+    {
+      "version": "1.5.0",
+      "address": "0xff51a5898e281db6dfc7855790607438df2ca44b",
+      "source_url": "https://github.com/safe-global/safe-deployments/blob/06021f40739266f21a9ec083cf19827ab48b5dc7/src/assets/v1.5.0/safe.json"
+    }
+  ],
+  "erc4337": {
+    "event_signature": "UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)",
+    "event_topic": "0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f",
+    "entrypoints": [
+      {
+        "version": "0.6",
+        "address": "0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789",
+        "source_url": "https://github.com/eth-infinitism/account-abstraction/releases/tag/v0.6.0"
+      },
+      {
+        "version": "0.7",
+        "address": "0x0000000071727de22e5e9d8baf0edac6f37da032",
+        "source_url": "https://github.com/eth-infinitism/account-abstraction/releases/tag/v0.7.0"
+      },
+      {
+        "version": "0.8",
+        "address": "0x4337084d9e255ff0702461cf8895ce9e3b5ff108",
+        "source_url": "https://github.com/eth-infinitism/account-abstraction/releases/tag/v0.8.0"
+      },
+      {
+        "version": "0.9",
+        "address": "0x433709009b8330fda32311df1c2afa402ed8d009",
+        "source_url": "https://github.com/eth-infinitism/account-abstraction/releases/tag/v0.9.0"
+      }
+    ]
+  }
+}
