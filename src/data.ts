@@ -44,6 +44,8 @@ export type TokenStatus = "trusted" | "unverified" | "suspected_spam" | "spam";
 export type TokenReputation = TokenStatus;
 export type InteractionLegitimacy = "not_suspicious" | "uncertain" | "suspicious";
 export type AddressType = "contract" | "wallet" | "unknown";
+export type TransactionSenderRelation = "transfer_sender" | "transfer_recipient" | "other" | "unknown";
+export type TransactionTargetRelation = "token_contract" | "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 
 export type ClassificationEvidence = {
   token_reputation: TokenReputation;
@@ -76,6 +78,8 @@ export type TokenSummary = {
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
+  indirect_inbound_transfer_count: number;
+  indirect_outbound_transfer_count: number;
   counterparty_count: number;
   sender_account_count: number;
   recipient_account_count: number;
@@ -120,11 +124,18 @@ export type WalletEvent = ClassificationEvidence & {
   block_date: string;
   transaction_hash: string;
   transaction_index: number;
+  transaction_from_address: string | null;
+  transaction_to_address: string | null;
   log_index: number;
   wallet_id: string;
   ens: string;
   wallet_address: string;
+  from_address: string;
+  to_address: string;
   direction: "in" | "out";
+  transaction_sender_relation: TransactionSenderRelation;
+  transaction_target_relation: TransactionTargetRelation;
+  is_indirect: boolean | null;
   counterparty_address: string;
   counterparty_type: AddressType;
   token_address: string;

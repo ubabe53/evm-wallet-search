@@ -7,6 +7,8 @@ export type Erc20TransferEventLike = {
   transaction: {
     hash: string;
     transactionIndex?: number | null;
+    from?: string | null;
+    to?: string | null;
   };
   logIndex: number;
   srcAddress: string;
@@ -24,6 +26,8 @@ export type Erc20TransferEntity = {
   blockTimestamp: number;
   transactionHash: string;
   transactionIndex: number;
+  transactionFromAddress: string | undefined;
+  transactionToAddress: string | undefined;
   logIndex: number;
   tokenAddress: string;
   fromAddress: string;
@@ -32,6 +36,7 @@ export type Erc20TransferEntity = {
 };
 
 const lower = (value: string) => value.toLowerCase();
+const lowerOptional = (value: string | null | undefined) => value ? lower(value) : undefined;
 
 export function toErc20TransferEntity(event: Erc20TransferEventLike): Erc20TransferEntity {
   const blockNumber = BigInt(event.block.number);
@@ -43,6 +48,8 @@ export function toErc20TransferEntity(event: Erc20TransferEventLike): Erc20Trans
     blockTimestamp: event.block.timestamp,
     transactionHash: lower(event.transaction.hash),
     transactionIndex: event.transaction.transactionIndex ?? 0,
+    transactionFromAddress: lowerOptional(event.transaction.from),
+    transactionToAddress: lowerOptional(event.transaction.to),
     logIndex: event.logIndex,
     tokenAddress: lower(event.srcAddress),
     fromAddress: lower(event.params.from),

@@ -23,6 +23,8 @@ matched as (
     cast(transfers.block_timestamp as date) as block_date,
     transfers.transaction_hash,
     transfers.transaction_index,
+    transfers.transaction_from_address,
+    transfers.transaction_to_address,
     transfers.log_index,
     wallets.wallet_id,
     wallets.ens,
@@ -37,6 +39,23 @@ matched as (
     tokens.token_label_reason,
     transfers.from_address,
     transfers.to_address,
+    case
+      when transfers.transaction_from_address is null then 'unknown'
+      when transfers.transaction_from_address = transfers.from_address then 'transfer_sender'
+      when transfers.transaction_from_address = transfers.to_address then 'transfer_recipient'
+      else 'other'
+    end as transaction_sender_relation,
+    case
+      when transfers.transaction_to_address is null then 'unknown'
+      when transfers.transaction_to_address = transfers.token_address then 'token_contract'
+      when transfers.transaction_to_address = transfers.from_address then 'transfer_sender'
+      when transfers.transaction_to_address = transfers.to_address then 'transfer_recipient'
+      else 'other'
+    end as transaction_target_relation,
+    case
+      when transfers.transaction_from_address is null then null
+      else transfers.transaction_from_address != transfers.from_address
+    end as is_indirect,
     case
       when transfers.from_address = wallets.wallet_address then 'out'
       when transfers.to_address = wallets.wallet_address then 'in'

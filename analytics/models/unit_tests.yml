@@ -1,0 +1,70 @@
+unit_tests:
+  - name: classifies_outbound_initiator_evidence
+    description: The mass-outbound initiator component requires complete matching transaction-sender evidence and ignores unknown or mismatched senders.
+    model: int_wallet_token_interactions
+    given:
+      - input: ref('int_wallet_transfer_events')
+        format: sql
+        rows: |
+          select
+            'wallet' as wallet_id,
+            '0xwallet' as wallet_address,
+            evidence.token_address,
+            concat('counterparty-', evidence.token_address, '-', event_number) as counterparty_address,
+            'out' as direction,
+            evidence.is_indirect,
+            evidence.transaction_sender_relation,
+            timestamp '2024-01-01 00:00:00' + event_number * interval '1 minute' as block_timestamp
+          from range(100) as events(event_number)
+          cross join (
+            values
+              ('matched', false, 'transfer_sender'),
+              ('unknown', null, 'unknown'),
+              ('mismatched', true, 'other')
+          ) as evidence(token_address, is_indirect, transaction_sender_relation)
+    expect:
+      format: sql
+      rows: |
+        select * from (
+          values
+            (
+              'wallet', '0xwallet', 'matched', 100, 100, 0, 100, 0, 0, 100, 100,
+              timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
+              100, 'suspicious',
+              'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction; mass_outbound_transaction_sender_matches_wallet',
+              'interaction-legitimacy-v2'
+            ),
+            (
+              'wallet', '0xwallet', 'unknown', 100, 100, 0, 100, 0, 0, 0, 0,
+              timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
+              80, 'suspicious',
+              'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction',
+              'interaction-legitimacy-v2'
+            ),
+            (
+              'wallet', '0xwallet', 'mismatched', 100, 100, 0, 100, 0, 100, 100, 0,
+              timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
+              80, 'suspicious',
+              'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction',
+              'interaction-legitimacy-v2'
+            )
+        ) as expected(
+          wallet_id,
+          wallet_address,
+          token_address,
+          transfer_count,
+          distinct_counterparty_count,
+          inbound_transfer_count,
+          outbound_transfer_count,
+          indirect_inbound_transfer_count,
+          indirect_outbound_transfer_count,
+          evidenced_outbound_transfer_count,
+          sender_matched_outbound_transfer_count,
+          first_seen_at,
+          last_seen_at,
+          active_minutes,
+          interaction_legitimacy_score,
+          interaction_legitimacy,
+          interaction_legitimacy_reasons,
+          interaction_legitimacy_version
+        )

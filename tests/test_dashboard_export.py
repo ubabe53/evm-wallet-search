@@ -7,6 +7,38 @@ import scripts.export_dashboard as dashboard_export
 
 
 class DashboardExportTest(unittest.TestCase):
+    def test_export_schema_requires_transaction_initiation_evidence(self) -> None:
+        duckdb = dashboard_export.ensure_duckdb()
+        connection = duckdb.connect(":memory:")
+        try:
+            connection.execute("create table wallet_events (from_address varchar, to_address varchar)")
+            connection.execute("create table token_summary (transfer_count integer)")
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "wallet_events is missing required export columns",
+            ):
+                dashboard_export.validate_export_schema(connection)
+
+            for column in (
+                "transaction_from_address varchar",
+                "transaction_to_address varchar",
+                "transaction_sender_relation varchar",
+                "transaction_target_relation varchar",
+                "is_indirect boolean",
+            ):
+                connection.execute(f"alter table wallet_events add column {column}")
+            connection.execute(
+                "alter table token_summary add column indirect_inbound_transfer_count integer"
+            )
+            connection.execute(
+                "alter table token_summary add column indirect_outbound_transfer_count integer"
+            )
+
+            dashboard_export.validate_export_schema(connection)
+        finally:
+            connection.close()
+
     def test_counterparty_candidates_cover_combined_status_rankings(self) -> None:
         duckdb = dashboard_export.ensure_duckdb()
         connection = duckdb.connect(":memory:")

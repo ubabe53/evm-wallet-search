@@ -29,6 +29,21 @@ TOKEN_SUMMARY_LIMIT_PER_STATUS = 500
 COUNTERPARTY_RANKING_LIMIT_PER_STATUS_COMBINATION = 50
 TIMELINE_ROW_LIMIT = 5_000
 TOKEN_STATUSES = ("trusted", "unverified", "suspected_spam", "spam")
+REQUIRED_EXPORT_COLUMNS = {
+    "wallet_events": {
+        "from_address",
+        "to_address",
+        "transaction_from_address",
+        "transaction_to_address",
+        "transaction_sender_relation",
+        "transaction_target_relation",
+        "is_indirect",
+    },
+    "token_summary": {
+        "indirect_inbound_transfer_count",
+        "indirect_outbound_transfer_count",
+    },
+}
 
 
 def ensure_duckdb() -> Any:
@@ -72,6 +87,18 @@ def rows(
     if limit is not None:
         query += f" limit {limit}"
     return query_rows(connection, query)
+
+
+def validate_export_schema(connection: Any) -> None:
+    """Fail before writing files when required dashboard evidence is unavailable."""
+
+    for table, required_columns in REQUIRED_EXPORT_COLUMNS.items():
+        result = connection.execute(f"select * from {table} limit 0")
+        available_columns = {column[0] for column in result.description}
+        missing_columns = sorted(required_columns - available_columns)
+        if missing_columns:
+            missing = ", ".join(missing_columns)
+            raise RuntimeError(f"{table} is missing required export columns: {missing}")
 
 
 def write_json(name: str, payload: Any) -> None:
@@ -261,6 +288,7 @@ def main() -> None:
     connection = duckdb.connect(str(DB_PATH), read_only=True)
 
     try:
+        validate_export_schema(connection)
         nodes, edges = graph_rows(connection)
         events = query_rows(
             connection,

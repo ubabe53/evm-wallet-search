@@ -8,6 +8,7 @@ import {
   etherscanTokenUrl,
   etherscanTransactionUrl,
   interactionEdgeLabel,
+  INDIRECT_TRANSFER_EXPLANATION,
 } from "../src/App";
 import type { CounterpartySummary } from "../src/data";
 
@@ -46,6 +47,8 @@ const summaries = {
       transfer_count: 1,
       inbound_transfer_count: 1,
       outbound_transfer_count: 0,
+      indirect_inbound_transfer_count: 1,
+      indirect_outbound_transfer_count: 0,
       counterparty_count: 1,
       sender_account_count: 1,
       recipient_account_count: 0,
@@ -58,6 +61,7 @@ const summaries = {
       metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
       token_reputation: "spam", token_reputation_score: 100, token_reputation_reasons: "reviewed_spam",
       transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
+      indirect_inbound_transfer_count: 0, indirect_outbound_transfer_count: 0,
       counterparty_count: 1, sender_account_count: 1, recipient_account_count: 0,
       amount_decimal_sum: 1, value_raw_sum: "1000000000000000000",
     },
@@ -91,11 +95,18 @@ const events = [
     block_date: "2023-11-14",
     transaction_hash: "0xaaa",
     transaction_index: 2,
+    transaction_from_address: "0x1",
+    transaction_to_address: "0x2",
     log_index: 0,
     wallet_id: "vitalik",
     ens: "vitalik.eth",
     wallet_address: "0x1",
+    from_address: "0x1111111111111111111111111111111111111111",
+    to_address: "0x1",
     direction: "in",
+    transaction_sender_relation: "transfer_recipient",
+    transaction_target_relation: "token_contract",
+    is_indirect: true,
     counterparty_address: "0x1111111111111111111111111111111111111111",
     counterparty_type: "contract",
     token_address: "0x2",
@@ -113,7 +124,10 @@ const events = [
     transfer_id: "1-0xspam-0", chain_id: 1, block_number: 17_000_002,
     block_timestamp: "2023-11-14T22:16:00+00:00", block_date: "2023-11-14",
     transaction_hash: "0xspam", transaction_index: 3, log_index: 0, wallet_id: "vitalik",
+    transaction_from_address: null, transaction_to_address: null,
     ens: "vitalik.eth", wallet_address: "0x1", direction: "in",
+    from_address: "0x2222222222222222222222222222222222222222", to_address: "0x1",
+    transaction_sender_relation: "unknown", transaction_target_relation: "unknown", is_indirect: null,
     counterparty_address: "0x2222222222222222222222222222222222222222", token_address: "0x3",
     counterparty_type: "wallet",
     token_symbol: "SPAM", token_name: "Spam Token", token_decimals: 18, token_status: "spam",
@@ -265,6 +279,9 @@ describe("App", () => {
     );
     expect(screen.getByText("Token Flow")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Senders | Recipients" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Indirect In / Out" })).toBeInTheDocument();
+    expect(screen.getAllByTitle(INDIRECT_TRANSFER_EXPLANATION).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("in*").length).toBeGreaterThan(0);
     expect(screen.getByRole("columnheader", { name: "Amount In / Out" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();

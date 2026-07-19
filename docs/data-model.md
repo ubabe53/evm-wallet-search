@@ -6,7 +6,7 @@ The core grain is one row per wallet-relevant ERC20 transfer.
 
 ### `stg_erc20_transfers`
 
-Deduplicates raw transfer entities by `chain_id`, `transaction_hash`, and `log_index`. It normalizes all addresses to lowercase and standardizes block, transaction, token, `from`, `to`, and raw value fields.
+Deduplicates raw transfer entities by `chain_id`, `transaction_hash`, and `log_index`. It normalizes all addresses to lowercase and standardizes block, transaction, token, emitted Transfer `from`/`to`, and raw value fields. Nullable `transaction_from_address` and `transaction_to_address` preserve selected top-level transaction envelope evidence. They remain null for legacy entities that predate this field selection; no directness is inferred from missing values.
 
 In HyperIndex mode, `value_raw` is cast to text inside Postgres through `postgres_query` before DuckDB scans it. This avoids converting unconstrained Postgres numeric values to floating point or scientific notation and preserves exact ERC20 integer units.
 
@@ -47,6 +47,9 @@ Filters staged transfers to configured wallets and adds:
 - `counterparty_address`: the other side of the transfer.
 - `counterparty_type`: bytecode classification when enriched, otherwise `unknown`.
 - `amount_decimal`: `value_raw / 10 ^ decimals` when metadata exists.
+- `transaction_sender_relation`: `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `from` and the emitted Transfer participants.
+- `transaction_target_relation`: `token_contract`, `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `to`, the emitting token, and Transfer participants.
+- `is_indirect`: true for an observed `transaction_from_address != from_address`, false for an observed match, and null when transaction-sender evidence is unavailable.
 
 ### `int_token_reputation`
 
@@ -54,7 +57,7 @@ One row per observed or labeled token contract. It produces `token_reputation`, 
 
 ### `int_wallet_token_interactions`
 
-One row per wallet and token. It records transfer and distinct-counterparty counts, direction counts, first/last timestamps, active duration, a 0-100 `interaction_legitimacy_score`, reason codes, version, and `interaction_legitimacy` (`not_suspicious`, `uncertain`, or `suspicious`). It detects broad, bursty, one-direction transfer sprays without claiming transaction initiation.
+One row per wallet and token. It records transfer and distinct-counterparty counts, direction counts, confirmed-indirect inbound/outbound counts, transaction-sender evidence coverage, first/last timestamps, active duration, a 0-100 `interaction_legitimacy_score`, reason codes, version, and `interaction_legitimacy` (`not_suspicious`, `uncertain`, or `suspicious`). It detects broad, bursty, one-direction transfer sprays. In `interaction-legitimacy-v2`, the outbound-initiator score and `mass_outbound_transaction_sender_matches_wallet` reason require complete outbound transaction-sender evidence matching the wallet; unknown or mismatched senders do not receive that component. A mismatch alone is not a spam classification signal.
 
 ### `int_classified_wallet_transfer_events`
 
@@ -64,7 +67,7 @@ Joins both evidence layers back to one-row-per-transfer events. Its effective `t
 
 ### `wallet_events`
 
-Dashboard-ready event table. This preserves the one-transfer grain and carries counterparty type, effective status, metadata provenance, both classification scores, reason codes, and classifier versions to every transfer.
+Dashboard-ready event table. This preserves the one-transfer grain and carries emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, counterparty type, effective status, metadata provenance, both classification scores, reason codes, and classifier versions to every transfer.
 
 ### `graph_nodes`
 
@@ -84,7 +87,9 @@ Graph edges carry effective status, metadata provenance, and both evidence layer
 
 ### `token_summary`
 
-One row per wallet and token across inbound and outbound activity. It records total, inbound, and outbound ERC20 transfer-event counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
+One row per wallet and token across inbound and outbound activity. It records total, inbound, and outbound ERC20 transfer-event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
+
+`indirect_inbound_transfer_count` and `indirect_outbound_transfer_count` count only `is_indirect = true`. Legacy nulls are excluded rather than treated as direct or indirect, so each indirect count is bounded by its corresponding direction total.
 
 `sender_account_count` counts distinct non-zero, non-self counterparties on inbound events. `recipient_account_count` applies the same exclusions on outbound events. `counterparty_count` is their distinct union, so it must not be calculated by adding the other two counts. These are event-address roles, not proof of human wallets or transaction initiation.
 
@@ -123,5 +128,7 @@ dbt tests enforce:
 - Exact graph counterparty transfer counts across tokens and directions.
 - Counterparty-summary totals that reconcile with inbound plus outbound counts, with ranking exclusions enforced.
 - Classification scores constrained to 0-100 with non-empty reasons.
+- Exact transaction sender/target relation derivation, nullable legacy behavior, indirect direction aggregates, and evidence-backed interaction-legitimacy reasons.
+- Synthetic broad-outbound classifier cases proving the initiator component is added for complete sender matches and withheld for unknown or mismatched senders.
 - Manual-spam, automated-suspicion, and trusted-status precedence.
 - Valid pinned-block address types, fetch statuses, and bytecode-size consistency.

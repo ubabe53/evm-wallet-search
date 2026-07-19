@@ -5,6 +5,8 @@ type Erc20Transfer {
   blockTimestamp: Int!
   transactionHash: String!
   transactionIndex: Int!
+  transactionFromAddress: String
+  transactionToAddress: String
   logIndex: Int!
   tokenAddress: String!
   fromAddress: String!
