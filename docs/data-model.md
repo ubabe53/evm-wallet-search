@@ -45,7 +45,9 @@ Reads the fixture or live `counterparty_code_metadata` seed at one row per `(cha
 - Deployment-clamped effective coverage, exhausted chunk ranges, and the block-chunk and sender-batch sizes used for bounded `eth_getLogs` work. Effective coverage merges adjacent successful chunks; it never spans a failed chunk.
 - `fetch_status`, stable `reason_codes`, evidence schema version, fetch time, coverage scope, and coverage start/end blocks.
 
-Primary account-type precedence is delegated EOA, verified Safe, canonical EntryPoint sender, other contract code, no-code EOA candidate, then unknown. A failed code read is unknown. `partial` means some evidence source was unavailable or inconsistent even when code still supports a bounded primary type; for ERC-4337 it preserves successful effective coverage and names every exhausted block chunk.
+Primary account-type precedence is delegated EOA, verified Safe, canonical EntryPoint sender, other contract code, no-code EOA candidate, then unknown. A failed code read is unknown unless positive ERC-4337 evidence supplies the bounded primary type. `partial` means some evidence source was unavailable or inconsistent even when another source supports usable evidence; for ERC-4337 it preserves successful effective coverage and names every exhausted block chunk. `failed` means no evidence source yielded a usable result.
+
+The deterministic account-evidence fixture is observed at Ethereum mainnet block `22,500,000`, timestamp `2025-05-17T03:11:47+00:00`, hash `0x12114659c3097400929d30304e6705c846ec534610e7708b3651b3c2a21cdc62`, obtained with `eth_getBlockByNumber`. This is after Pectra activated at epoch `364032` on 2025-05-07, so the EIP-7702 fixture is chronologically possible. Its ERC-20 transfer rows remain at their original event blocks/timestamps: later account evidence describes an address at the observation block and never rewrites event-time facts. See the [Ethereum Foundation Pectra announcement](https://blog.ethereum.org/en/2025/04/23/pectra-mainnet).
 
 ## Intermediate
 
@@ -83,7 +85,7 @@ Dashboard-ready event table. This preserves the one-transfer grain and carries e
 
 Nodes for tracked addresses, counterparties, and tokens. Counterparty nodes carry primary account type, code observation, independent Safe/ERC-4337 flags and display evidence, fetch status, reasons, and coverage bounds. Tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
 
-The dashboard export shortens counterparty labels for readability while keeping full addresses in the JSON node `address` field.
+The dashboard export shortens counterparty labels for readability while keeping full addresses in the JSON node `address` field. Labels append independent `Safe` and `ERC-4337` evidence, including both for overlap; the graph also uses Safe shape/border weight and an ERC-4337 dotted border so the flags are not encoded by primary `account_type` or color alone.
 
 ### `graph_edges`
 
@@ -117,9 +119,9 @@ Daily transfer counts and token-flow aggregates by wallet, token, and direction.
 
 ### `pipeline_metadata`
 
-One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, observation block/time, scan scope/range, and schema version.
+One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Equal bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch.
 
-The exporter enriches this row in `meta.json` with complete token-summary and counterparty-summary row counts; per-status event, interaction, and token-summary limits; the per-status-combination counterparty ranking limit; the global timeline limit; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. Counterparty candidate selection ranks combined address activity before limiting and exports every status row for each candidate, preserving exact top-50 browser rankings for every status combination. `is_sampled` covers every bounded export, including both summary files. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard status-filter statistics. The JSON subsets do not change any dbt mart grain.
+The exporter enriches this row in `meta.json` with complete token-summary and counterparty-summary row counts; per-status event, interaction, and token-summary limits; the per-filter-selection counterparty ranking limit; the global timeline limit; actual exported counts; `is_sampled`; and exact transfer/token/counterparty counts for all 15 non-empty combinations of the four statuses. Counterparty candidate selection ranks combined address activity before limiting for all 15 token-status combinations crossed with all 63 non-empty subsets of the six inclusive account filters. Safe and ERC-4337 predicates use their independent flags, so overlap is retained. Every status row for the resulting candidate union is exported, preserving exact top-50 browser rankings for all 945 selections. Metadata records the `15`, `63`, and `945` counts, exported candidate-address count, and exact-ranking guarantee. `is_sampled` covers every bounded export, including both summary files. These fields distinguish complete DuckDB mart counts from bounded static views and support exact dashboard filter statistics. The JSON subsets do not change any dbt mart grain.
 
 ## Tests
 
@@ -144,3 +146,6 @@ dbt tests enforce:
 - Valid account-type/code-state precedence, exact 23-byte EIP-7702 evidence, and pinned observation/coverage consistency.
 - Safe types backed by official-singleton and internally consistent owner-address/threshold evidence; interface-only fixtures cannot become Safe.
 - ERC-4337 types backed by positive canonical EntryPoint sender evidence, with Safe/ERC-4337 overlap retained.
+- Mixed-source results become partial when one RPC source fails but another yields usable evidence.
+- Account-evidence fixture observations occur after Pectra without changing event-time transfer blocks or timestamps.
+- Partial EntryPoint fixtures reconcile every deployment-clamped range into either effective coverage or an explicit failed chunk.

@@ -97,7 +97,7 @@ bun run addresses:enrich --limit 500 \
   --erc4337-max-retries 3
 ```
 
-Use `ethereum.account_evidence.erc4337_block_chunk_size`, `erc4337_address_batch_size`, and `erc4337_max_retries`, or the corresponding `ACCOUNT_EVIDENCE_BLOCK_CHUNK_SIZE`, `ACCOUNT_EVIDENCE_ADDRESS_BATCH_SIZE`, and `ACCOUNT_EVIDENCE_MAX_RETRIES` environment variables. Successful chunks are retained across in-process retries. If a chunk still fails, every affected address records that exact EntryPoint/range in `erc4337_failed_ranges`, retains the other successful ranges in `erc4337_effective_coverage`, and receives `fetch_status = partial` unless the code lookup itself failed.
+Use `ethereum.account_evidence.erc4337_block_chunk_size`, `erc4337_address_batch_size`, and `erc4337_max_retries`, or the corresponding `ACCOUNT_EVIDENCE_BLOCK_CHUNK_SIZE`, `ACCOUNT_EVIDENCE_ADDRESS_BATCH_SIZE`, and `ACCOUNT_EVIDENCE_MAX_RETRIES` environment variables. Successful chunks are retained across in-process retries. If a chunk still fails, every affected address records that exact EntryPoint/range in `erc4337_failed_ranges`, retains the other successful ranges in `erc4337_effective_coverage`, and receives `fetch_status = partial`. A failed code lookup is also `partial` when successful EntryPoint coverage or a positive sender event remains usable; `failed` is reserved for no usable source evidence.
 
 ```sh
 bun run addresses:enrich --limit 500 --retry-failed
@@ -154,7 +154,7 @@ This creates:
 - `public/data/events.json`
 - `public/data/meta.json`
 
-The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status. Event rows include raw Transfer participants, nullable top-level transaction evidence, the indirect marker, and observed-at account evidence; token summaries include indirect inbound/outbound counts. Counterparty export takes the union of the exact top 50 addresses for all 15 non-empty status combinations and includes every status row for those candidates; timeline rows are capped at 5,000 overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for full status-combination counts, account-evidence observation/coverage metadata, complete and exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
+The JSON is bounded for static-browser performance: up to 1,000 newest events, 250 top graph interactions, and 500 token-summary rows per token status. Event rows include raw Transfer participants, nullable top-level transaction evidence, the indirect marker, and observed-at account evidence; token summaries include indirect inbound/outbound counts. Counterparty export takes the union of exact top-50 candidates for all 945 selections formed by 15 non-empty token-status combinations crossed with 63 non-empty inclusive account-filter combinations, then includes every status row for those addresses. Timeline rows are capped at 5,000 overall. Files are replaced atomically so readers never observe partially written JSON. The complete transformed data remains in `analytics/wallet_analytics.duckdb`. Inspect `meta.json` for the exact-ranking guarantee, combination/candidate counts, account-evidence min/max observation range and scan coverage, complete/exported row counts, limits, and `is_sampled` before publishing or debugging a dashboard snapshot.
 
 ## Verification
 

@@ -80,7 +80,7 @@ describe("toErc20TransferEntity", () => {
                   transactionIndex: 4,
                   from: "0xD8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
                   to: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-                },
+                } as never, // Envio's simulation type omits selected envelope fields that are present at runtime.
                 params: {
                   from: "0xD8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
                   to: "0x000000000000000000000000000000000000dEaD",

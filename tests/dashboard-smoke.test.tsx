@@ -2,12 +2,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   App,
+  accountEvidenceObservationBlockLabel,
+  accountEvidenceObservationTimeLabel,
   accountMatches,
   aggregateCounterparties,
   counterpartyNodeSize,
   etherscanAddressUrl,
   etherscanTokenUrl,
   etherscanTransactionUrl,
+  graphStyles,
   interactionEdgeLabel,
   INDIRECT_TRANSFER_EXPLANATION,
 } from "../src/App";
@@ -17,8 +20,8 @@ const contractAccountEvidence = {
   account_type: "contract",
   code_state: "contract_code",
   code_size_bytes: 32,
-  observation_block_number: 17_006_000,
-  observation_block_timestamp: "2023-11-18T12:00:00+00:00",
+  observation_block_number: 22_500_000,
+  observation_block_timestamp: "2025-05-17T03:11:47+00:00",
   eip7702_delegation_target: null,
   is_safe: false,
   safe_verification_status: "singleton_not_official",
@@ -34,7 +37,7 @@ const contractAccountEvidence = {
   erc4337_entrypoint_version: null,
   erc4337_entrypoint_source: null,
   erc4337_entrypoint_deployment_block: null,
-  erc4337_effective_coverage: "fixture:17000000-17006000",
+  erc4337_effective_coverage: "fixture:17000000-22500000",
   erc4337_failed_ranges: null,
   erc4337_block_chunk_size: 10_000,
   erc4337_address_batch_size: 50,
@@ -42,7 +45,7 @@ const contractAccountEvidence = {
   evidence_reason_codes: "contract_code_observed|erc4337_sender_not_observed|safe_singleton_not_official",
   evidence_coverage_scope: "fixture_complete",
   evidence_coverage_start_block: 17_000_000,
-  evidence_coverage_end_block: 17_006_000,
+  evidence_coverage_end_block: 22_500_000,
   evidence_schema_version: "account-evidence-v1",
 } as const;
 
@@ -59,8 +62,8 @@ const contractEventEvidence = {
   counterparty_account_type: "contract",
   counterparty_code_state: "contract_code",
   counterparty_code_size_bytes: 32,
-  counterparty_observation_block_number: 17_006_000,
-  counterparty_observation_block_timestamp: "2023-11-18T12:00:00+00:00",
+  counterparty_observation_block_number: 22_500_000,
+  counterparty_observation_block_timestamp: "2025-05-17T03:11:47+00:00",
   counterparty_eip7702_delegation_target: null,
   counterparty_is_safe: false,
   counterparty_safe_verification_status: "singleton_not_official",
@@ -76,7 +79,7 @@ const contractEventEvidence = {
   counterparty_erc4337_entrypoint_version: null,
   counterparty_erc4337_entrypoint_source: null,
   counterparty_erc4337_entrypoint_deployment_block: null,
-  counterparty_erc4337_effective_coverage: "fixture:17000000-17006000",
+  counterparty_erc4337_effective_coverage: "fixture:17000000-22500000",
   counterparty_erc4337_failed_ranges: null,
   counterparty_erc4337_block_chunk_size: 10_000,
   counterparty_erc4337_address_batch_size: 50,
@@ -84,7 +87,7 @@ const contractEventEvidence = {
   counterparty_evidence_reason_codes: "contract_code_observed|erc4337_sender_not_observed|safe_singleton_not_official",
   counterparty_evidence_coverage_scope: "fixture_complete",
   counterparty_evidence_coverage_start_block: 17_000_000,
-  counterparty_evidence_coverage_end_block: 17_006_000,
+  counterparty_evidence_coverage_end_block: 22_500_000,
   counterparty_evidence_schema_version: "account-evidence-v1",
 } as const;
 
@@ -101,9 +104,9 @@ const graph = {
   nodes: [
     { data: { id: "wallet:0x1", label: "vitalik.eth", type: "wallet", address: "0x1", tokenAddress: null, symbol: null, accountType: null } },
     { data: { id: "token:0x2", label: "USDC", type: "token", address: null, tokenAddress: "0x2", symbol: "USDC", accountType: null } },
-    { data: { id: "counterparty:0x1111111111111111111111111111111111111111", label: "0x1111...1111\ncontract", type: "counterparty", address: "0x1111111111111111111111111111111111111111", tokenAddress: null, symbol: null, accountType: "contract", isSafe: false, isErc4337Account: false } },
+    { data: { id: "counterparty:0x1111111111111111111111111111111111111111", label: "0x1111...1111\nContract", type: "counterparty", address: "0x1111111111111111111111111111111111111111", tokenAddress: null, symbol: null, accountType: "contract", isSafe: false, isErc4337Account: false } },
     { data: { id: "token:0x3", label: "SPAM", type: "token", address: null, tokenAddress: "0x3", symbol: "SPAM", accountType: null } },
-    { data: { id: "counterparty:0x2222222222222222222222222222222222222222", label: "0x2222...2222\neoa_candidate", type: "counterparty", address: "0x2222222222222222222222222222222222222222", tokenAddress: null, symbol: null, accountType: "eoa_candidate", isSafe: false, isErc4337Account: false } },
+    { data: { id: "counterparty:0x2222222222222222222222222222222222222222", label: "0x2222...2222\nEOA candidate", type: "counterparty", address: "0x2222222222222222222222222222222222222222", tokenAddress: null, symbol: null, accountType: "eoa_candidate", isSafe: false, isErc4337Account: false } },
   ],
   edges: [
     { data: { id: "edge:1", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "token_counterparty", source: "counterparty:0x1111111111111111111111111111111111111111", target: "token:0x2", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
@@ -254,11 +257,13 @@ const metadata = {
   account_evidence_complete_count: 2,
   safe_evidence_address_count: 0,
   erc4337_evidence_address_count: 0,
-  account_evidence_observation_block_number: 17_006_000,
-  account_evidence_observation_block_timestamp: "2023-11-18T12:00:00+00:00",
+  account_evidence_observation_block_number_min: 22_500_000,
+  account_evidence_observation_block_number_max: 22_500_000,
+  account_evidence_observation_block_timestamp_min: "2025-05-17T03:11:47+00:00",
+  account_evidence_observation_block_timestamp_max: "2025-05-17T03:11:47+00:00",
   account_evidence_coverage_scope: "fixture_complete",
   account_evidence_coverage_start_block: 17_000_000,
-  account_evidence_coverage_end_block: 17_006_000,
+  account_evidence_coverage_end_block: 22_500_000,
   account_evidence_schema_version: "account-evidence-v1",
   token_summary_row_count: 2,
   counterparty_summary_row_count: 2,
@@ -282,7 +287,12 @@ const metadata = {
   event_export_limit_per_status: 1000,
   graph_interaction_export_limit_per_status: 250,
   token_summary_export_limit_per_status: 500,
-  counterparty_ranking_limit_per_status_combination: 50,
+  counterparty_ranking_limit_per_filter_selection: 50,
+  counterparty_token_status_combination_count: 15,
+  counterparty_account_filter_combination_count: 63,
+  counterparty_ranking_selection_count: 945,
+  counterparty_ranking_candidate_address_count: 2,
+  counterparty_rankings_exact_for_all_filter_selections: true,
   timeline_row_export_limit: 5000,
   is_sampled: false,
 };
@@ -296,6 +306,21 @@ describe("App", () => {
     expect(accountMatches("safe", true, true, ["safe"])).toBe(true);
     expect(accountMatches("safe", true, true, ["erc4337_account"])).toBe(true);
     expect(accountMatches("safe", true, true, ["contract"])).toBe(false);
+  });
+
+  it("renders single and mixed account-evidence observation ranges", () => {
+    expect(accountEvidenceObservationBlockLabel(22_500_000, 22_500_000)).toBe("block 22,500,000");
+    expect(accountEvidenceObservationBlockLabel(22_500_000, 22_600_000)).toBe("blocks 22,500,000–22,600,000");
+    expect(accountEvidenceObservationTimeLabel("2025-05-17T03:11:47+00:00", "2025-05-17T03:11:47+00:00"))
+      .toBe("2025-05-17T03:11:47+00:00");
+    expect(accountEvidenceObservationTimeLabel("2025-05-17T03:11:47+00:00", "2025-05-18T03:11:47+00:00"))
+      .toBe("2025-05-17T03:11:47+00:00–2025-05-18T03:11:47+00:00");
+  });
+
+  it("styles Safe and ERC-4337 graph evidence as independent channels", () => {
+    const selectors = graphStyles(document.createElement("div")).map((rule) => rule.selector);
+    expect(selectors).toContain("node[?isSafe]");
+    expect(selectors).toContain("node[?isErc4337Account]");
   });
 
   it("scales counterparty nodes gradually on a stable logarithmic range", () => {
@@ -368,7 +393,7 @@ describe("App", () => {
     );
     expect(screen.getAllByText("Contract").find((element) => element.hasAttribute("title"))).toHaveAttribute(
       "title",
-      "Non-delegation contract bytecode observed at pinned block 17006000",
+      "Non-delegation contract bytecode observed at pinned block 22500000",
     );
     expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" })[0]).toHaveAttribute(
       "href",

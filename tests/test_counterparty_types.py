@@ -99,6 +99,15 @@ class RetryingLogClient:
         return results
 
 
+class MixedEvidenceClient(FakeEvidenceClient):
+    def batch(self, requests):
+        results = super().batch(requests)
+        for method, _params, key in requests:
+            if method == "eth_getCode":
+                results[key] = None
+        return results
+
+
 class CounterpartyTypeTest(unittest.TestCase):
     def test_decodes_no_code_contract_delegation_and_failures(self) -> None:
         target = "11" * 20
@@ -188,6 +197,30 @@ class CounterpartyTypeTest(unittest.TestCase):
         )
         self.assertTrue(all(len(item["topics"][2]) == 2 for item in client.log_filters))
 
+    def test_code_failure_with_erc4337_match_is_partial_usable_evidence(self) -> None:
+        manifest = load_manifest()
+        manifest["erc4337"]["entrypoints"] = [{
+            **manifest["erc4337"]["entrypoints"][1],
+            "deployment_block": 85,
+        }]
+        row = fetch_account_evidence(
+            MixedEvidenceClient(),
+            [FakeEvidenceClient.SAFE_ADDRESS],
+            "0x64",
+            "2023-11-18T12:00:00+00:00",
+            80,
+            manifest,
+            erc4337_block_chunk_size=10,
+            erc4337_address_batch_size=1,
+            erc4337_max_retries=1,
+        )[0]
+
+        self.assertEqual(row["code_state"], "unknown")
+        self.assertEqual(row["account_type"], "erc4337_account")
+        self.assertTrue(row["erc4337_observed"])
+        self.assertEqual(row["fetch_status"], "partial")
+        self.assertIn(":85-100", row["erc4337_effective_coverage"])
+
     def test_retries_failed_chunks_without_losing_successful_coverage(self) -> None:
         manifest = load_manifest()
         manifest["erc4337"]["entrypoints"] = [{
@@ -266,6 +299,27 @@ class CounterpartyTypeTest(unittest.TestCase):
             with path.open(newline="") as source:
                 written = list(csv.DictReader(source))
             self.assertEqual([row["address"] for row in written], ["0x1", "0x2"])
+
+    def test_fixture_uses_post_pectra_observation_and_reconciled_partial_ranges(self) -> None:
+        fixture_path = Path(__file__).parents[1] / "analytics" / "seeds" / "counterparty_code_metadata_fixture.csv"
+        with fixture_path.open(newline="") as source:
+            rows = list(csv.DictReader(source))
+
+        self.assertEqual({row["observation_block_number"] for row in rows}, {"22500000"})
+        self.assertEqual({row["observation_block_timestamp"] for row in rows}, {"2025-05-17T03:11:47+00:00"})
+        self.assertTrue(all(row["coverage_end_block"] == "22500000" for row in rows))
+        delegated = next(row for row in rows if row["account_type"] == "eip7702_delegated")
+        self.assertGreaterEqual(int(delegated["observation_block_number"]), 22_431_084)
+
+        unknown = next(row for row in rows if row["account_type"] == "unknown")
+        self.assertEqual(unknown["fetch_status"], "partial")
+        self.assertEqual(
+            unknown["erc4337_failed_ranges"],
+            "0.6@0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789:17012204-17112203",
+        )
+        self.assertIn(":17112204-22500000", unknown["erc4337_effective_coverage"])
+        self.assertIn("0.7@0x0000000071727de22e5e9d8baf0edac6f37da032", unknown["erc4337_effective_coverage"])
+        self.assertIn("0.8@0x4337084d9e255ff0702461cf8895ce9e3b5ff108", unknown["erc4337_effective_coverage"])
 
 
 if __name__ == "__main__":

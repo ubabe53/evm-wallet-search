@@ -5,6 +5,12 @@ where chain_id != 1
   or coverage_end_block != observation_block_number
   or evidence_schema_version != 'account-evidence-v1'
   or (fetch_status = 'failed' and account_type != 'unknown')
+  or (fetch_status = 'failed' and erc4337_effective_coverage is not null)
+  or (
+    code_state = 'unknown'
+    and coalesce(erc4337_observed, false)
+    and fetch_status != 'partial'
+  )
   or (
     fetch_status = 'complete'
     and (
@@ -23,6 +29,7 @@ where chain_id != 1
     code_state = 'eip7702_delegated'
     and (
       account_type != 'eip7702_delegated'
+      or observation_block_number < 22431084
       or code_size_bytes != 23
       or not regexp_matches(eip7702_delegation_target, '^0x[0-9a-f]{40}$')
     )

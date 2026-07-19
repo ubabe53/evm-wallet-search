@@ -121,6 +121,17 @@ export function interactionEdgeLabel(tokenSymbol: string, transferCount: number)
   return `${tokenSymbol} x${transferCount.toLocaleString("en-US")}`;
 }
 
+export function accountEvidenceObservationBlockLabel(minimum: number, maximum: number): string {
+  if (minimum === maximum) {
+    return `block ${minimum.toLocaleString("en-US")}`;
+  }
+  return `blocks ${minimum.toLocaleString("en-US")}–${maximum.toLocaleString("en-US")}`;
+}
+
+export function accountEvidenceObservationTimeLabel(minimum: string, maximum: string): string {
+  return minimum === maximum ? minimum : `${minimum}–${maximum}`;
+}
+
 function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="stat">
@@ -262,7 +273,7 @@ function eventBadgeEvidence(event: WalletEvent): BadgeEvidence {
   };
 }
 
-function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
+export function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
   const styles = getComputedStyle(container);
   const nodeText = styles.getPropertyValue("--graph-label").trim();
   const edgeColor = styles.getPropertyValue("--graph-edge").trim();
@@ -299,8 +310,16 @@ function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
       style: { "background-color": walletColor, width: 44, height: 44, "border-width": 2 },
     },
     {
-      selector: 'node[accountType = "contract"], node[accountType = "safe"], node[accountType = "erc4337_account"]',
+      selector: 'node[accountType = "contract"]',
       style: { shape: "round-rectangle" },
+    },
+    {
+      selector: "node[?isSafe]",
+      style: { shape: "round-rectangle", "border-width": 3 },
+    },
+    {
+      selector: "node[?isErc4337Account]",
+      style: { "border-style": "dotted", "border-width": 4 },
     },
     {
       selector: 'node[accountType = "eip7702_delegated"]',
@@ -1087,8 +1106,8 @@ export function App() {
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
             <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
-            <span title={`Account evidence coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
-              account evidence at block {data.metadata.account_evidence_observation_block_number.toLocaleString()}
+            <span title={`Account evidence observed at ${accountEvidenceObservationTimeLabel(data.metadata.account_evidence_observation_block_timestamp_min, data.metadata.account_evidence_observation_block_timestamp_max)}; coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
+              account evidence at {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
             </span>
             {data.metadata.is_sampled && (
               <span>{data.metadata.exported_event_count.toLocaleString()} recent events shown</span>

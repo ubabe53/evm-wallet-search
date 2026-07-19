@@ -2,6 +2,7 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import scripts.export_dashboard as dashboard_export
 
@@ -48,18 +49,21 @@ class DashboardExportTest(unittest.TestCase):
                 create table counterparty_summary (
                     counterparty_address varchar,
                     token_status varchar,
+                    account_type varchar,
+                    is_safe boolean,
+                    is_erc4337_account boolean,
                     transfer_count integer,
                     last_seen_at timestamp
                 )
                 """
             )
             connection.executemany(
-                "insert into counterparty_summary values (?, ?, ?, ?)",
+                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?, ?)",
                 [
-                    ("0xaaa", "trusted", 90, "2024-01-01"),
-                    ("0xaaa", "unverified", 90, "2024-01-01"),
-                    ("0xbbb", "trusted", 100, "2024-01-02"),
-                    ("0xccc", "unverified", 100, "2024-01-02"),
+                    ("0xaaa", "trusted", "contract", False, False, 90, "2024-01-01"),
+                    ("0xaaa", "unverified", "contract", False, False, 90, "2024-01-01"),
+                    ("0xbbb", "trusted", "contract", False, False, 100, "2024-01-02"),
+                    ("0xccc", "unverified", "contract", False, False, 100, "2024-01-02"),
                 ],
             )
 
@@ -79,6 +83,62 @@ class DashboardExportTest(unittest.TestCase):
                 combined_counts.get(row["counterparty_address"], 0) + row["transfer_count"]
             )
         self.assertEqual(max(combined_counts, key=combined_counts.get), "0xaaa")
+
+    def test_counterparty_candidates_cover_all_945_filter_selections(self) -> None:
+        with patch.object(dashboard_export, "query_rows", return_value=[]) as query:
+            self.assertEqual(dashboard_export.counterparty_rows(object()), [])
+
+        status_combinations = dashboard_export.non_empty_subsets(dashboard_export.TOKEN_STATUSES)
+        account_combinations = dashboard_export.non_empty_subsets(dashboard_export.ACCOUNT_FILTERS)
+        self.assertEqual(len(status_combinations), 15)
+        self.assertEqual(len(account_combinations), 63)
+        self.assertEqual(query.call_count, 945)
+
+    def test_counterparty_account_predicates_include_safe_erc4337_overlap(self) -> None:
+        duckdb = dashboard_export.ensure_duckdb()
+        connection = duckdb.connect(":memory:")
+        try:
+            connection.execute(
+                """
+                create table counterparty_summary (
+                    counterparty_address varchar,
+                    token_status varchar,
+                    account_type varchar,
+                    is_safe boolean,
+                    is_erc4337_account boolean,
+                    transfer_count integer,
+                    last_seen_at timestamp
+                )
+                """
+            )
+            connection.executemany(
+                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    ("0xoverlap", "trusted", "safe", True, True, 200, "2025-01-03"),
+                    ("0xsafe", "trusted", "safe", True, False, 150, "2025-01-02"),
+                    ("0xerc4337", "trusted", "erc4337_account", False, True, 125, "2025-01-01"),
+                ],
+            )
+            exported = dashboard_export.counterparty_rows(
+                connection,
+                statuses=("trusted",),
+                account_filters=("safe", "erc4337_account"),
+                ranking_limit=1,
+            )
+        finally:
+            connection.close()
+
+        self.assertEqual({row["counterparty_address"] for row in exported}, {"0xoverlap"})
+
+    def test_graph_label_exposes_independent_safe_and_erc4337_evidence(self) -> None:
+        label = dashboard_export.display_label({
+            "node_type": "counterparty",
+            "label": "0x3333333333333333333333333333333333333333",
+            "account_type": "safe",
+            "is_safe": True,
+            "is_erc4337_account": True,
+        })
+        self.assertEqual(label, "0x3333...3333\nSafe + ERC-4337")
 
     def test_sampling_covers_every_bounded_export(self) -> None:
         metadata = {

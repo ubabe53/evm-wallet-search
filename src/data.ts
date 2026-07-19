@@ -259,8 +259,10 @@ export type PipelineMetadata = {
   account_evidence_complete_count: number;
   safe_evidence_address_count: number;
   erc4337_evidence_address_count: number;
-  account_evidence_observation_block_number: number;
-  account_evidence_observation_block_timestamp: string;
+  account_evidence_observation_block_number_min: number;
+  account_evidence_observation_block_number_max: number;
+  account_evidence_observation_block_timestamp_min: string;
+  account_evidence_observation_block_timestamp_max: string;
   account_evidence_coverage_scope: string;
   account_evidence_coverage_start_block: number | null;
   account_evidence_coverage_end_block: number;
@@ -283,7 +285,12 @@ export type PipelineMetadata = {
   event_export_limit_per_status: number;
   graph_interaction_export_limit_per_status: number;
   token_summary_export_limit_per_status: number;
-  counterparty_ranking_limit_per_status_combination: number;
+  counterparty_ranking_limit_per_filter_selection: number;
+  counterparty_token_status_combination_count: number;
+  counterparty_account_filter_combination_count: number;
+  counterparty_ranking_selection_count: number;
+  counterparty_ranking_candidate_address_count: number;
+  counterparty_rankings_exact_for_all_filter_selections: boolean;
   timeline_row_export_limit: number;
   is_sampled: boolean;
 };

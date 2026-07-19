@@ -299,7 +299,7 @@ models:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
   - name: pipeline_metadata
-    description: Export provenance and complete mart counts for each configured wallet.
+    description: Export provenance and complete mart counts for each configured wallet, including minimum and maximum account-evidence observation block/time across mixed enrichment batches.
     columns:
       - name: wallet_address
         tests:
@@ -310,3 +310,15 @@ models:
           - accepted_values:
               arguments:
                 values: ["fixture", "hyperindex"]
+      - name: account_evidence_observation_block_number_min
+        tests:
+          - not_null
+      - name: account_evidence_observation_block_number_max
+        tests:
+          - not_null
+      - name: account_evidence_observation_block_timestamp_min
+        tests:
+          - not_null
+      - name: account_evidence_observation_block_timestamp_max
+        tests:
+          - not_null

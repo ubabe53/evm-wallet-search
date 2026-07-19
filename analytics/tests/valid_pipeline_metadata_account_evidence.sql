@@ -1,0 +1,5 @@
+select wallet_address
+from {{ ref('pipeline_metadata') }}
+where account_evidence_observation_block_number_min > account_evidence_observation_block_number_max
+  or account_evidence_observation_block_timestamp_min > account_evidence_observation_block_timestamp_max
+  or account_evidence_observation_block_number_max != account_evidence_coverage_end_block

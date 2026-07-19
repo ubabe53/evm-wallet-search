@@ -24,14 +24,24 @@ describe("dashboard export shape", () => {
     expect(["fixture", "hyperindex"]).toContain(metadata.data_source);
     expect(typeof metadata.is_sampled).toBe("boolean");
     expect(metadata.account_evidence_schema_version).toBe("account-evidence-v1");
-    expect(metadata.account_evidence_observation_block_number).toBe(metadata.account_evidence_coverage_end_block);
+    expect(metadata.account_evidence_observation_block_number_min).toBeLessThanOrEqual(
+      metadata.account_evidence_observation_block_number_max,
+    );
+    expect(metadata.account_evidence_observation_block_number_max).toBe(metadata.account_evidence_coverage_end_block);
+    expect(metadata.account_evidence_observation_block_timestamp_min.localeCompare(
+      metadata.account_evidence_observation_block_timestamp_max,
+    )).toBeLessThanOrEqual(0);
     expect(metadata.account_evidence_complete_count).toBeLessThanOrEqual(metadata.account_evidence_address_count);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.event_export_limit_per_status * 4);
     expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.graph_interaction_export_limit_per_status * 4);
     expect(metadata.exported_token_summary_count).toBeLessThanOrEqual(metadata.token_summary_export_limit_per_status * 4);
     expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(
-      metadata.counterparty_ranking_limit_per_status_combination * 15 * 4,
+      metadata.counterparty_ranking_limit_per_filter_selection * metadata.counterparty_ranking_selection_count * 4,
     );
+    expect(metadata.counterparty_token_status_combination_count).toBe(15);
+    expect(metadata.counterparty_account_filter_combination_count).toBe(63);
+    expect(metadata.counterparty_ranking_selection_count).toBe(945);
+    expect(metadata.counterparty_rankings_exact_for_all_filter_selections).toBe(true);
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_export_limit);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.transfer_count);
     expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.interaction_count);
@@ -102,9 +112,14 @@ describe("dashboard export shape", () => {
       erc4337_block_chunk_size: 100000,
       erc4337_address_batch_size: 50,
     });
-    expect(overlappingSafe.erc4337_effective_coverage).toContain(":19274877-20000000");
+    expect(overlappingSafe.erc4337_effective_coverage).toContain(":19274877-22500000");
+    const overlappingGraphNode = graph.nodes.find((node: { data: { address: string } }) =>
+      node.data.address === overlappingSafe.counterparty_address);
+    expect(overlappingGraphNode.data.label).toContain("Safe + ERC-4337");
     const failedEvidence = summaries.counterparties.find((row: { account_type: string }) => row.account_type === "unknown");
     expect(failedEvidence.erc4337_failed_ranges).toContain(":17012204-17112203");
+    expect(failedEvidence.erc4337_effective_coverage).toContain(":17112204-22500000");
+    expect(failedEvidence.evidence_fetch_status).toBe("partial");
     expect(events.every((event: {
       from_address: string;
       to_address: string;

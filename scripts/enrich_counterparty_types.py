@@ -479,7 +479,10 @@ def fetch_account_evidence(
             account_type = "unknown"
 
         status = code_status
-        if status == "complete" and (
+        other_source_usable = bool(erc["observed"] or erc["effective_coverage"] or safe["safe_verified"])
+        if status == "failed" and other_source_usable:
+            status = "partial"
+        elif status == "complete" and (
             not erc["complete"] or safe["safe_verification_status"] in ("evidence_unavailable", "calls_inconsistent")
         ):
             status = "partial"

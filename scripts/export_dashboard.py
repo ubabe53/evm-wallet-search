@@ -26,9 +26,10 @@ PUBLIC_DATA = ROOT / "public" / "data"
 EVENT_LIMIT_PER_STATUS = 1_000
 GRAPH_INTERACTION_LIMIT_PER_STATUS = 250
 TOKEN_SUMMARY_LIMIT_PER_STATUS = 500
-COUNTERPARTY_RANKING_LIMIT_PER_STATUS_COMBINATION = 50
+COUNTERPARTY_RANKING_LIMIT_PER_FILTER_SELECTION = 50
 TIMELINE_ROW_LIMIT = 5_000
 TOKEN_STATUSES = ("trusted", "unverified", "suspected_spam", "spam")
+ACCOUNT_FILTERS = ("eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown")
 REQUIRED_EXPORT_COLUMNS = {
     "wallet_events": {
         "from_address",
@@ -138,8 +139,28 @@ def display_label(node: dict[str, Any]) -> str:
     if node["node_type"] == "counterparty" and isinstance(label, str) and len(label) == 42:
         label = f"{label[:6]}...{label[-4:]}"
     if node["node_type"] == "counterparty" and node["account_type"]:
-        return f"{label}\n{node['account_type']}"
+        type_labels = {
+            "eoa_candidate": "EOA candidate",
+            "eip7702_delegated": "Delegated EOA",
+            "safe": "Safe",
+            "erc4337_account": "ERC-4337",
+            "contract": "Contract",
+            "unknown": "Unknown",
+        }
+        evidence_labels = [type_labels[node["account_type"]]]
+        if node["is_safe"] and "Safe" not in evidence_labels:
+            evidence_labels.append("Safe")
+        if node["is_erc4337_account"] and "ERC-4337" not in evidence_labels:
+            evidence_labels.append("ERC-4337")
+        return f"{label}\n{' + '.join(evidence_labels)}"
     return label
+
+
+def non_empty_subsets(values: tuple[str, ...]) -> list[tuple[str, ...]]:
+    return [
+        tuple(value for index, value in enumerate(values) if mask & (1 << index))
+        for mask in range(1, 1 << len(values))
+    ]
 
 
 def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dict[str, Any]:
@@ -262,27 +283,39 @@ def graph_rows(connection: Any) -> tuple[list[dict[str, Any]], list[dict[str, An
 def counterparty_rows(
     connection: Any,
     statuses: tuple[str, ...] = TOKEN_STATUSES,
-    ranking_limit: int = COUNTERPARTY_RANKING_LIMIT_PER_STATUS_COMBINATION,
+    account_filters: tuple[str, ...] = ACCOUNT_FILTERS,
+    ranking_limit: int = COUNTERPARTY_RANKING_LIMIT_PER_FILTER_SELECTION,
 ) -> list[dict[str, Any]]:
-    """Export the rows needed for an exact top-N ranking for every status selection."""
+    """Export rows needed for exact top-N rankings across every UI filter selection."""
 
     candidate_addresses: set[str] = set()
-    for mask in range(1, 1 << len(statuses)):
-        selected = [status for index, status in enumerate(statuses) if mask & (1 << index)]
-        placeholders = ", ".join("?" for _ in selected)
-        candidates = query_rows(
-            connection,
-            f"""
-              select counterparty_address
-              from counterparty_summary
-              where token_status in ({placeholders})
-              group by counterparty_address
-              order by sum(transfer_count) desc, max(last_seen_at) desc, counterparty_address
-              limit {ranking_limit}
-            """,
-            selected,
-        )
-        candidate_addresses.update(row["counterparty_address"] for row in candidates)
+    for selected_statuses in non_empty_subsets(statuses):
+        status_placeholders = ", ".join("?" for _ in selected_statuses)
+        for selected_accounts in non_empty_subsets(account_filters):
+            account_placeholders = ", ".join("?" for _ in selected_accounts)
+            candidates = query_rows(
+                connection,
+                f"""
+                  select counterparty_address
+                  from counterparty_summary
+                  where token_status in ({status_placeholders})
+                    and (
+                      account_type in ({account_placeholders})
+                      or (? and coalesce(is_safe, false))
+                      or (? and coalesce(is_erc4337_account, false))
+                    )
+                  group by counterparty_address
+                  order by sum(transfer_count) desc, max(last_seen_at) desc, counterparty_address
+                  limit {ranking_limit}
+                """,
+                [
+                    *selected_statuses,
+                    *selected_accounts,
+                    "safe" in selected_accounts,
+                    "erc4337_account" in selected_accounts,
+                ],
+            )
+            candidate_addresses.update(row["counterparty_address"] for row in candidates)
 
     if not candidate_addresses:
         return []
@@ -398,7 +431,16 @@ def main() -> None:
             "event_export_limit_per_status": EVENT_LIMIT_PER_STATUS,
             "graph_interaction_export_limit_per_status": GRAPH_INTERACTION_LIMIT_PER_STATUS,
             "token_summary_export_limit_per_status": TOKEN_SUMMARY_LIMIT_PER_STATUS,
-            "counterparty_ranking_limit_per_status_combination": COUNTERPARTY_RANKING_LIMIT_PER_STATUS_COMBINATION,
+            "counterparty_ranking_limit_per_filter_selection": COUNTERPARTY_RANKING_LIMIT_PER_FILTER_SELECTION,
+            "counterparty_token_status_combination_count": len(non_empty_subsets(TOKEN_STATUSES)),
+            "counterparty_account_filter_combination_count": len(non_empty_subsets(ACCOUNT_FILTERS)),
+            "counterparty_ranking_selection_count": (
+                len(non_empty_subsets(TOKEN_STATUSES)) * len(non_empty_subsets(ACCOUNT_FILTERS))
+            ),
+            "counterparty_ranking_candidate_address_count": len({
+                row["counterparty_address"] for row in counterparty_summaries
+            }),
+            "counterparty_rankings_exact_for_all_filter_selections": True,
             "timeline_row_export_limit": TIMELINE_ROW_LIMIT,
         }
         meta["is_sampled"] = export_is_sampled(meta)
