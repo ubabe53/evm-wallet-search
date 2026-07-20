@@ -37,7 +37,7 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "envio": "^3.2.1",
-    "jsdom": "^25.0.1",
+    "jsdom": "^29.1.1",
     "playwright": "^1.61.1",
     "typescript": "^5.7.2",
     "vitest": "^4.1.10"
