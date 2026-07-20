@@ -31,7 +31,8 @@ rpc_metadata as (
     cast(rpc_block_number as bigint) as rpc_block_number,
     fetch_status as rpc_fetch_status,
     nullif(trim(error_code), '') as rpc_error_code
-  {% if var('use_fixture', true) %}
+  {% set source_mode = 'hyperindex' if not var('use_fixture', true) else var('fixture_kind', 'vitalik_90d') %}
+  {% if source_mode == 'semantic' %}
   from {{ ref('token_rpc_metadata_fixture') }}
   {% else %}
   from {{ ref('token_rpc_metadata') }}

@@ -459,6 +459,19 @@ models:
           - accepted_values:
               arguments:
                 values: ["fixture", "hyperindex"]
+      - name: fixture_kind
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["semantic", "vitalik_90d"]
+              config:
+                where: "fixture_kind is not null"
+      - name: indexed_block_number_min
+        tests:
+          - not_null
+      - name: indexed_block_number_max
+        tests:
+          - not_null
       - name: account_evidence_observation_block_number_min
         tests:
           - not_null

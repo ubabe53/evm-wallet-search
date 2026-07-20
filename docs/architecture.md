@@ -6,7 +6,7 @@ The MVP is intentionally batch-oriented. HyperIndex captures a narrow event set,
 
 1. `indexer/` runs Envio HyperIndex on Ethereum mainnet.
 2. The HyperIndex handler stores one `Erc20Transfer` entity per ERC20 transfer involving the configured wallet. It selects the top-level transaction `from` and `to` fields and stores them as nullable envelope evidence alongside the emitted Transfer `from`, `to`, and raw value. HyperIndex raw-event storage is disabled because the normalized entity is the pipeline input and duplicate raw storage adds overhead.
-3. `analytics/` reads local fixture seeds by default. In live mode, dbt-duckdb attaches HyperIndex Postgres read-only as the `hyperindex` catalog and reads `public."Erc20Transfer"`.
+3. `analytics/` reads a checked-in, deterministically sampled Parquet snapshot of the latest 90 indexed days for `vitalik.eth` by default, capped at 100 transfers per UTC day. CI selects the separate six-row semantic fixture for exact edge-case tests. In live mode, dbt-duckdb attaches HyperIndex Postgres read-only as the `hyperindex` catalog and reads `public."Erc20Transfer"`.
 4. dbt joins offline token and observed-at counterparty account-evidence snapshots, separates metadata availability, token quality, and spam reputation, calculates interaction-legitimacy evidence, then builds marts into `analytics/wallet_analytics.duckdb`.
 5. `scripts/export_dashboard.py` exports deterministic, bounded mart views to `public/data/*.json`. The complete marts remain in DuckDB.
 6. The Vite React dashboard reads the JSON files directly.
@@ -39,7 +39,7 @@ Transaction initiation remains a separate event-time evidence layer from observe
 
 Theme changes update the existing Cytoscape stylesheet in place. They do not recreate the graph or rerun its layout, so node positions, pan, and zoom remain stable. The graph container owns explicit light and dark palette variables to prevent effect-order races from applying the previous theme's label color.
 
-`meta.json` carries fixture-versus-HyperIndex provenance, complete mart counts, minimum/maximum account-evidence observation block/time, scan coverage, exported row counts, and configured export limits into the static application. The dashboard renders a block range for mixed enrichment batches and a single block only when both bounds match. It must display this metadata so fixture data, bounded evidence scans, and bounded live exports cannot be confused with complete indexed chain history.
+`meta.json` carries fixture-versus-HyperIndex provenance, fixture kind, fixed-window size, indexed event block bounds, complete mart counts, minimum/maximum account-evidence observation block/time, scan coverage, exported row counts, and configured export limits into the static application. The dashboard identifies the 90-day snapshot and renders its exact event block range; it renders an evidence block range for mixed enrichment batches and a single block only when both evidence bounds match. This keeps a bounded snapshot, bounded evidence scans, and bounded live exports distinct from complete chain history.
 
 ## Token Label Flow
 

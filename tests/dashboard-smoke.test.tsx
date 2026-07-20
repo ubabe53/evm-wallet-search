@@ -305,6 +305,10 @@ const metadata = {
   wallet_address: "0x1",
   chain_id: 1,
   data_source: "fixture",
+  fixture_kind: "semantic",
+  source_window_days: null,
+  source_is_sampled: false,
+  source_sample_policy: null,
   generated_at: "2023-11-14T22:15:00+00:00",
   transfer_count: 2,
   token_count: 2,
@@ -314,6 +318,10 @@ const metadata = {
   non_spam_counterparty_count: 1,
   spam_transfer_count: 1,
   spam_token_count: 1,
+  suspected_spam_transfer_count: 0,
+  suspected_spam_token_count: 0,
+  indexed_block_number_min: 17_000_001,
+  indexed_block_number_max: 17_000_001,
   interaction_count: 2,
   account_evidence_address_count: 2,
   account_evidence_complete_count: 2,
@@ -550,7 +558,7 @@ describe("App", () => {
     expect(screen.getByRole("columnheader", { name: "Amount In / Out" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
-    expect(screen.getByText("Fixture data")).toBeInTheDocument();
+    expect(screen.getByText("Semantic fixture data")).toBeInTheDocument();
     expect(screen.getByLabelText("Maximum graph interactions")).toHaveValue("25");
     expect(screen.getByText("10 of 11 events")).toBeInTheDocument();
     expect(screen.queryByLabelText("Include spam")).not.toBeInTheDocument();

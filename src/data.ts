@@ -279,6 +279,10 @@ export type PipelineMetadata = {
   wallet_address: string;
   chain_id: number;
   data_source: "fixture" | "hyperindex";
+  fixture_kind: "semantic" | "vitalik_90d" | null;
+  source_window_days: number | null;
+  source_is_sampled: boolean;
+  source_sample_policy: string | null;
   generated_at: string;
   transfer_count: number;
   token_count: number;
@@ -290,6 +294,8 @@ export type PipelineMetadata = {
   spam_token_count: number;
   suspected_spam_transfer_count: number;
   suspected_spam_token_count: number;
+  indexed_block_number_min: number;
+  indexed_block_number_max: number;
   interaction_count: number;
   account_evidence_address_count: number;
   account_evidence_complete_count: number;

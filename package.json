@@ -7,6 +7,7 @@
     "indexer:codegen": "python3 scripts/run_indexer.py codegen",
     "indexer:dev": "python3 scripts/run_indexer.py dev",
     "analytics:build": "python3 scripts/run_dbt.py build",
+    "analytics:build:semantic-fixture": "python3 scripts/run_dbt.py build --vars '{\"fixture_kind\": \"semantic\"}'",
     "analytics:build:hyperindex": "python3 scripts/run_dbt.py build --vars '{\"use_fixture\": false}'",
     "labels:sync": "python3 scripts/sync_token_registry.py",
     "labels:enrich": "python3 scripts/enrich_token_metadata.py",
@@ -16,10 +17,10 @@
     "dashboard:build": "vite build",
     "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit scripts/codex_review_gate.sh",
     "review:staged": "scripts/codex_review_gate.sh",
-    "test": "bun run analytics:build && bun run test:labels && bun run export:dashboard && bun run test:js && python3 scripts/run_dbt.py test",
+    "test": "bun run analytics:build:semantic-fixture && bun run test:labels && bun run export:dashboard && bun run test:js && python3 scripts/run_dbt.py test --vars '{\"fixture_kind\": \"semantic\"}'",
     "test:labels": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "test:js": "vitest run",
-    "test:analytics": "python3 scripts/run_dbt.py test"
+    "test:analytics": "python3 scripts/run_dbt.py test --vars '{\"fixture_kind\": \"semantic\"}'"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.3",

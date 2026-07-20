@@ -1,4 +1,4 @@
-{% if var('use_fixture', true) %}
+{% if var('use_fixture', true) and var('fixture_kind', 'vitalik_90d') == 'semantic' %}
 with expected (
   transfer_id,
   transaction_sender_relation,

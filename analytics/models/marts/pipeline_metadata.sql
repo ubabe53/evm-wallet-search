@@ -11,6 +11,8 @@ with event_metrics as (
     count(distinct token_address) filter (where token_status in ('suspected_spam', 'spam')) as spam_token_count,
     count(*) filter (where token_status = 'suspected_spam') as suspected_spam_transfer_count,
     count(distinct token_address) filter (where token_status = 'suspected_spam') as suspected_spam_token_count,
+    min(block_number) as indexed_block_number_min,
+    max(block_number) as indexed_block_number_max,
     min(block_timestamp) as first_event_at,
     max(block_timestamp) as last_event_at
   from {{ ref('wallet_events') }}
@@ -55,6 +57,10 @@ select
   wallets.wallet_address,
   1 as chain_id,
   {% if var('use_fixture', true) %}'fixture'{% else %}'hyperindex'{% endif %} as data_source,
+  {% if var('use_fixture', true) %}'{{ var("fixture_kind", "vitalik_90d") }}'{% else %}null{% endif %} as fixture_kind,
+  {% if var('use_fixture', true) and var('fixture_kind', 'vitalik_90d') == 'vitalik_90d' %}90{% else %}null{% endif %} as source_window_days,
+  {% if var('use_fixture', true) and var('fixture_kind', 'vitalik_90d') == 'vitalik_90d' %}true{% else %}false{% endif %} as source_is_sampled,
+  {% if var('use_fixture', true) and var('fixture_kind', 'vitalik_90d') == 'vitalik_90d' %}'up_to_100_per_utc_day_by_md5_id'{% else %}null{% endif %} as source_sample_policy,
   current_timestamp as generated_at,
   coalesce(events.transfer_count, 0) as transfer_count,
   coalesce(events.token_count, 0) as token_count,
@@ -66,6 +72,8 @@ select
   coalesce(events.spam_token_count, 0) as spam_token_count,
   coalesce(events.suspected_spam_transfer_count, 0) as suspected_spam_transfer_count,
   coalesce(events.suspected_spam_token_count, 0) as suspected_spam_token_count,
+  events.indexed_block_number_min,
+  events.indexed_block_number_max,
   coalesce(interactions.interaction_count, 0) as interaction_count,
   coalesce(timeline.timeline_row_count, 0) as timeline_row_count,
   evidence.account_evidence_address_count,

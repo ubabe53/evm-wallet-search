@@ -10,6 +10,7 @@ macro-paths: ["macros"]
 
 vars:
   use_fixture: true
+  fixture_kind: vitalik_90d
 
 models:
   evm_wallet_search:

@@ -1,7 +1,11 @@
 with raw_transfers as (
-  {% if var('use_fixture', true) %}
+  {% set source_mode = 'hyperindex' if not var('use_fixture', true) else var('fixture_kind', 'vitalik_90d') %}
+  {% if source_mode == 'semantic' %}
     select * from {{ ref('raw_erc20_transfers_fixture') }}
-  {% else %}
+  {% elif source_mode == 'vitalik_90d' %}
+    select *
+    from read_parquet('fixtures/vitalik_erc20_transfers_90d.parquet')
+  {% elif source_mode == 'hyperindex' %}
     -- Force the unconstrained Postgres numeric to text before DuckDB scans it.
     -- depends_on: {{ source('hyperindex', 'erc20_transfer') }}
     select
@@ -22,6 +26,8 @@ with raw_transfers as (
       'hyperindex',
       'select id, chain_id, block_number, block_timestamp, transaction_hash, transaction_index, transaction_from_address, transaction_to_address, log_index, token_address, from_address, to_address, value_raw::text as value_raw from public."Erc20Transfer"'
     )
+  {% else %}
+    {{ exceptions.raise_compiler_error("Unsupported transfer source: " ~ source_mode) }}
   {% endif %}
 ),
 

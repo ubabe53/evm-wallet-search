@@ -1,0 +1,20 @@
+{
+  "fixture_kind": "vitalik_90d",
+  "chain_id": 1,
+  "wallet_address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+  "source": "Envio HyperIndex public.Erc20Transfer",
+  "window_policy": "latest indexed wallet timestamp minus 90 days, inclusive",
+  "sampling_policy": "up to 100 rows per UTC day ordered by md5(id), then id",
+  "source_is_sampled": true,
+  "generated_at_utc": "2026-07-19T16:07:20.102992+00:00",
+  "row_count": 2931,
+  "token_contract_count": 757,
+  "counterparty_count": 904,
+  "block_number_min": 24878423.0,
+  "block_number_max": 25522946.0,
+  "block_timestamp_min_utc": "2026-04-14T13:46:59+00:00",
+  "block_timestamp_max_utc": "2026-07-13T09:55:35+00:00",
+  "transaction_envelope_populated_rows": 0,
+  "transaction_envelope_note": "Historical rows predate transaction envelope indexing; nullable sender and target evidence remains unknown.",
+  "parquet_sha256": "712043fc371c5cca7ae5e9a7e76c1f2239e3b3dcadb4a07f78e50a46b6e6c781"
+}

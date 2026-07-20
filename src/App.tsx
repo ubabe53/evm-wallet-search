@@ -1242,8 +1242,20 @@ export function App() {
           <h1>EVM Wallet Search</h1>
           <p>ERC20 token flow analytics for {data.metadata.ens}</p>
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
-            <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
+            <span>
+              {data.metadata.fixture_kind === "vitalik_90d"
+                ? "Vitalik 90-day sample"
+                : data.metadata.data_source === "fixture"
+                  ? "Semantic fixture data"
+                  : "HyperIndex data"}
+            </span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
+            <span title={`Fixed event coverage from ${new Date(data.metadata.first_event_at ?? "").toLocaleString()} to ${new Date(data.metadata.last_event_at ?? "").toLocaleString()}`}>
+              blocks {data.metadata.indexed_block_number_min.toLocaleString()}–{data.metadata.indexed_block_number_max.toLocaleString()}
+            </span>
+            {data.metadata.source_is_sampled && (
+              <span title={data.metadata.source_sample_policy ?? undefined}>sampled source</span>
+            )}
             <span title={`Account evidence observed at ${accountEvidenceObservationTimeLabel(data.metadata.account_evidence_observation_block_timestamp_min, data.metadata.account_evidence_observation_block_timestamp_max)}; coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
               account evidence at {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
             </span>

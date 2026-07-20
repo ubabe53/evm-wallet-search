@@ -138,7 +138,9 @@ def export_is_sampled(metadata: dict[str, Any]) -> bool:
         ("exported_counterparty_summary_count", "counterparty_summary_row_count"),
         ("exported_timeline_row_count", "timeline_row_count"),
     )
-    return any(metadata[exported] < metadata[complete] for exported, complete in count_pairs)
+    return bool(metadata.get("source_is_sampled")) or any(
+        metadata[exported] < metadata[complete] for exported, complete in count_pairs
+    )
 
 
 def display_label(node: dict[str, Any]) -> str:

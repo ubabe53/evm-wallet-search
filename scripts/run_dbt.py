@@ -36,7 +36,7 @@ def ensure_python_dependencies() -> None:
 
 
 def run_dbt(command: str, extra_args: list[str]) -> None:
-    """Execute dbt from the analytics project with fixture mode enabled by default."""
+    """Execute dbt from the analytics project with snapshot mode enabled by default."""
 
     env = os.environ.copy()
     env["DBT_PROFILES_DIR"] = str(ANALYTICS_DIR)

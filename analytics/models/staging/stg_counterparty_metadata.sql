@@ -32,7 +32,8 @@ select
   cast(coverage_end_block as bigint) as coverage_end_block,
   evidence_schema_version,
   cast(fetched_at as varchar) as fetched_at
-{% if var('use_fixture', true) %}
+{% set source_mode = 'hyperindex' if not var('use_fixture', true) else var('fixture_kind', 'vitalik_90d') %}
+{% if source_mode == 'semantic' %}
 from {{ ref('counterparty_code_metadata_fixture') }}
 {% else %}
 from {{ ref('counterparty_code_metadata') }}

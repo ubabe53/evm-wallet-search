@@ -25,15 +25,31 @@ ethereum:
     erc4337_start_block: ""
 ```
 
-## Fixture Mode
+## Fixture Modes
 
-Fixture mode is the default so the project can be built and tested without a live HyperIndex Postgres database.
+The checked-in Vitalik snapshot is the default, so the project can show realistic data without a live HyperIndex Postgres database.
 
 ```sh
 bun run analytics:build
 ```
 
-The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. Their separate observed-at account-evidence fixture covers all six primary types and includes one address that is both verified Safe and observed through ERC-4337. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Exported `meta.json` records `data_source: fixture`, and the dashboard displays a fixture badge. After changing fixture columns, use `python3 scripts/run_dbt.py build --full-refresh` once so dbt recreates the seed schema.
+`analytics/fixtures/vitalik_erc20_transfers_90d.parquet` contains a deterministic sample of 2,931 wallet-relevant transfers from blocks 24,878,423–25,522,946 (2026-04-14T13:46:59Z through 2026-07-13T09:55:35Z). It is capped at 100 transfers per UTC day, ordered by `md5(id)` and then `id`; it is not a complete transfer count for that window. Its adjacent JSON manifest records the source, exact sample counts, cutoff and sampling policies, transaction-envelope limitation, and SHA-256 checksum. Historical rows predate collection of the top-level transaction sender and target, so those nullable fields remain unknown; the snapshot never invents initiation evidence.
+
+The six-row semantic fixture remains available for fast, exact edge-case validation:
+
+```sh
+bun run analytics:build:semantic-fixture
+```
+
+Those CSV rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv` and cover direct, indirect, and legacy-unknown transaction-envelope evidence. Their separate observed-at account-evidence fixture covers all six primary types and includes one address that is both verified Safe and observed through ERC-4337. `bun run test` selects this semantic fixture explicitly. Exported `meta.json` records both `data_source: fixture` and `fixture_kind`, and the dashboard distinguishes the semantic fixture from the Vitalik snapshot.
+
+To intentionally refresh the checked-in 90-day artifact from an available HyperIndex database, configure the Postgres DSN as described below and run:
+
+```sh
+python3 scripts/create_vitalik_fixture.py
+```
+
+The generator has a fixed contract of the pinned Vitalik address, a 90-day window, and at most 100 transfers per UTC day so its output cannot contradict the dbt provenance fields. It casts `value_raw` to text inside Postgres before DuckDB sees it, validates that no scientific notation or unrelated rows entered the artifact, and atomically rewrites the Parquet file and manifest. A refresh changes the snapshot boundary and should be reviewed as a dataset update.
 
 ## Token Registry
 
@@ -162,7 +178,7 @@ The JSON is bounded for static-browser performance: up to 1,000 newest events, 2
 bun run test
 ```
 
-The full test command builds analytics, exports JSON, runs JS tests, and runs dbt tests.
+The full test command builds the six-row semantic analytics fixture, exports JSON, runs JS tests, and runs dbt tests. Run `bun run analytics:build && bun run export:dashboard` separately to inspect the default Vitalik snapshot locally.
 
 ## GitHub CI and Deployment
 
