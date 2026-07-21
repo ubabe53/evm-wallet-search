@@ -6,7 +6,7 @@ The pipeline indexes wallet-relevant `Transfer(address,address,uint256)` events 
 
 The source is signature-based, not standards-proof: ERC-721 uses the same `Transfer` signature, and the current wildcard indexer does not disambiguate token standards. Captured rows are therefore ERC-20-intended analytics inputs, not proof that every emitting contract complies with ERC-20.
 
-The repository is currently migrating from a static-JSON frontend to that local API architecture. The static JSON path is retained only for a bounded, fixture-backed GitHub Pages portfolio demo. It is not the intended serving path for complete HyperIndex analytics.
+The local frontend now queries that API. The static JSON path is retained only for a bounded, fixture-backed GitHub Pages portfolio demo; it is not the serving path for complete HyperIndex analytics.
 
 ## Wallet
 
@@ -20,25 +20,28 @@ The repository is currently migrating from a static-JSON frontend to that local 
 bun install
 bun run indexer:dev
 bun run analytics:build:hyperindex
+bun run api:dev
+bun run analytics:build:fixture
 bun run labels:sync
 bun run labels:enrich --limit 100
 bun run addresses:enrich --limit 500
 bun run test
 ```
 
-`analytics:build:hyperindex` is the local-product analytics path. It reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN` and materializes complete marts in DuckDB; see `docs/operations.md`.
+`analytics:build:hyperindex` is the local-product analytics path. It reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN` and materializes complete marts in `analytics/artifacts/live.duckdb`; see `docs/operations.md`.
 
-The local API and its development command have not been implemented yet. Until that migration lands, `bun run dashboard:dev` still reads generated files from `public/data/`; do not treat that transitional behavior as the target architecture.
+`bun run api:dev` starts a loopback-only FastAPI service on `http://127.0.0.1:8000`. In a second terminal, `bun run dashboard:dev` starts the API-backed React app and proxies `/api` to that loopback service. The API opens `analytics/artifacts/live.duckdb` read-only, requires HyperIndex provenance, validates filters, performs exact calculations across every matching row, and returns bounded rankings or cursor-paginated event pages with complete matching counts. FastAPI supplies query validation and OpenAPI at `/docs`; the server dependency is intentionally limited to FastAPI and Uvicorn rather than a second data or persistence layer.
 
-`analytics:build`, `export:dashboard`, and the production Vite build form the deterministic fixture-demo path used by CI and, eventually, GitHub Pages. Running that path overwrites the shared local DuckDB and `public/data` artifacts with fixture data, so it must not be used as the way to launch complete local analytics. Separating live and fixture output paths is part of the pending API migration.
+`analytics:build:fixture` (also available as the compatibility alias `analytics:build`), `export:dashboard`, and the production Vite build form the deterministic fixture-demo path used by CI and, eventually, GitHub Pages. Fixture dbt commands write `analytics/artifacts/fixture.duckdb`, clear the live Postgres DSN from their child environment, and never overwrite `analytics/artifacts/live.duckdb`. Only the generated `public/data` JSON belongs to the static demo.
 
 `labels:sync` refreshes the checked-in metadata registry from Trust Wallet, Uniswap, and CoinGecko. `labels:enrich` reads self-declared ERC20 metadata for the highest-impact unverified contracts. `addresses:enrich` collects pinned-block bytecode, Safe, and canonical ERC-4337 EntryPoint evidence for high-activity counterparties. Ordinary dbt builds remain offline and reproducible; no full live account enrichment is part of the fixture path.
 
 ## Layout
 
 - `indexer/`: Envio HyperIndex config, schema, and handlers for the ERC-20-intended `Transfer` signature.
-- `analytics/`: dbt + DuckDB project with staged, intermediate, and mart models.
-- `src/`: React dashboard; currently static-data-backed and pending migration to the local API client.
+- `analytics/`: dbt project plus isolated `artifacts/live.duckdb` and `artifacts/fixture.duckdb` outputs.
+- `server/`: loopback-only read API for exact, bounded queries over the live DuckDB marts.
+- `src/`: React dashboard with isolated live-API and fixture-demo adapters.
 - `scripts/`: dbt orchestration, enrichment, and the fixture-demo JSON exporter.
 - `config.example.yaml`: shared Envio, Postgres, and Ethereum RPC configuration template; copy it to the git-ignored `config.yaml` for local values.
 - `public/data/`: generated fixture-demo JSON for static hosting, not the complete local application database.
@@ -85,7 +88,7 @@ The target local runtime is:
 Envio HyperIndex Postgres → dbt → DuckDB → local API → React
 ```
 
-DuckDB is the application query source. The API will apply filters, rankings, counts, and pagination on demand against the complete marts and return provenance with every response. React must call the API rather than connect directly to Postgres or receive database/RPC credentials. This API is the next implementation step; it does not exist on `main` yet.
+DuckDB is the application query source. The API applies filters, rankings, counts, and pagination on demand against the complete marts and returns provenance with every response. React calls the API rather than connecting directly to Postgres or receiving database/RPC credentials. Search, spam, and inclusive account-evidence filters therefore operate on all matching DuckDB rows before the API returns bounded panel data.
 
 The planned Docker distribution will package the local services and persistent data needed by a user who clones the project and runs their own indexer and analytics. Its service and volume contract is not implemented yet.
 
@@ -101,14 +104,16 @@ The static demo consumes five generated files:
 
 The demo contract is typed in `src/data.ts` and generated by `scripts/export_dashboard.py` from deterministic fixture marts. Event rows preserve raw Transfer `from_address`/`to_address`, nullable top-level `transaction_from_address`/`transaction_to_address`, sender/target relation evidence, and a nullable indirect marker. Token summaries include confirmed indirect inbound and outbound counts.
 
-The current exporter still contains full-history candidate-union logic for 6,615 composed filter selections. That machinery belongs to the transitional implementation and is not the target local serving contract; complete local queries should move to DuckDB-backed API endpoints instead of expanding static precomputation.
+`bun run dashboard:build` always selects this static adapter for production/Pages output. `bun run dashboard:dev:fixture` is available for explicitly inspecting the fixture demo locally; it never enables the live API adapter at the same time.
+
+The exporter still contains full-history candidate-union logic for 6,615 composed filter selections. That machinery belongs only to the legacy fixture-demo contract and must not expand; the local dashboard now computes requested selections through DuckDB-backed API endpoints.
 
 ## Dashboard Controls
 
 - Theme toggle: switches palettes in place, preserves graph positions and viewport state, and stores the preference locally. Graph labels use dark text in light mode and light text in dark mode.
-- Filter bar: hides suspected and reviewed spam by default, provides one `Include spam` toggle, and applies inclusive account evidence before filtering events, token summaries, graph elements, timeline rows, counterparties, pagination, and summary cards by token, address, direction, or transaction text.
+- Filter bar: hides suspected and reviewed spam by default, provides one `Include spam` toggle, and applies inclusive account evidence before filtering events, token summaries, graph elements, counterparties, pagination, and summary cards by token, address, direction, or transaction text. Live mode evaluates the selection over complete DuckDB rows; fixture mode evaluates only its bounded demo payload.
 - Account evidence: a six-option multi-select filters the graph, ranked counterparties, and recent events by `EOA candidate`, `Delegated EOA`, `Safe`, `ERC-4337`, `Contract`, or `Unknown`. Safe and ERC-4337 are independent evidence predicates, so an address observed as both remains visible when either corresponding filter is selected.
-- Data provenance: identifies fixture versus HyperIndex data, shows the complete indexed transfer count, and identifies when recent events are a bounded export.
+- Data provenance: identifies fixture versus HyperIndex data and shows the complete snapshot transfer count. Live summary cards are exact for the active selection; panel labels distinguish returned top-N/page rows from complete matching counts.
 - Graph density: shows the 25 highest-ranked interactions by default, with controls for 10, 25, 50, or 100 direct wallet-address links. Nodes without a displayed edge are removed automatically.
 - Graph activity sizing: interacted-address nodes scale gradually from 26px at one transfer to 68px at 10,000 or more, using their complete captured Transfer-signature event count with the configured wallet. Because token standard is not yet disambiguated, this is not a proven ERC-20-only count. The fixed logarithmic scale keeps node sizes stable when filters or graph limits change.
 - Graph interaction styling: uses a terminal-inspired network canvas with thin weighted links. Token symbols appear on links instead of occupying separate graph nodes. Counterparty labels name independent Safe and ERC-4337 evidence, Safe changes node shape/border weight, and ERC-4337 uses a dotted border, so overlap remains visible without color alone. Hovering a node emphasizes its immediate neighborhood; hovering a link emphasizes that interaction.

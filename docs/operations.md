@@ -8,9 +8,17 @@ bun run indexer:dev
 bun run analytics:build:hyperindex
 ```
 
-This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads the already indexed HyperIndex entity table, and builds the DuckDB marts used by the application.
+This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads the already indexed HyperIndex entity table, and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
 
-The DuckDB-backed local API and its launch command are not implemented yet. The current `dashboard:dev` command still serves generated JSON and therefore does not represent the target local runtime. Do not run the fixture/export commands below when the goal is to preserve a live local DuckDB cache; they currently share output paths with live mode.
+Start the read-only API after the live build:
+
+```sh
+bun run api:dev
+```
+
+The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. Stop the API before rebuilding `live.duckdb`; DuckDB permits multiple read-only processes, but the dbt writer and API reader must not access the same file concurrently. Restart the API and reload the dashboard after a successful live build so every request and the browser's snapshot metadata use the new artifact.
+
+In a second terminal, run `bun run dashboard:dev`. Vite selects the live API adapter and proxies `/api` to `127.0.0.1:8000`; it does not load `public/data`. Fixture and live dbt artifacts are isolated, so deterministic validation cannot replace the live database.
 
 Copy `config.example.yaml` to the git-ignored `config.yaml` for one local configuration file, or use the variable names from `.env.example`. Shell environment values take precedence over YAML. Envio and dbt wrappers load the shared configuration without printing secrets.
 
@@ -31,12 +39,12 @@ ethereum:
 Fixture mode exists for deterministic tests and the eventual GitHub Pages portfolio demo. It is not the primary local application mode and does not stand in for HyperIndex verification.
 
 ```sh
-bun run analytics:build
+bun run analytics:build:fixture
 ```
 
-The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. Their separate observed-at account-evidence fixture covers all six primary types and includes one address that is both verified Safe and observed through ERC-4337. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge. After changing fixture columns, use `python3 scripts/run_dbt.py build --full-refresh` once so dbt recreates the seed schema.
+The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. Their separate observed-at account-evidence fixture covers all six primary types and includes one address that is both verified Safe and observed through ERC-4337. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge. After changing fixture columns, use `python3 scripts/run_dbt.py build --full-refresh` once so dbt recreates the fixture seed schema.
 
-Fixture builds currently overwrite `analytics/wallet_analytics.duckdb`, and fixture exports overwrite `public/data`. Separating fixture and live artifact paths is required before the local API workflow is complete.
+`bun run analytics:build` remains an alias for `analytics:build:fixture` so existing CI and contributor commands stay deterministic. The exporter reads only the fixture database and may overwrite only the ignored files under `public/data/`.
 
 ## Token Registry
 
@@ -107,7 +115,7 @@ bun run addresses:enrich --limit 500 --retry-failed
 bun run addresses:enrich --limit 500 --refresh
 ```
 
-Normal mode advances to unattempted addresses, retry mode retries `failed` and `partial` checks, and refresh mode rechecks ranked addresses at a new pinned block. Run the live analytics build after enrichment; once implemented, restart or refresh the local API as its operational contract requires. A seed-schema migration requires `python3 scripts/run_dbt.py build --full-refresh` once for an existing DuckDB file.
+Normal mode advances to unattempted addresses, retry mode retries `failed` and `partial` checks, and refresh mode rechecks ranked addresses at a new pinned block. Run the live analytics build after enrichment, then restart the local API so new requests use that snapshot. A seed-schema migration requires `python3 scripts/run_dbt.py build --full-refresh` once for an existing DuckDB file.
 
 Rows migrated from the earlier code-only snapshot are retained with `coverage_scope = legacy_code_snapshot`, explicit `safe_not_checked` / `erc4337_not_checked` reasons, and `fetch_status = partial`. They preserve the prior pinned code observation without implying that the newer Safe or EntryPoint evidence was collected. Refresh only the desired ranked batch to replace them; this migration does not perform a full live enrichment.
 
@@ -142,7 +150,7 @@ bun run analytics:build:hyperindex
 
 dbt-duckdb attaches that database read-only as the `hyperindex` catalog. The wrapper stops with a clear error when live mode is requested without the DSN. Confirm the mapped local port with `docker port envio-postgres 5432`; this project currently maps it to `5433`. Store the URI under `analytics.hyperindex_postgres_dsn` in ignored `config.yaml` to avoid exporting it in every shell.
 
-The resulting `analytics/wallet_analytics.duckdb` is the local application's query source. Do not export full live history through the fixture-demo exporter. The pending API layer will open DuckDB read-only for bounded, filtered, paginated queries.
+The resulting `analytics/artifacts/live.duckdb` is the local application's query source. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API opens one read-only DuckDB connection per request, applies filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
 
 ## Fixture Demo Export
 
@@ -160,7 +168,9 @@ Run this only after the fixture build. It creates:
 
 These files are the static GitHub Pages demonstration contract. They must remain bounded, identify fixture provenance, and never claim to be complete HyperIndex history. Files are replaced atomically so readers never observe a partially written individual JSON file.
 
-The current exporter still contains legacy full-history logic for exact candidate unions across 6,615 composed filter selections. Do not use that behavior for live local data; it is slated to be replaced by a small fixture-only export when the local DuckDB API is implemented.
+The exporter still contains legacy candidate-union logic across 6,615 composed filter selections. Do not use that behavior for live local data or expand it; the live dashboard now computes only the requested selection through DuckDB-backed API endpoints.
+
+`bun run dashboard:build` always produces the fixture/static build used by CI and Pages. To inspect that exact adapter locally, run `bun run dashboard:dev:fixture`. Do not use the fixture command to validate the live API path.
 
 ## Verification
 
@@ -168,7 +178,7 @@ The current exporter still contains legacy full-history logic for exact candidat
 bun run test
 ```
 
-The full test command builds fixture analytics, exports fixture JSON, runs JS tests, and runs dbt tests. Because live and fixture paths are not separated yet, it overwrites the local DuckDB and `public/data` cache with fixture artifacts. Rebuild HyperIndex-mode analytics afterward if live local data is needed.
+The full test command builds `analytics/artifacts/fixture.duckdb`, exports fixture JSON, runs JS tests, and runs dbt tests against that fixture artifact. It can overwrite ignored fixture JSON under `public/data`, but it does not modify `analytics/artifacts/live.duckdb` or attach HyperIndex.
 
 ## GitHub CI and Deployment
 

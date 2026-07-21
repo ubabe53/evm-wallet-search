@@ -10,6 +10,7 @@ analytics/target/
 analytics/logs/
 analytics/dbt_packages/
 analytics/wallet_analytics.duckdb
+analytics/artifacts/
 analytics/.user.yml
 public/data/*.json
 !public/data/.gitkeep

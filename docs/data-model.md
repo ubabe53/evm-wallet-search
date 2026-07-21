@@ -121,13 +121,28 @@ The ranking-serving mart excludes the zero address, the tracked wallet itself, a
 
 ### `timeline_daily`
 
-Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. The local API applies the inclusive account predicate and aggregates matching cells back to wallet-date-token-status-quality-direction before returning a bounded time range. Token addresses remain part of the displayed grain because decimal amounts from different assets cannot be meaningfully summed together. Raw totals are exact strings and decimal totals remain null without metadata.
+Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. This mart remains available for the fixture demo and a future time-series endpoint; the current local dashboard API does not expose a timeline route. Token addresses remain part of the displayed grain because decimal amounts from different assets cannot be meaningfully summed together. Raw totals are exact strings and decimal totals remain null without metadata.
 
 ### `pipeline_metadata`
 
 One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Equal bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch. Local API responses combine this provenance with the active filters, complete matching count, returned row count, ordering, and pagination/ranking limit.
 
 The fixture-demo exporter enriches this row in `meta.json` with returned counts, limits, and sampling state. The demo metadata must identify fixture provenance and must not imply that its counts describe complete HyperIndex history.
+
+## Local API contract
+
+The `/api/v1` service reads only `analytics/artifacts/live.duckdb` in read-only mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. Common `include_spam`, repeated inclusive `account`, and optional literal `q` predicates are applied to `wallet_events` before exact calculations. Omitting `account` selects every supported account evidence value; `account=none` explicitly selects no rows and cannot be combined with another account value. The service exposes:
+
+- `metadata`: one provenance object for the configured wallet, including DuckDB generation time, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema are not an indexer checkpoint or a block-continuity claim;
+- `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
+- `events`: one row per immutable `wallet_events` row, ordered newest-first by block/transaction/log position and traversed with an opaque keyset cursor;
+- `tokens`: one exact aggregate per emitting token contract, ranked after filtering and limited only after aggregation;
+- `counterparties`: one exact aggregate per eligible address, with the same zero/self/emitting-token exclusions as the mart ranking, ranked after filtering;
+- `graph`: one exact wallet-counterparty-token-direction interaction per row, ranked after filtering while retaining the counterparty's complete cross-token activity count for stable node sizing.
+
+Event responses distinguish `complete_matching_count` from `returned_count`, `limit`, `next_cursor`, and `is_paginated`. Ranked responses distinguish the complete matching item count from the returned top-N and `is_truncated`. `is_sampled` is always false because no matching source rows are randomly or permanently discarded. A top-N graph or ranking is a bounded presentation over a complete calculation, not a sample.
+
+The React live adapter sends the same predicate set to every endpoint, displays summary counts from the complete matching set, and distinguishes those totals from bounded graph, token, counterparty, and event rows. Event expansion follows `next_cursor`; it never infers completeness from the current browser array. The static adapter remains separate and reads only generated fixture JSON.
 
 The current transitional exporter also records exact transfer/token/counterparty statistics for all 6,615 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 63 non-empty inclusive account selections. That full-history candidate-union contract is legacy behavior and is not the target serving model. The local API should compute only the requested selection against DuckDB; the static exporter should be reduced to the deterministic fixture demo.
 
@@ -160,4 +175,4 @@ dbt tests enforce:
 - Account-evidence fixture observations occur after Pectra without changing event-time transfer blocks or timestamps.
 - Partial EntryPoint fixtures reconcile every deployment-clamped range into either effective coverage or an explicit failed chunk.
 - Reviewed-spam, automated-suspicion, high-confidence-trust, and unverified fallback precedence.
-- The current transitional export's exact 6,615-selection token/counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains. Replace this legacy export test when the DuckDB API and fixture-only demo contracts are implemented.
+- The fixture export's legacy 6,615-selection token/counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains. This is deterministic demo compatibility coverage, not the live serving contract, and should be simplified rather than expanded.

@@ -17,7 +17,26 @@ import {
   Sun,
   type LucideIcon,
 } from "lucide-react";
-import { AccountFilter, AccountType, CounterpartySummary, DashboardData, DashboardGraph, GraphEdge, loadDashboardData, TimelineRow, TokenQuality, TokenStatus, TokenSummary, WalletEvent } from "./data";
+import {
+  AccountFilter,
+  AccountType,
+  ApiDashboardData,
+  CounterpartySummary,
+  DashboardData,
+  DashboardGraph,
+  DashboardMetadata,
+  DashboardQuery,
+  GraphEdge,
+  dashboardDataMode,
+  loadApiDashboardData,
+  loadDashboardData,
+  loadNextApiEvents,
+  TimelineRow,
+  TokenQuality,
+  TokenStatus,
+  TokenSummary,
+  WalletEvent,
+} from "./data";
 
 type Theme = "light" | "dark";
 const EVENT_PAGE_SIZE = 10;
@@ -720,17 +739,21 @@ function CounterpartyTable({ rows }: { rows: RankedCounterparty[] }) {
 function EventList({
   events,
   limit,
+  totalCount,
+  showMoreDisabled,
   onShowMore,
   onShowLess,
 }: {
   events: WalletEvent[];
   limit: number;
+  totalCount: number;
+  showMoreDisabled: boolean;
   onShowMore: () => void;
   onShowLess: () => void;
 }) {
   const visibleEvents = events.slice(0, limit);
   const canShowLess = limit > EVENT_PAGE_SIZE && events.length > EVENT_PAGE_SIZE;
-  const canShowMore = visibleEvents.length < events.length;
+  const canShowMore = visibleEvents.length < totalCount;
 
   return (
     <div className="events">
@@ -787,7 +810,7 @@ function EventList({
             </button>
           )}
           {canShowMore && (
-            <button className="eventPageButton" type="button" onClick={onShowMore}>
+            <button className="eventPageButton" type="button" onClick={onShowMore} disabled={showMoreDisabled}>
               <ChevronDown size={16} />
               Show more
             </button>
@@ -799,10 +822,15 @@ function EventList({
 }
 
 export function App() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<DashboardData<DashboardMetadata> | null>(null);
+  const [apiResult, setApiResult] = useState<ApiDashboardData | null>(null);
+  const [apiResultQueryKey, setApiResultQueryKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [eventLimit, setEventLimit] = useState(EVENT_PAGE_SIZE);
+  const [loadingMoreEvents, setLoadingMoreEvents] = useState(false);
+  const apiMetadataRef = useRef<ApiDashboardData["data"]["metadata"] | undefined>(undefined);
   const [graphInteractionLimit, setGraphInteractionLimit] = useState(DEFAULT_GRAPH_INTERACTION_LIMIT);
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
   const [graphTheaterMode, setGraphTheaterMode] = useState(false);
@@ -817,6 +845,9 @@ export function App() {
   });
 
   useEffect(() => {
+    if (dashboardDataMode !== "static") {
+      return;
+    }
     const controller = new AbortController();
     loadDashboardData(controller.signal).then(setData).catch((loadError: unknown) => {
       if (loadError instanceof Error && loadError.name === "AbortError") {
@@ -827,13 +858,56 @@ export function App() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 200);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  const dashboardQuery = useMemo((): DashboardQuery => ({
+    includeSpam,
+    accountFilters: selectedAccountFilters,
+    query: debouncedQuery,
+    graphLimit: graphInteractionLimit,
+    counterpartyLimit,
+  }), [includeSpam, selectedAccountFilters, debouncedQuery, graphInteractionLimit, counterpartyLimit]);
+  const dashboardQueryKey = JSON.stringify(dashboardQuery);
+  const dashboardQueryKeyRef = useRef(dashboardQueryKey);
+  useEffect(() => {
+    dashboardQueryKeyRef.current = dashboardQueryKey;
+  }, [dashboardQueryKey]);
+
+  useEffect(() => {
+    if (dashboardDataMode !== "api") {
+      return;
+    }
+    const controller = new AbortController();
+    const requestedQueryKey = dashboardQueryKey;
+    setError(null);
+    setLoadingMoreEvents(false);
+    loadApiDashboardData(dashboardQuery, controller.signal, apiMetadataRef.current).then((result) => {
+      if (dashboardQueryKeyRef.current !== requestedQueryKey) {
+        return;
+      }
+      apiMetadataRef.current = result.data.metadata;
+      setApiResult(result);
+      setApiResultQueryKey(requestedQueryKey);
+      setData(result.data);
+    }).catch((loadError: unknown) => {
+      if (loadError instanceof Error && loadError.name === "AbortError") {
+        return;
+      }
+      setError(loadError instanceof Error ? loadError.message : "Could not load live dashboard data");
+    });
+    return () => controller.abort();
+  }, [dashboardQuery, dashboardQueryKey]);
+
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, includeSpam, selectedAccountFilters]);
-  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [data, query, includeSpam, selectedAccountFilters]);
+  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [debouncedQuery, includeSpam, selectedAccountFilters]);
+  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [debouncedQuery, includeSpam, selectedAccountFilters]);
 
   useEffect(() => {
     if (!graphTheaterMode) {
@@ -857,6 +931,9 @@ export function App() {
   const filtered = useMemo(() => {
     if (!data) {
       return null;
+    }
+    if (dashboardDataMode === "api") {
+      return data;
     }
 
     const statusVisible = (status: TokenSummary["token_status"]) => includeSpam || !isSpamStatus(status);
@@ -1002,7 +1079,17 @@ export function App() {
     if (!filtered || !data) {
       return null;
     }
+    if (dashboardDataMode === "api") {
+      return apiResult ? {
+        transferCount: apiResult.summary.transfer_count,
+        tokenCount: apiResult.summary.token_count,
+        counterpartyCount: apiResult.summary.counterparty_count,
+      } : null;
+    }
     if (!query.trim()) {
+      if (!("status_quality_account_counts" in data.metadata)) {
+        return null;
+      }
       const statusKey = (includeSpam ? TOKEN_STATUSES : NON_SPAM_TOKEN_STATUSES).join("+");
       const qualityKey = TOKEN_QUALITIES.join("+");
       const accountKey = ACCOUNT_FILTERS.filter((account) => selectedAccountFilters.includes(account)).join("+");
@@ -1021,7 +1108,7 @@ export function App() {
     const tokenCount = new Set(filtered.events.map((event) => event.token_address)).size;
     const counterpartyCount = new Set(filtered.events.map((event) => event.counterparty_address)).size;
     return { transferCount, tokenCount, counterpartyCount };
-  }, [data, filtered, query, includeSpam, selectedAccountFilters]);
+  }, [apiResult, data, filtered, query, includeSpam, selectedAccountFilters]);
 
   const displayedGraph = useMemo(() => {
     if (!filtered) {
@@ -1089,6 +1176,50 @@ export function App() {
     return { nodes, edges };
   }, [filtered, graphInteractionLimit]);
 
+  const eventCount = dashboardDataMode === "api"
+    ? (apiResult?.eventCount ?? 0)
+    : (filtered?.events.length ?? 0);
+  const tokenCount = dashboardDataMode === "api"
+    ? (apiResult?.tokenCount ?? 0)
+    : (filtered?.summaries.tokens.length ?? 0);
+  const apiResultIsCurrent = dashboardDataMode !== "api" || apiResultQueryKey === dashboardQueryKey;
+
+  async function showMoreEvents() {
+    if (!data || loadingMoreEvents || !apiResultIsCurrent) {
+      return;
+    }
+    if (eventLimit < data.events.length) {
+      setEventLimit((current) => current + EVENT_PAGE_SIZE);
+      return;
+    }
+    if (dashboardDataMode !== "api" || !apiResult?.eventNextCursor) {
+      setEventLimit((current) => current + EVENT_PAGE_SIZE);
+      return;
+    }
+
+    setLoadingMoreEvents(true);
+    const requestedQueryKey = dashboardQueryKey;
+    try {
+      const page = await loadNextApiEvents(dashboardQuery, apiResult.eventNextCursor);
+      if (dashboardQueryKeyRef.current !== requestedQueryKey) {
+        return;
+      }
+      setData((current) => current ? { ...current, events: [...current.events, ...page.items] } : current);
+      setApiResult((current) => current ? {
+        ...current,
+        eventCount: page.complete_matching_count,
+        eventNextCursor: page.next_cursor ?? null,
+      } : current);
+      setEventLimit((current) => current + EVENT_PAGE_SIZE);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load more events");
+    } finally {
+      if (dashboardQueryKeyRef.current === requestedQueryKey) {
+        setLoadingMoreEvents(false);
+      }
+    }
+  }
+
   function trapTheaterFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (!graphTheaterMode || event.key !== "Tab") {
       return;
@@ -1119,7 +1250,11 @@ export function App() {
         <section className="empty">
           <Database size={28} />
           <h1>EVM Wallet Search</h1>
-          <p>{error}. Run `bun run analytics:build` and `bun run export:dashboard`.</p>
+          <p>
+            {error}. {dashboardDataMode === "api"
+              ? "Build live analytics, then run `bun run api:dev`."
+              : "Run `bun run analytics:build` and `bun run export:dashboard`."}
+          </p>
         </section>
       </main>
     );
@@ -1227,6 +1362,9 @@ export function App() {
             <h2>Interaction Graph</h2>
             <div className="graphHeaderControls">
               <span>{displayedGraph.nodes.length} nodes / {displayedGraph.edges.length} edges</span>
+              {dashboardDataMode === "api" && apiResult && (
+                <span>{displayedGraph.edges.length} of {apiResult.graphInteractionCount.toLocaleString("en-US")} interactions</span>
+              )}
               <label className="graphLimit">
                 <span>Interactions</span>
                 <select
@@ -1275,6 +1413,11 @@ export function App() {
           <div className="counterpartyTableScroll">
             <CounterpartyTable rows={rankedCounterparties.slice(0, counterpartyLimit)} />
           </div>
+          {dashboardDataMode === "api" && apiResult && (
+            <p className="boundedNote">
+              Showing {rankedCounterparties.length.toLocaleString("en-US")} of {apiResult.counterpartyCount.toLocaleString("en-US")} matching counterparties.
+            </p>
+          )}
         </div>
       </section>
 
@@ -1282,13 +1425,15 @@ export function App() {
           <div className="panelHeader">
             <h2>Recent Events</h2>
             <span>
-              {Math.min(eventLimit, filtered.events.length)} of {filtered.events.length} events
+              {Math.min(eventLimit, filtered.events.length)} of {eventCount.toLocaleString("en-US")} events
             </span>
           </div>
         <EventList
           events={filtered.events}
           limit={eventLimit}
-          onShowMore={() => setEventLimit((current) => current + EVENT_PAGE_SIZE)}
+          totalCount={eventCount}
+          showMoreDisabled={loadingMoreEvents || !apiResultIsCurrent}
+          onShowMore={showMoreEvents}
           onShowLess={() => setEventLimit((current) => Math.max(EVENT_PAGE_SIZE, current - EVENT_PAGE_SIZE))}
         />
       </section>
@@ -1299,7 +1444,11 @@ export function App() {
             <h2>Token Flow</h2>
             <p>One row per token across inbound and outbound transfers.</p>
           </div>
-          <span>{filtered.summaries.tokens.length} tokens</span>
+          <span>
+            {filtered.summaries.tokens.length === tokenCount
+              ? `${tokenCount.toLocaleString("en-US")} tokens`
+              : `${filtered.summaries.tokens.length.toLocaleString("en-US")} of ${tokenCount.toLocaleString("en-US")} tokens`}
+          </span>
         </div>
         <div className="tokenTableScroll compact">
           <TokenTable rows={filtered.summaries.tokens} />

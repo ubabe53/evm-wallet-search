@@ -13,15 +13,17 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from .artifact_paths import LIVE_DB_PATH
     from .enrich_token_metadata import JsonRpcClient, ensure_dependencies
     from .project_config import resolved_runtime
 except ImportError:
+    from artifact_paths import LIVE_DB_PATH
     from enrich_token_metadata import JsonRpcClient, ensure_dependencies
     from project_config import resolved_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "analytics" / "wallet_analytics.duckdb"
+DB_PATH = LIVE_DB_PATH
 OUTPUT_PATH = ROOT / "analytics" / "seeds" / "counterparty_code_metadata.csv"
 MANIFEST_PATH = ROOT / "analytics" / "seeds" / "account_evidence_manifest.json"
 EVIDENCE_SCHEMA_VERSION = "account-evidence-v1"
@@ -566,7 +568,7 @@ def main() -> None:
     import duckdb
 
     if not DB_PATH.exists():
-        raise SystemExit("Analytics database is missing; run an analytics build first")
+        raise SystemExit("Live analytics database is missing; run bun run analytics:build:hyperindex first")
     existing = read_existing()
     connection = duckdb.connect(str(DB_PATH), read_only=True)
     try:

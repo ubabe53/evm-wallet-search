@@ -19,13 +19,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
+    from .artifact_paths import LIVE_DB_PATH
     from .project_config import resolved_runtime
 except ImportError:
+    from artifact_paths import LIVE_DB_PATH
     from project_config import resolved_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "analytics" / "wallet_analytics.duckdb"
+DB_PATH = LIVE_DB_PATH
 REQUIREMENTS = ROOT / "analytics" / "requirements.txt"
 OUTPUT_PATH = ROOT / "analytics" / "seeds" / "token_rpc_metadata.csv"
 FIELDNAMES = [
@@ -266,7 +268,7 @@ def main() -> None:
     import duckdb
 
     if not DB_PATH.exists():
-        raise SystemExit("Analytics database is missing; run an analytics build first")
+        raise SystemExit("Live analytics database is missing; run bun run analytics:build:hyperindex first")
     existing = read_existing()
     connection = duckdb.connect(str(DB_PATH), read_only=True)
     try:
