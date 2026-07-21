@@ -20,24 +20,25 @@ The repository is currently migrating from a static-JSON frontend to that local 
 bun install
 bun run indexer:dev
 bun run analytics:build:hyperindex
+bun run analytics:build:fixture
 bun run labels:sync
 bun run labels:enrich --limit 100
 bun run addresses:enrich --limit 500
 bun run test
 ```
 
-`analytics:build:hyperindex` is the local-product analytics path. It reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN` and materializes complete marts in DuckDB; see `docs/operations.md`.
+`analytics:build:hyperindex` is the local-product analytics path. It reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN` and materializes complete marts in `analytics/artifacts/live.duckdb`; see `docs/operations.md`.
 
 The local API and its development command have not been implemented yet. Until that migration lands, `bun run dashboard:dev` still reads generated files from `public/data/`; do not treat that transitional behavior as the target architecture.
 
-`analytics:build`, `export:dashboard`, and the production Vite build form the deterministic fixture-demo path used by CI and, eventually, GitHub Pages. Running that path overwrites the shared local DuckDB and `public/data` artifacts with fixture data, so it must not be used as the way to launch complete local analytics. Separating live and fixture output paths is part of the pending API migration.
+`analytics:build:fixture` (also available as the compatibility alias `analytics:build`), `export:dashboard`, and the production Vite build form the deterministic fixture-demo path used by CI and, eventually, GitHub Pages. Fixture dbt commands write `analytics/artifacts/fixture.duckdb`, clear the live Postgres DSN from their child environment, and never overwrite `analytics/artifacts/live.duckdb`. Only the generated `public/data` JSON belongs to the static demo.
 
 `labels:sync` refreshes the checked-in metadata registry from Trust Wallet, Uniswap, and CoinGecko. `labels:enrich` reads self-declared ERC20 metadata for the highest-impact unverified contracts. `addresses:enrich` collects pinned-block bytecode, Safe, and canonical ERC-4337 EntryPoint evidence for high-activity counterparties. Ordinary dbt builds remain offline and reproducible; no full live account enrichment is part of the fixture path.
 
 ## Layout
 
 - `indexer/`: Envio HyperIndex config, schema, and handlers for the ERC-20-intended `Transfer` signature.
-- `analytics/`: dbt + DuckDB project with staged, intermediate, and mart models.
+- `analytics/`: dbt project plus isolated `artifacts/live.duckdb` and `artifacts/fixture.duckdb` outputs.
 - `src/`: React dashboard; currently static-data-backed and pending migration to the local API client.
 - `scripts/`: dbt orchestration, enrichment, and the fixture-demo JSON exporter.
 - `config.example.yaml`: shared Envio, Postgres, and Ethereum RPC configuration template; copy it to the git-ignored `config.yaml` for local values.

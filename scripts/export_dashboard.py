@@ -17,9 +17,14 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+try:
+    from .artifact_paths import FIXTURE_DB_PATH
+except ImportError:
+    from artifact_paths import FIXTURE_DB_PATH
+
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "analytics" / "wallet_analytics.duckdb"
+DB_PATH = FIXTURE_DB_PATH
 PUBLIC_DATA = ROOT / "public" / "data"
 
 # Static JSON stays intentionally bounded; DuckDB remains the complete artifact.

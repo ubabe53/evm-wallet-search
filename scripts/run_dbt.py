@@ -14,11 +14,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from project_config import resolved_runtime
+try:
+    from .artifact_paths import ANALYTICS_DIR, DBT_DUCKDB_PATH_ENV, database_path
+    from .project_config import resolved_runtime
+except ImportError:
+    from artifact_paths import ANALYTICS_DIR, DBT_DUCKDB_PATH_ENV, database_path
+    from project_config import resolved_runtime
 
 
-ROOT = Path(__file__).resolve().parents[1]
-ANALYTICS_DIR = ROOT / "analytics"
 REQUIREMENTS = ANALYTICS_DIR / "requirements.txt"
 HYPERINDEX_DSN_ENV = "DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN"
 
@@ -35,11 +38,30 @@ def ensure_python_dependencies() -> None:
     )
 
 
-def run_dbt(command: str, extra_args: list[str]) -> None:
-    """Execute dbt from the analytics project with fixture mode enabled by default."""
+def run_dbt(
+    command: str,
+    extra_args: list[str],
+    *,
+    use_hyperindex: bool,
+    hyperindex_dsn: str | None,
+) -> None:
+    """Execute dbt against the database dedicated to the selected source mode."""
 
     env = os.environ.copy()
     env["DBT_PROFILES_DIR"] = str(ANALYTICS_DIR)
+    db_path = database_path(use_fixture=not use_hyperindex)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    env[DBT_DUCKDB_PATH_ENV] = str(db_path)
+    if use_hyperindex:
+        if not hyperindex_dsn:
+            raise SystemExit(
+                f"Live HyperIndex mode requires {HYPERINDEX_DSN_ENV}. "
+                "Set it to the Envio Postgres connection URI before running dbt."
+            )
+        env[HYPERINDEX_DSN_ENV] = hyperindex_dsn
+    else:
+        # Fixture builds must never attach the live ingestion database implicitly.
+        env.pop(HYPERINDEX_DSN_ENV, None)
 
     dbt_executable = shutil.which("dbt")
     if dbt_executable is None:
@@ -86,14 +108,14 @@ def main() -> None:
 
     ensure_python_dependencies()
     runtime = resolved_runtime()
-    if runtime["hyperindex_postgres_dsn"] and not os.environ.get(HYPERINDEX_DSN_ENV):
-        os.environ[HYPERINDEX_DSN_ENV] = str(runtime["hyperindex_postgres_dsn"])
-    if requests_hyperindex(sys.argv[2:]) and not os.environ.get(HYPERINDEX_DSN_ENV):
-        raise SystemExit(
-            f"Live HyperIndex mode requires {HYPERINDEX_DSN_ENV}. "
-            "Set it to the Envio Postgres connection URI before running dbt."
-        )
-    run_dbt(command, sys.argv[2:])
+    use_hyperindex = requests_hyperindex(sys.argv[2:])
+    hyperindex_dsn = os.environ.get(HYPERINDEX_DSN_ENV) or runtime["hyperindex_postgres_dsn"]
+    run_dbt(
+        command,
+        sys.argv[2:],
+        use_hyperindex=use_hyperindex,
+        hyperindex_dsn=str(hyperindex_dsn) if hyperindex_dsn else None,
+    )
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ Treat documentation as part of the implementation. If code and documentation dis
 - Ethereum mainnet only (`chain_id = 1`).
 - One configured wallet, currently the pinned address for `vitalik.eth`.
 - One `Transfer(address,address,uint256)` event signature, intended for ERC-20 analytics. ERC-721 uses the same signature, and the current wildcard indexer does not disambiguate standards; never claim every captured row is proven ERC-20.
-- HyperIndex Postgres is ingestion persistence; DuckDB is the complete analytics artifact.
+- HyperIndex Postgres is ingestion persistence; `analytics/artifacts/live.duckdb` is the complete local analytics artifact. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
 - The intended local product is React → local read-only API → DuckDB. The API is not implemented yet.
 - The current React app still reads generated JSON as a transitional implementation.
 - Static JSON is only the bounded fixture-backed GitHub Pages demo path.
@@ -111,6 +111,7 @@ bun run hooks:install
 bun run indexer:codegen
 bun run indexer:dev
 bun run analytics:build
+bun run analytics:build:fixture
 bun run analytics:build:hyperindex
 bun run labels:sync
 bun run labels:enrich --limit 100

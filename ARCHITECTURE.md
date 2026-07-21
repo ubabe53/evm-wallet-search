@@ -39,7 +39,8 @@ The current frontend uses the JSON path. The target local application replaces t
 | Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
-| Complete analytical store | `analytics/wallet_analytics.duckdb` | Hold complete locally transformed analytics | A checked-in artifact or a browser-delivered database |
+| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics for the local API | A checked-in artifact or a browser-delivered database |
+| Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Transitional/demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON to the current frontend and fixture demo | The long-term complete-history serving architecture |
 | Dashboard | `src/` | Present graph, summary, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
 | Tests | `tests/`, `analytics/tests/`, `analytics/models/unit_tests.yml` | Enforce UI, export, enrichment, grain, and semantic contracts | A substitute for documenting system intent and boundaries |
@@ -106,7 +107,7 @@ The indexer and live analytics are explicit operations. Builds must not silently
 checked-in fixtures → dbt → DuckDB → bounded JSON exporter → React/static hosting
 ```
 
-This path is deterministic and suitable for CI and GitHub Pages. It is not proof of live-source integration behavior. Fixture and live outputs currently share paths; avoid running fixture commands when preserving a live DuckDB cache matters until those artifacts are separated.
+This path is deterministic and suitable for CI and GitHub Pages. It is not proof of live-source integration behavior. Fixture builds write only `analytics/artifacts/fixture.duckdb` and deliberately remove the HyperIndex DSN from dbt's environment. Live builds write only `analytics/artifacts/live.duckdb`; fixture validation cannot overwrite that cache.
 
 ## Intended local API boundary
 

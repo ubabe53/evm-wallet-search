@@ -3,7 +3,7 @@ evm_wallet_search:
   outputs:
     dev:
       type: duckdb
-      path: wallet_analytics.duckdb
+      path: "{{ env_var('EVM_WALLET_DUCKDB_PATH', 'artifacts/fixture.duckdb') }}"
       threads: 4
       attach:
         - path: "{{ env_var('DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN', ':memory:') }}"
