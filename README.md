@@ -2,7 +2,9 @@
 
 Portfolio-grade Ethereum wallet analytics MVP for one pinned wallet: `vitalik.eth`.
 
-The pipeline indexes ERC20 `Transfer` events plus the selected top-level transaction sender and target with Envio HyperIndex, transforms wallet-relevant transfers through dbt into DuckDB marts, exports static JSON, and serves a React dashboard. Transfer `from`, `to`, raw value, and wallet-relative direction remain the event source of truth; transaction envelope fields are separate evidence about initiation and routing.
+The pipeline indexes ERC20 `Transfer` events plus the selected top-level transaction sender and target with Envio HyperIndex and transforms wallet-relevant transfers through dbt into DuckDB marts. The primary product is a locally run React application backed by an API that queries those marts on demand. Transfer `from`, `to`, raw value, and wallet-relative direction remain the event source of truth; transaction envelope fields are separate evidence about initiation and routing.
+
+The repository is currently migrating from a static-JSON frontend to that local API architecture. The static JSON path is retained only for a bounded, fixture-backed GitHub Pages portfolio demo. It is not the intended serving path for complete HyperIndex analytics.
 
 ## Wallet
 
@@ -15,17 +17,18 @@ The pipeline indexes ERC20 `Transfer` events plus the selected top-level transac
 ```sh
 bun install
 bun run indexer:dev
-bun run analytics:build
 bun run analytics:build:hyperindex
 bun run labels:sync
 bun run labels:enrich --limit 100
 bun run addresses:enrich --limit 500
-bun run export:dashboard
-bun run dashboard:dev
 bun run test
 ```
 
-`analytics:build` defaults to six documented fixture transfers so the project is usable before a HyperIndex backfill. The dashboard labels that provenance explicitly. `analytics:build:hyperindex` reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN`; see `docs/operations.md`.
+`analytics:build:hyperindex` is the local-product analytics path. It reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN` and materializes complete marts in DuckDB; see `docs/operations.md`.
+
+The local API and its development command have not been implemented yet. Until that migration lands, `bun run dashboard:dev` still reads generated files from `public/data/`; do not treat that transitional behavior as the target architecture.
+
+`analytics:build`, `export:dashboard`, and the production Vite build form the deterministic fixture-demo path used by CI and, eventually, GitHub Pages. Running that path overwrites the shared local DuckDB and `public/data` artifacts with fixture data, so it must not be used as the way to launch complete local analytics. Separating live and fixture output paths is part of the pending API migration.
 
 `labels:sync` refreshes the checked-in metadata registry from Trust Wallet, Uniswap, and CoinGecko. `labels:enrich` reads self-declared ERC20 metadata for the highest-impact unverified contracts. `addresses:enrich` collects pinned-block bytecode, Safe, and canonical ERC-4337 EntryPoint evidence for high-activity counterparties. Ordinary dbt builds remain offline and reproducible; no full live account enrichment is part of the fixture path.
 
@@ -33,22 +36,22 @@ bun run test
 
 - `indexer/`: Envio HyperIndex config, schema, and handlers for ERC20 transfers.
 - `analytics/`: dbt + DuckDB project with staged, intermediate, and mart models.
-- `src/`: React dashboard.
-- `scripts/`: dbt orchestration and JSON export.
+- `src/`: React dashboard; currently static-data-backed and pending migration to the local API client.
+- `scripts/`: dbt orchestration, enrichment, and the fixture-demo JSON exporter.
 - `config.example.yaml`: shared Envio, Postgres, and Ethereum RPC configuration template; copy it to the git-ignored `config.yaml` for local values.
-- `public/data/`: generated dashboard JSON.
+- `public/data/`: generated fixture-demo JSON for static hosting, not the complete local application database.
 
 ## Documentation
 
 - `docs/architecture.md`: pipeline flow, scope, and documentation update rules.
 - `docs/data-model.md`: staging, intermediate, mart grain, and tests.
-- `docs/operations.md`: setup, fixture mode, HyperIndex mode, export, and verification.
+- `docs/operations.md`: local database mode, fixture-demo mode, setup, and verification.
 
 When code changes, update the related docs in the same change. For example, a mart schema change must update `docs/data-model.md`, `src/data.ts`, and any affected export or dashboard notes.
 
 ## GitHub Automation
 
-- CI runs the complete fixture pipeline and production build on every pull request and every push to `main`. Its downloadable dashboard build is retained for one day; that is artifact storage, not a website expiry time.
+- CI runs the deterministic fixture-demo pipeline and production static build on every pull request and every push to `main`. Its downloadable dashboard build is retained for one day; that is artifact storage, not a website expiry time.
 - Deploy runs only after successful `main` CI (or a manual dispatch) and only when the repository variable `ENABLE_GITHUB_PAGES` is exactly `true`. The published site remains online until it is replaced or disabled.
 - Dependabot checks GitHub Actions, the root JavaScript application, the indexer package, and Python analytics dependencies every Monday.
 - The pull-request template makes validation, data-contract, security, documentation, and screenshot checks explicit.
@@ -68,9 +71,23 @@ Every commit with staged changes then starts a fresh, ephemeral Codex session in
 
 Run the same gate without committing with `bun run review:staged`. For an exceptional offline or recovery commit, bypass it once with `SKIP_CODEX_REVIEW=1 git commit ...`; GitHub CI still remains the shared enforcement layer.
 
-## Data Contract
+## Delivery Contracts
 
-The dashboard consumes five generated files:
+### Local application — primary product
+
+The target local runtime is:
+
+```text
+Envio HyperIndex Postgres → dbt → DuckDB → local API → React
+```
+
+DuckDB is the application query source. The API will apply filters, rankings, counts, and pagination on demand against the complete marts and return provenance with every response. React must call the API rather than connect directly to Postgres or receive database/RPC credentials. This API is the next implementation step; it does not exist on `main` yet.
+
+The planned Docker distribution will package the local services and persistent data needed by a user who clones the project and runs their own indexer and analytics. Its service and volume contract is not implemented yet.
+
+### GitHub Pages — fixture demo only
+
+The static demo consumes five generated files:
 
 - `graph.json`: Cytoscape nodes and edges.
 - `summaries.json`: token and counterparty summaries.
@@ -78,13 +95,14 @@ The dashboard consumes five generated files:
 - `events.json`: event-level transfer rows.
 - `meta.json`: provenance, complete mart counts, JSON export counts, and export limits.
 
-The contract is typed in `src/data.ts` and generated by `scripts/export_dashboard.py`. Event rows preserve raw Transfer `from_address`/`to_address`, nullable top-level `transaction_from_address`/`transaction_to_address`, sender/target relation evidence, and a nullable indirect marker. Token summaries include confirmed indirect inbound and outbound counts.
-DuckDB remains the complete analytics artifact. Events, graph interactions, and daily rows are deterministically bounded by status, quality, and exact account-evidence signature. Token and counterparty exports instead preserve candidate unions that prove exact top-500 token and top-50 counterparty rankings for every one of the 6,615 selections formed by 15 non-empty status combinations, 7 non-empty quality combinations, and 63 non-empty inclusive account-filter combinations. The browser aggregates matching token and timeline account cells back to their displayed grains before ranking or rendering. `meta.json` records complete/exported counts, limits, selection counts, exact-ranking guarantees, and `is_sampled`; exact candidate-union rankings remain valid even when other browser exports are sampled.
+The demo contract is typed in `src/data.ts` and generated by `scripts/export_dashboard.py` from deterministic fixture marts. Event rows preserve raw Transfer `from_address`/`to_address`, nullable top-level `transaction_from_address`/`transaction_to_address`, sender/target relation evidence, and a nullable indirect marker. Token summaries include confirmed indirect inbound and outbound counts.
+
+The current exporter still contains full-history candidate-union logic for 6,615 composed filter selections. That machinery belongs to the transitional implementation and is not the target local serving contract; complete local queries should move to DuckDB-backed API endpoints instead of expanding static precomputation.
 
 ## Dashboard Controls
 
 - Theme toggle: switches palettes in place, preserves graph positions and viewport state, and stores the preference locally. Graph labels use dark text in light mode and light text in dark mode.
-- Filter bar: applies status AND quality AND inclusive account evidence before filtering events, token summaries, graph elements, timeline rows, counterparties, pagination, and summary cards by token, address, direction, or transaction text.
+- Filter bar: hides suspected and reviewed spam by default, provides one `Include spam` toggle, and applies inclusive account evidence before filtering events, token summaries, graph elements, timeline rows, counterparties, pagination, and summary cards by token, address, direction, or transaction text.
 - Account evidence: a six-option multi-select filters the graph, ranked counterparties, and recent events by `EOA candidate`, `Delegated EOA`, `Safe`, `ERC-4337`, `Contract`, or `Unknown`. Safe and ERC-4337 are independent evidence predicates, so an address observed as both remains visible when either corresponding filter is selected.
 - Data provenance: identifies fixture versus HyperIndex data, shows the complete indexed transfer count, and identifies when recent events are a bounded export.
 - Graph density: shows the 25 highest-ranked interactions by default, with controls for 10, 25, 50, or 100 direct wallet-address links. Nodes without a displayed edge are removed automatically.
@@ -93,13 +111,13 @@ DuckDB remains the complete analytics artifact. Events, graph interactions, and 
 - Graph edge labels: show the token symbol and the number of transfers aggregated into that counterparty-token-direction interaction, such as `USDC x5`.
 - Etherscan navigation: token symbols open their contract page, visible addresses open their address page, and transaction icons open their transaction page in a new tab. In the graph, clicking a wallet/counterparty node opens its address and clicking an interaction edge opens its token contract.
 - Account evidence badges: graph labels, ranked counterparties, and recent events show a primary pinned-block account type. `EOA candidate` means no bytecode was observed and never claims personhood or permanent EOA status. `Delegated EOA` requires code exactly equal to `0xef0100` plus a 20-byte target. Safe badges include the observed threshold as “M/N addresses”; ERC-4337 badges mean the address appeared as `UserOperationEvent.sender` at a versioned canonical EntryPoint within deployment-clamped successful coverage. Failed log chunks remain explicit partial evidence.
-- Top ERC-20 counterparties: ranks addresses by ERC20 `Transfer` event count, not distinct transaction count. It aggregates selected status-quality rows into one address row and shows token breadth plus `Amount In / Out` event counts. The ranking excludes the zero address, the tracked wallet, and addresses observed as token contracts; the underlying event rows remain intact. Despite the compact label, In/Out values are transfer-event counts, not token quantities.
+- Top ERC-20 counterparties: ranks addresses by ERC20 `Transfer` event count, not distinct transaction count. It aggregates matching internal classification rows into one address row and shows token breadth plus `Amount In / Out` event counts. The ranking excludes the zero address, the tracked wallet, and addresses observed as token contracts; the underlying event rows remain intact. Despite the compact label, In/Out values are transfer-event counts, not token quantities.
 - Zero-address handling: excludes the Ethereum zero address from the interaction graph and counterparty ranking because it represents mint/burn mechanics, while retaining those transfers in event and token-flow analytics.
 - Graph reset: recenters the graph after pan/zoom. Zoom bounds are derived from the fitted graph size, while hard safety caps prevent unusable extremes. Pan movement is clamped so the graph stays near the viewport.
 - Graph theater mode: expands the interaction graph over the dashboard for focused exploration, refits Cytoscape to the larger viewport, locks background scrolling, and exits through the collapse control or Escape.
 - Token flow: appears below recent events at one row per token. It shows total transfers, distinct non-zero/non-self `Senders | Recipients`, and the distinct union of those counterparties. Sender and recipient mean addresses in emitted token events, not proven people or transaction initiators. Decimal and exact raw totals remain in the generated data but are intentionally not presented until the amount visualization has a trustworthy use.
 - Transaction initiation evidence: recent-event directions gain an asterisk only when the selected top-level transaction sender differs from emitted `Transfer.from`. Token-flow rows show exact indirect inbound/outbound counts. The tooltip explains common causes such as `transferFrom`, routers, Safe/account abstraction, and synthetic or spam event emission; a mismatch alone never proves spam, intent, or economic ownership. Legacy rows without selected transaction fields remain unknown rather than being labeled direct.
-- Token classification: displays status separately from `high confidence`, `listed`, or `unknown` quality. Status precedence is reviewed spam, automated suspected spam, high-confidence trusted, then unverified. Trusted and unverified statuses remain selected by default; quality defaults to high confidence, with listed and unknown discoverable in the Quality menu. Hover titles expose quality source count, reason, provenance, `token-quality-v1`, and spam evidence.
+- Token classification: presents one user-facing `Spam` flag and one `Include spam` toggle. Automated `suspected_spam` and reviewed `spam` are merged into that presentation state; both are hidden by default. Non-spam tokens receive no `trusted` label because absence of a spam flag is not proof of trust. The detailed status, quality, score, reason, provenance, and classifier version remain internal analytics evidence for later product decisions.
 - Event pagination: renders 10 events initially, reveals 10 more with Show more, and reverses one page at a time with Show less while keeping the visible and total counts explicit.
 
 Playwright is included as a dev dependency for local rendered-dashboard checks and screenshots.

@@ -2,10 +2,12 @@
 
 ## Project context
 
-This repository is a batch-oriented Ethereum wallet analytics application. Envio
+This repository is a locally run Ethereum wallet analytics application. Envio
 HyperIndex captures ERC20 transfers, dbt transforms them into DuckDB marts, a
-Python exporter writes bounded static JSON, and a React/Vite dashboard displays
-the result. Fixture mode is the default and must remain offline and reproducible.
+local API is the target query-serving layer, and a React/Vite dashboard displays
+its responses. The API migration is pending: the current frontend still reads
+JSON. Bounded fixture JSON is only the GitHub Pages demo path. Fixture tests and
+demo builds must remain offline and reproducible.
 
 Use these commands when validating changes:
 
@@ -29,16 +31,19 @@ bun run dashboard:build
   security guarantee. RPC metadata is self-declared and must never establish
   trust. Absence from a registry must remain neutral rather than imply spam.
 - Only a reviewed manual override may assign final `spam`. Automated rules may
-  assign `suspected_spam` only when their evidence and reason codes are exported.
+  assign internal `suspected_spam` only when their evidence and reason codes are
+  preserved for audit. The dashboard merges both statuses into one `Spam` state.
 - When classifier thresholds or reason rules change, require matching tests,
   classifier-version updates, and documentation changes.
 - When a dbt mart or seed schema changes, verify the related dbt tests,
-  `docs/data-model.md`, `src/data.ts`, the exporter, and frontend tests together.
-- Preserve deterministic, status-balanced export limits. DuckDB marts retain the
-  complete dataset; static JSON is a bounded browser view and must report its
-  provenance and limits in `meta.json`.
-- Dashboard changes must preserve accessibility, loading/error behavior, status
-  filtering semantics, and both light and dark themes.
+  `docs/data-model.md`, local API contract, frontend client types, fixture-demo
+  exporter, and frontend tests as applicable.
+- DuckDB marts retain the complete local dataset. Local API queries must be
+  bounded and paginated while returning complete matching counts and provenance.
+  Static JSON is a fixture-only demo and must report its provenance and limits in
+  `meta.json`; do not expand full-history static precomputation.
+- Dashboard changes must preserve accessibility, loading/error behavior, the
+  default-off `Include spam` semantics, and both light and dark themes.
 - Documentation describing behavior must change in the same pull request as the
   behavior itself.
 
