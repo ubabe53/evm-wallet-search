@@ -3,7 +3,8 @@
 ## Project context
 
 This repository is a locally run Ethereum wallet analytics application. Envio
-HyperIndex captures ERC20 transfers, dbt transforms them into DuckDB marts, a
+HyperIndex captures the ERC-20-intended `Transfer(address,address,uint256)`
+signature without currently disambiguating ERC-721, dbt transforms rows into DuckDB marts, a
 local API is the target query-serving layer, and a React/Vite dashboard displays
 its responses. The API migration is pending: the current frontend still reads
 JSON. Bounded fixture JSON is only the GitHub Pages demo path. Fixture tests and

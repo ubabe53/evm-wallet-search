@@ -6,7 +6,8 @@ This file is the high-level system map for humans and agents. It records what ex
 
 ```text
 Ethereum mainnet
-      │ ERC-20 Transfer logs involving the configured wallet
+      │ Transfer(address,address,uint256) logs involving the configured wallet
+      │ (ERC-20-intended; token standard is not disambiguated)
       ▼
 Envio HyperIndex
       │ normalized Erc20Transfer entities
@@ -35,7 +36,7 @@ The current frontend uses the JSON path. The target local application replaces t
 
 | Component | Location | Responsibility | Must not become |
 | --- | --- | --- | --- |
-| Indexer | `indexer/` | Capture wallet-relevant ERC-20 `Transfer` logs and persist one normalized entity per log | A general trace, call, approval, NFT, or arbitrary-wallet indexer without a scope decision |
+| Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
 | Complete analytical store | `analytics/wallet_analytics.duckdb` | Hold complete locally transformed analytics | A checked-in artifact or a browser-delivered database |
@@ -65,7 +66,7 @@ Rules:
 
 ### On-chain evidence
 
-An ERC-20 `Transfer` log establishes that a contract emitted the event with specific indexed participants and a raw value at a block/log position. It does not establish intent, transaction initiation, execution path, economic ownership, standards compliance, or whether a label is trustworthy.
+A captured `Transfer(address,address,uint256)` log establishes that a contract emitted that signature with specific indexed participants and a raw third value at a block/log position. It does not establish token standard, intent, transaction initiation, execution path, economic ownership, standards compliance, or whether a label is trustworthy. ERC-721 uses the same event signature; because the current wildcard indexer has no standard-disambiguation step, an ERC-721-like row can enter marts that are currently shaped and named for ERC-20 analytics, with a token ID occupying the raw-value field.
 
 ### Enrichment evidence
 
@@ -126,6 +127,7 @@ Adding the API requires updating this file, `docs/data-model.md`, operations doc
 - React still loads generated JSON.
 - The static exporter retains legacy candidate-union machinery that should not expand into the local serving model.
 - Fixture and live dbt builds share the DuckDB output path.
+- The wildcard `Transfer` source does not yet disambiguate ERC-20 from ERC-721-like contracts that emit the identical signature.
 - Docker packaging is an approved direction, but service topology, volumes, health checks, secrets, and startup order are not designed or implemented.
 
 These are explicit gaps, not permissions to fill them opportunistically during unrelated work.

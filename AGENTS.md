@@ -2,7 +2,7 @@
 
 ## Mission
 
-Build a portfolio-grade Ethereum wallet interaction graph whose analytics are reproducible, bounded, and honest about what ERC-20 `Transfer` logs can prove.
+Build a portfolio-grade Ethereum wallet interaction graph whose analytics are reproducible, bounded, and honest about what the ERC-20-intended `Transfer` signature can—and cannot—prove.
 
 Optimize for agent legibility: keep architecture, commands, invariants, and change routes explicit enough that a new agent can act safely without reconstructing the repository from scratch.
 
@@ -23,13 +23,13 @@ Treat documentation as part of the implementation. If code and documentation dis
 
 - Ethereum mainnet only (`chain_id = 1`).
 - One configured wallet, currently the pinned address for `vitalik.eth`.
-- ERC-20 `Transfer(address,address,uint256)` logs only.
+- One `Transfer(address,address,uint256)` event signature, intended for ERC-20 analytics. ERC-721 uses the same signature, and the current wildcard indexer does not disambiguate standards; never claim every captured row is proven ERC-20.
 - HyperIndex Postgres is ingestion persistence; DuckDB is the complete analytics artifact.
 - The intended local product is React → local read-only API → DuckDB. The API is not implemented yet.
 - The current React app still reads generated JSON as a transitional implementation.
 - Static JSON is only the bounded fixture-backed GitHub Pages demo path.
 
-Native ETH transfers, traces, calls, approvals, NFTs, arbitrary wallet lookup, USD prices, and an implemented Docker stack are outside the current MVP. Adding one requires an explicit architecture and data-contract decision.
+Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, arbitrary wallet lookup, USD prices, and an implemented Docker stack are outside the current MVP. Adding one requires an explicit architecture and data-contract decision.
 
 ## Non-negotiable data semantics
 

@@ -2,7 +2,9 @@
 
 Portfolio-grade Ethereum wallet analytics MVP for one pinned wallet: `vitalik.eth`.
 
-The pipeline indexes ERC20 `Transfer` events plus the selected top-level transaction sender and target with Envio HyperIndex and transforms wallet-relevant transfers through dbt into DuckDB marts. The primary product is a locally run React application backed by an API that queries those marts on demand. Transfer `from`, `to`, raw value, and wallet-relative direction remain the event source of truth; transaction envelope fields are separate evidence about initiation and routing.
+The pipeline indexes wallet-relevant `Transfer(address,address,uint256)` events plus the selected top-level transaction sender and target with Envio HyperIndex and transforms them through dbt into ERC-20-oriented DuckDB marts. The primary product is a locally run React application backed by an API that queries those marts on demand. Transfer `from`, `to`, raw value, and wallet-relative direction remain the event source of truth; transaction envelope fields are separate evidence about initiation and routing.
+
+The source is signature-based, not standards-proof: ERC-721 uses the same `Transfer` signature, and the current wildcard indexer does not disambiguate token standards. Captured rows are therefore ERC-20-intended analytics inputs, not proof that every emitting contract complies with ERC-20.
 
 The repository is currently migrating from a static-JSON frontend to that local API architecture. The static JSON path is retained only for a bounded, fixture-backed GitHub Pages portfolio demo. It is not the intended serving path for complete HyperIndex analytics.
 
@@ -34,7 +36,7 @@ The local API and its development command have not been implemented yet. Until t
 
 ## Layout
 
-- `indexer/`: Envio HyperIndex config, schema, and handlers for ERC20 transfers.
+- `indexer/`: Envio HyperIndex config, schema, and handlers for the ERC-20-intended `Transfer` signature.
 - `analytics/`: dbt + DuckDB project with staged, intermediate, and mart models.
 - `src/`: React dashboard; currently static-data-backed and pending migration to the local API client.
 - `scripts/`: dbt orchestration, enrichment, and the fixture-demo JSON exporter.
@@ -108,12 +110,12 @@ The current exporter still contains full-history candidate-union logic for 6,615
 - Account evidence: a six-option multi-select filters the graph, ranked counterparties, and recent events by `EOA candidate`, `Delegated EOA`, `Safe`, `ERC-4337`, `Contract`, or `Unknown`. Safe and ERC-4337 are independent evidence predicates, so an address observed as both remains visible when either corresponding filter is selected.
 - Data provenance: identifies fixture versus HyperIndex data, shows the complete indexed transfer count, and identifies when recent events are a bounded export.
 - Graph density: shows the 25 highest-ranked interactions by default, with controls for 10, 25, 50, or 100 direct wallet-address links. Nodes without a displayed edge are removed automatically.
-- Graph activity sizing: interacted-address nodes scale gradually from 26px at one transfer to 68px at 10,000 or more, using their complete ERC20 transfer count with the configured wallet. The fixed logarithmic scale keeps node sizes stable when filters or graph limits change.
+- Graph activity sizing: interacted-address nodes scale gradually from 26px at one transfer to 68px at 10,000 or more, using their complete captured Transfer-signature event count with the configured wallet. Because token standard is not yet disambiguated, this is not a proven ERC-20-only count. The fixed logarithmic scale keeps node sizes stable when filters or graph limits change.
 - Graph interaction styling: uses a terminal-inspired network canvas with thin weighted links. Token symbols appear on links instead of occupying separate graph nodes. Counterparty labels name independent Safe and ERC-4337 evidence, Safe changes node shape/border weight, and ERC-4337 uses a dotted border, so overlap remains visible without color alone. Hovering a node emphasizes its immediate neighborhood; hovering a link emphasizes that interaction.
 - Graph edge labels: show the token symbol and the number of transfers aggregated into that counterparty-token-direction interaction, such as `USDC x5`.
 - Etherscan navigation: token symbols open their contract page, visible addresses open their address page, and transaction icons open their transaction page in a new tab. In the graph, clicking a wallet/counterparty node opens its address and clicking an interaction edge opens its token contract.
 - Account evidence badges: graph labels, ranked counterparties, and recent events show a primary pinned-block account type. `EOA candidate` means no bytecode was observed and never claims personhood or permanent EOA status. `Delegated EOA` requires code exactly equal to `0xef0100` plus a 20-byte target. Safe badges include the observed threshold as “M/N addresses”; ERC-4337 badges mean the address appeared as `UserOperationEvent.sender` at a versioned canonical EntryPoint within deployment-clamped successful coverage. Failed log chunks remain explicit partial evidence.
-- Top ERC-20 counterparties: ranks addresses by ERC20 `Transfer` event count, not distinct transaction count. It aggregates matching internal classification rows into one address row and shows token breadth plus `Amount In / Out` event counts. The ranking excludes the zero address, the tracked wallet, and addresses observed as token contracts; the underlying event rows remain intact. Despite the compact label, In/Out values are transfer-event counts, not token quantities.
+- Top ERC-20 counterparties: the current panel label reflects the intended analytics domain, but its ranking is technically based on captured `Transfer(address,address,uint256)` event count, not a proven ERC-20-only count or distinct transaction count. It aggregates matching internal classification rows into one address row and shows emitting-contract breadth plus `Amount In / Out` event counts. The ranking excludes the zero address, the tracked wallet, and addresses observed as emitting token contracts; the underlying event rows remain intact. Despite the compact label, In/Out values are Transfer-signature event counts, not token quantities.
 - Zero-address handling: excludes the Ethereum zero address from the interaction graph and counterparty ranking because it represents mint/burn mechanics, while retaining those transfers in event and token-flow analytics.
 - Graph reset: recenters the graph after pan/zoom. Zoom bounds are derived from the fitted graph size, while hard safety caps prevent unusable extremes. Pan movement is clamped so the graph stays near the viewport.
 - Graph theater mode: expands the interaction graph over the dashboard for focused exploration, refits Cytoscape to the larger viewport, locks background scrolling, and exits through the collapse control or Escape.

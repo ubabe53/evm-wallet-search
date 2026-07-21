@@ -1,14 +1,14 @@
 # Data Model
 
-The core grain is one row per wallet-relevant ERC20 transfer.
+The core grain is one row per wallet-relevant `Transfer(address,address,uint256)` log, interpreted by ERC-20-oriented models. The signature alone does not prove ERC-20: ERC-721 uses the same signature, and the current wildcard indexer has no standards-disambiguation step. Until that gap is closed, a captured ERC-721-like token ID can occupy `value_raw` and must not be presented as a proven fungible quantity.
 
 ## Staging
 
 ### `stg_erc20_transfers`
 
-Deduplicates raw transfer entities by `chain_id`, `transaction_hash`, and `log_index`. It normalizes all addresses to lowercase and standardizes block, transaction, token, emitted Transfer `from`/`to`, and raw value fields. Nullable `transaction_from_address` and `transaction_to_address` preserve selected top-level transaction envelope evidence. They remain null for legacy entities that predate this field selection; no directness is inferred from missing values.
+Deduplicates raw Transfer-signature entities by `chain_id`, `transaction_hash`, and `log_index`. It normalizes all addresses to lowercase and standardizes block, transaction, emitting contract, emitted Transfer `from`/`to`, and raw third-value fields. Nullable `transaction_from_address` and `transaction_to_address` preserve selected top-level transaction envelope evidence. They remain null for legacy entities that predate this field selection; no directness is inferred from missing values.
 
-In HyperIndex mode, `value_raw` is cast to text inside Postgres through `postgres_query` before DuckDB scans it. This avoids converting unconstrained Postgres numeric values to floating point or scientific notation and preserves exact ERC20 integer units.
+In HyperIndex mode, `value_raw` is cast to text inside Postgres through `postgres_query` before DuckDB scans it. This avoids converting unconstrained Postgres numeric values to floating point or scientific notation and preserves the exact integer emitted as the event's third value. Its meaning is not guaranteed to be a fungible quantity until token standard is disambiguated.
 
 ### `stg_wallets`
 
@@ -101,11 +101,11 @@ Each wallet-counterparty-token-direction interaction produces two directed legs:
 
 Graph edges carry effective status, metadata provenance, and both evidence layers so the application query can exclude suspected and reviewed spam before projecting direct wallet-counterparty links.
 
-`counterparty_transfer_count` is the complete number of wallet-relevant ERC20 transfers for the wallet-counterparty pair across all tokens and both directions. It is repeated on each interaction edge so bounded graph exports retain the full-history activity metric used for gradual node sizing.
+`counterparty_transfer_count` is the complete number of captured wallet-relevant Transfer-signature events for the wallet-counterparty pair across all emitting contracts and both directions. It is not a proven ERC-20-only count. It is repeated on each interaction edge so bounded graph exports retain the full-history activity metric used for gradual node sizing.
 
 ### `token_summary`
 
-One row per wallet, token, effective status, quality, and exact counterparty account-evidence signature across inbound and outbound activity. This serving grain supports inclusive account filtering. The local API filters cell rows and aggregates them back to one row per wallet and token before ranking and returning a bounded page; the fixture demo performs the equivalent operation over its small static payload. It records total, inbound, and outbound ERC20 transfer-event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
+One row per wallet, emitting contract, effective status, quality, and exact counterparty account-evidence signature across inbound and outbound activity. This serving grain supports inclusive account filtering. The local API filters cell rows and aggregates them back to one row per wallet and emitting contract before ranking and returning a bounded page; the fixture demo performs the equivalent operation over its small static payload. It records total, inbound, and outbound captured Transfer-signature event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when metadata exists; and exact raw-third-value total. Without token-standard disambiguation, those counts and totals are ERC-20-intended rather than proven fungible-token measures.
 
 `indirect_inbound_transfer_count` and `indirect_outbound_transfer_count` count only `is_indirect = true`. Legacy nulls are excluded rather than treated as direct or indirect, so each indirect count is bounded by its corresponding direction total.
 
@@ -115,9 +115,9 @@ One row per wallet, token, effective status, quality, and exact counterparty acc
 
 ### `counterparty_summary`
 
-One row per wallet, chain, eligible counterparty, effective token status, and token quality. `transfer_count` is the sheer number of ERC20 `Transfer` events, not a distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-token count, first/last event timestamps, primary account type, pinned code observation, independent Safe/ERC-4337 evidence, provenance, fetch status/reasons, and coverage bounds.
+One row per wallet, chain, eligible counterparty, effective token status, and token quality. `transfer_count` is the sheer number of captured Transfer-signature events, not a proven ERC-20-only or distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-emitting-contract count, first/last event timestamps, primary account type, pinned code observation, independent Safe/ERC-4337 evidence, provenance, fetch status/reasons, and coverage bounds.
 
-The ranking-serving mart excludes the zero address, the tracked wallet itself, and any counterparty address observed as an ERC20 token contract in the indexed wallet dataset. These exclusions do not delete rows from `wallet_events` or alter token totals.
+The ranking-serving mart excludes the zero address, the tracked wallet itself, and any counterparty address observed as an emitting token contract in the indexed wallet dataset. These exclusions do not delete rows from `wallet_events` or alter event totals.
 
 ### `timeline_daily`
 
