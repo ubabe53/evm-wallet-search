@@ -26,7 +26,7 @@ Treat documentation as part of the implementation. If code and documentation dis
 - One `Transfer(address,address,uint256)` event signature, intended for ERC-20 analytics. ERC-721 uses the same signature, and the current wildcard indexer does not disambiguate standards; never claim every captured row is proven ERC-20.
 - HyperIndex Postgres is ingestion persistence; `analytics/artifacts/live.duckdb` is the complete local analytics artifact. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
 - The local read-only FastAPI service in `server/` queries only `analytics/artifacts/live.duckdb`; it must reject fixture provenance.
-- The current React app still reads generated JSON as a transitional implementation and has not yet migrated to the API client.
+- The React app has two explicit build-time modes: local development queries the live API, while the fixture-demo build reads generated JSON. Do not add a runtime switch that can mix them.
 - Static JSON is only the bounded fixture-backed GitHub Pages demo path.
 
 Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, arbitrary wallet lookup, USD prices, and an implemented Docker stack are outside the current MVP. Adding one requires an explicit architecture and data-contract decision.
@@ -98,7 +98,7 @@ Do not update documentation mechanically when behavior did not change. Do block 
 - Fixture export contract: `bun run export:dashboard` before export-shape tests
 - Cross-layer changes: `bun run test`
 
-Fixture validation is deterministic CI/demo coverage, not proof of HyperIndex-specific or future local-API behavior.
+Fixture validation is deterministic CI/demo coverage, not proof of HyperIndex-specific or live-API behavior.
 
 ## Commits and review
 
@@ -120,6 +120,7 @@ bun run addresses:enrich --limit 500
 bun run export:dashboard
 bun run api:dev
 bun run dashboard:dev
+bun run dashboard:dev:fixture
 bun run dashboard:build
 bun run test
 bun run review:staged

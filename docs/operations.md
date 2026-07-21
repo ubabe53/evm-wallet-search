@@ -16,9 +16,9 @@ Start the read-only API after the live build:
 bun run api:dev
 ```
 
-The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. Stop the API before rebuilding `live.duckdb`; DuckDB permits multiple read-only processes, but the dbt writer and API reader must not access the same file concurrently. Restart the API after a successful live build so every request uses the new snapshot.
+The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. Stop the API before rebuilding `live.duckdb`; DuckDB permits multiple read-only processes, but the dbt writer and API reader must not access the same file concurrently. Restart the API and reload the dashboard after a successful live build so every request and the browser's snapshot metadata use the new artifact.
 
-The current `dashboard:dev` command still serves generated JSON until the frontend client migration is complete. Fixture and live dbt artifacts are isolated, so deterministic validation cannot replace the live database.
+In a second terminal, run `bun run dashboard:dev`. Vite selects the live API adapter and proxies `/api` to `127.0.0.1:8000`; it does not load `public/data`. Fixture and live dbt artifacts are isolated, so deterministic validation cannot replace the live database.
 
 Copy `config.example.yaml` to the git-ignored `config.yaml` for one local configuration file, or use the variable names from `.env.example`. Shell environment values take precedence over YAML. Envio and dbt wrappers load the shared configuration without printing secrets.
 
@@ -115,7 +115,7 @@ bun run addresses:enrich --limit 500 --retry-failed
 bun run addresses:enrich --limit 500 --refresh
 ```
 
-Normal mode advances to unattempted addresses, retry mode retries `failed` and `partial` checks, and refresh mode rechecks ranked addresses at a new pinned block. Run the live analytics build after enrichment; once implemented, restart or refresh the local API as its operational contract requires. A seed-schema migration requires `python3 scripts/run_dbt.py build --full-refresh` once for an existing DuckDB file.
+Normal mode advances to unattempted addresses, retry mode retries `failed` and `partial` checks, and refresh mode rechecks ranked addresses at a new pinned block. Run the live analytics build after enrichment, then restart the local API so new requests use that snapshot. A seed-schema migration requires `python3 scripts/run_dbt.py build --full-refresh` once for an existing DuckDB file.
 
 Rows migrated from the earlier code-only snapshot are retained with `coverage_scope = legacy_code_snapshot`, explicit `safe_not_checked` / `erc4337_not_checked` reasons, and `fetch_status = partial`. They preserve the prior pinned code observation without implying that the newer Safe or EntryPoint evidence was collected. Refresh only the desired ranked batch to replace them; this migration does not perform a full live enrichment.
 
@@ -168,7 +168,9 @@ Run this only after the fixture build. It creates:
 
 These files are the static GitHub Pages demonstration contract. They must remain bounded, identify fixture provenance, and never claim to be complete HyperIndex history. Files are replaced atomically so readers never observe a partially written individual JSON file.
 
-The current exporter still contains legacy full-history logic for exact candidate unions across 6,615 composed filter selections. Do not use that behavior for live local data; it is slated to be replaced by a small fixture-only export when the local DuckDB API is implemented.
+The exporter still contains legacy candidate-union logic across 6,615 composed filter selections. Do not use that behavior for live local data or expand it; the live dashboard now computes only the requested selection through DuckDB-backed API endpoints.
+
+`bun run dashboard:build` always produces the fixture/static build used by CI and Pages. To inspect that exact adapter locally, run `bun run dashboard:dev:fixture`. Do not use the fixture command to validate the live API path.
 
 ## Verification
 

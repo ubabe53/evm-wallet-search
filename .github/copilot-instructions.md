@@ -6,9 +6,9 @@ This repository is a locally run Ethereum wallet analytics application. Envio
 HyperIndex captures the ERC-20-intended `Transfer(address,address,uint256)`
 signature without currently disambiguating ERC-721, dbt transforms rows into DuckDB marts, and the
 local FastAPI service executes read-only queries over the isolated live artifact.
-The frontend migration is pending: the current React/Vite dashboard still reads
-JSON. Bounded fixture JSON is only the GitHub Pages demo path. Fixture tests and
-demo builds must remain offline and reproducible.
+The React/Vite dashboard selects the API adapter in local development and the
+generated-JSON adapter only for the GitHub Pages fixture demo. Fixture tests and
+demo builds must remain offline and reproducible; never enable both adapters together.
 
 Use these commands when validating changes:
 

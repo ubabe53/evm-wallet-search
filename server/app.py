@@ -19,6 +19,7 @@ from server.queries import (
 
 
 class AccountFilter(str, Enum):
+    none = "none"
     eoa_candidate = "eoa_candidate"
     eip7702_delegated = "eip7702_delegated"
     safe = "safe"
@@ -32,7 +33,12 @@ def dashboard_filters(
     account: Annotated[list[AccountFilter] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=128)] = None,
 ) -> DashboardFilters:
-    selected = tuple(item.value for item in account) if account else ACCOUNT_FILTERS
+    if account and AccountFilter.none in account:
+        if len(account) != 1:
+            raise HTTPException(status_code=422, detail="account=none cannot be combined with other account filters")
+        selected = ()
+    else:
+        selected = tuple(item.value for item in account) if account else ACCOUNT_FILTERS
     normalized_query = q.strip() if q and q.strip() else None
     return DashboardFilters(include_spam, selected, normalized_query)
 

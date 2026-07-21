@@ -19,17 +19,17 @@ dbt + offline enrichment inputs
       │ staging → intermediate evidence → marts
       ▼
 DuckDB (complete local analytics artifact)
-      ├──────────── intended local product ────────────┐
+      ├─────────────── local product ───────────────────────┐
       │                                                ▼
       │                                      local read-only FastAPI
       │                                                │
       │                                                ▼
       │                                         React dashboard
       │
-      └── transitional/demo exporter → bounded JSON → React dashboard
+      └── fixture demo exporter → bounded JSON → React/static hosting
 ```
 
-The current frontend uses the JSON path. The target local application replaces that serving path with bounded, typed, on-demand API queries over DuckDB. GitHub Pages continues to use only a small fixture-derived static export.
+The frontend selects exactly one path at build time: local development uses bounded, typed, on-demand API queries over DuckDB, while GitHub Pages uses only a small fixture-derived static export.
 
 ## Component map
 
@@ -41,7 +41,7 @@ The current frontend uses the JSON path. The target local application replaces t
 | Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics for the local API | A checked-in artifact or a browser-delivered database |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Local API | `server/` | Validate filters and execute exact, bounded, read-only queries against the live artifact | A writer, ingestion service, or fixture-data server |
-| Transitional/demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON to the current frontend and fixture demo | The long-term complete-history serving architecture |
+| Fixture demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON only to the explicit fixture/static build | The complete-history local serving architecture |
 | Dashboard | `src/` | Present graph, summary, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
 | Tests | `tests/`, `analytics/tests/`, `analytics/models/unit_tests.yml` | Enforce UI, export, enrichment, grain, and semantic contracts | A substitute for documenting system intent and boundaries |
 | Context layer | `AGENTS.md`, this file, `README.md`, `docs/` | Make constraints, decisions, operations, and change routes legible | Stale narrative that contradicts executable behavior |
@@ -120,11 +120,10 @@ The loopback-only FastAPI service:
 - expose `include_spam` as the public reputation control while retaining detailed evidence internally;
 - keep secrets and database paths server-side.
 
-The API opens one read-only DuckDB connection per request rather than sharing a thread-unsafe global connection. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The remaining implementation gap is migrating React from static JSON to these endpoints.
+The API opens one read-only DuckDB connection per request rather than sharing a thread-unsafe global connection. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves the exact totals, requests bounded graph/token/counterparty results, and follows the opaque event cursor when the user asks for more rows.
 
 ## Known implementation gaps
 
-- React still loads generated JSON.
 - The static exporter retains legacy candidate-union machinery that should not expand into the local serving model.
 - The wildcard `Transfer` source does not yet disambiguate ERC-20 from ERC-721-like contracts that emit the identical signature.
 - Docker packaging is an approved direction, but service topology, volumes, health checks, secrets, and startup order are not designed or implemented.

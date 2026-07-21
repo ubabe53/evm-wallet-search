@@ -47,28 +47,28 @@ export type GraphEdge = {
     tokenSymbol: string;
     label?: string;
     tokenStatus: TokenStatus;
-    metadataAvailability: MetadataAvailability;
-    tokenQuality: TokenQuality;
-    tokenQualitySources: string[];
-    tokenQualitySourceCount: number;
-    tokenQualityReason: string;
-    tokenQualityProvenance: string;
-    tokenQualityVersion: "token-quality-v1";
-    metadataSource: string | null;
-    metadataSourceUrl: string | null;
-    tokenReputation: TokenReputation;
-    tokenReputationScore: number;
-    tokenReputationReasons: string;
-    tokenReputationVersion: "token-reputation-v2";
-    interactionLegitimacy: InteractionLegitimacy;
-    interactionLegitimacyScore: number;
-    interactionLegitimacyReasons: string;
+    metadataAvailability?: MetadataAvailability;
+    tokenQuality?: TokenQuality;
+    tokenQualitySources?: string[];
+    tokenQualitySourceCount?: number;
+    tokenQualityReason?: string;
+    tokenQualityProvenance?: string;
+    tokenQualityVersion?: "token-quality-v1";
+    metadataSource?: string | null;
+    metadataSourceUrl?: string | null;
+    tokenReputation?: TokenReputation;
+    tokenReputationScore?: number;
+    tokenReputationReasons?: string;
+    tokenReputationVersion?: "token-reputation-v2";
+    interactionLegitimacy?: InteractionLegitimacy;
+    interactionLegitimacyScore?: number;
+    interactionLegitimacyReasons?: string;
     counterpartyAccountType: AccountType;
     counterpartyIsSafe: boolean;
     counterpartyIsErc4337Account: boolean;
     transferCount: number;
     counterpartyTransferCount: number;
-    amountDecimalSum: number | null;
+    amountDecimalSum?: number | null;
   };
 };
 
@@ -351,7 +351,38 @@ export type PipelineMetadata = {
   is_sampled: boolean;
 };
 
-export type DashboardData = {
+export type ApiMetadata = {
+  wallet_id: string;
+  ens: string;
+  wallet_address: string;
+  chain_id: number;
+  data_source: "fixture" | "hyperindex";
+  generated_at: string;
+  transfer_count: number;
+  spam_transfer_count: number;
+  first_event_at: string | null;
+  last_event_at: string | null;
+  account_evidence_observation_block_number_min: number;
+  account_evidence_observation_block_number_max: number;
+  account_evidence_observation_block_timestamp_min: string;
+  account_evidence_observation_block_timestamp_max: string;
+  account_evidence_coverage_scope: string;
+  account_evidence_coverage_start_block: number | null;
+  account_evidence_coverage_end_block: number;
+  account_evidence_schema_version: string;
+  event_block_number_min: number | null;
+  event_block_number_max: number | null;
+  api_schema_version: string;
+  database_mode: "live" | "fixture_test";
+  completeness_scope: "duckdb_snapshot";
+  indexer_checkpoint_recorded: false;
+  finality_status: "not_recorded";
+  is_sampled: false;
+};
+
+export type DashboardMetadata = PipelineMetadata | ApiMetadata;
+
+export type DashboardData<Metadata extends DashboardMetadata = PipelineMetadata> = {
   graph: DashboardGraph;
   summaries: {
     tokens: TokenSummary[];
@@ -359,13 +390,159 @@ export type DashboardData = {
   };
   timeline: TimelineRow[];
   events: WalletEvent[];
-  metadata: PipelineMetadata;
+  metadata: Metadata;
 };
+
+export type DashboardQuery = {
+  includeSpam: boolean;
+  accountFilters: AccountFilter[];
+  query: string;
+  graphLimit: number;
+  counterpartyLimit: number;
+};
+
+export type DashboardSummary = {
+  transfer_count: number;
+  token_count: number;
+  counterparty_count: number;
+};
+
+export type ApiCollection<T> = {
+  complete_matching_count: number;
+  returned_count: number;
+  next_cursor?: string | null;
+  is_truncated?: boolean;
+  items: T[];
+};
+
+export type ApiDashboardData = {
+  data: DashboardData<ApiMetadata>;
+  summary: DashboardSummary;
+  eventCount: number;
+  eventNextCursor: string | null;
+  tokenCount: number;
+  counterpartyCount: number;
+  graphInteractionCount: number;
+};
+
+type ApiGraphInteraction = {
+  wallet_id: string;
+  ens: string;
+  wallet_address: string;
+  counterparty_address: string;
+  token_address: string;
+  token_symbol: string;
+  token_status: TokenStatus;
+  direction: "in" | "out";
+  account_type: AccountType;
+  is_safe: boolean;
+  is_erc4337_account: boolean;
+  observation_block_number: number | null;
+  eip7702_delegation_target: string | null;
+  safe_version: string | null;
+  safe_owner_count: number | null;
+  safe_threshold: number | null;
+  erc4337_entrypoint_version: string | null;
+  erc4337_effective_coverage: string | null;
+  erc4337_failed_ranges: string | null;
+  evidence_coverage_start_block: number | null;
+  evidence_coverage_end_block: number | null;
+  transfer_count: number;
+  counterparty_transfer_count: number;
+};
+
+export const dashboardDataMode = import.meta.env.VITE_DATA_MODE === "api" ? "api" : "static";
+
+function apiQuery(query: DashboardQuery, extra: Record<string, string | number> = {}): string {
+  const parameters = new URLSearchParams();
+  parameters.set("include_spam", String(query.includeSpam));
+  if (query.accountFilters.length === 0) {
+    parameters.append("account", "none");
+  } else {
+    for (const account of query.accountFilters) {
+      parameters.append("account", account);
+    }
+  }
+  if (query.query.trim()) {
+    parameters.set("q", query.query.trim());
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    parameters.set(key, String(value));
+  }
+  return parameters.toString();
+}
+
+function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
+  const nodes = new Map<string, GraphNode>();
+  const edges: GraphEdge[] = [];
+
+  for (const item of items) {
+    const walletNodeId = `wallet:${item.wallet_address}`;
+    const counterpartyNodeId = `counterparty:${item.counterparty_address}`;
+    const interactionId = `interaction:${item.wallet_address}:${item.counterparty_address}:${item.token_address}:${item.direction}`;
+    nodes.set(walletNodeId, {
+      data: {
+        id: walletNodeId, label: item.ens, type: "wallet", address: item.wallet_address,
+        tokenAddress: null, symbol: null, accountType: null, codeState: null,
+        observationBlockNumber: null, observationBlockTimestamp: null,
+        eip7702DelegationTarget: null, isSafe: null, safeVerificationStatus: null,
+        safeVersion: null, safeSingletonAddress: null, safeOwnerCount: null, safeThreshold: null,
+        isErc4337Account: null, erc4337EntrypointAddress: null, erc4337EntrypointVersion: null,
+        erc4337EntrypointSource: null, erc4337EntrypointDeploymentBlock: null,
+        erc4337EffectiveCoverage: null, erc4337FailedRanges: null, evidenceFetchStatus: null,
+        evidenceReasonCodes: null, evidenceCoverageStartBlock: null, evidenceCoverageEndBlock: null,
+      },
+    });
+    nodes.set(counterpartyNodeId, {
+      data: {
+        id: counterpartyNodeId,
+        label: `${item.counterparty_address.slice(0, 6)}...${item.counterparty_address.slice(-4)}`,
+        type: "counterparty",
+        address: item.counterparty_address, tokenAddress: null, symbol: null,
+        accountType: item.account_type, codeState: null,
+        observationBlockNumber: item.observation_block_number, observationBlockTimestamp: null,
+        eip7702DelegationTarget: item.eip7702_delegation_target, isSafe: item.is_safe,
+        safeVerificationStatus: null, safeVersion: item.safe_version, safeSingletonAddress: null,
+        safeOwnerCount: item.safe_owner_count, safeThreshold: item.safe_threshold,
+        isErc4337Account: item.is_erc4337_account, erc4337EntrypointAddress: null,
+        erc4337EntrypointVersion: item.erc4337_entrypoint_version, erc4337EntrypointSource: null,
+        erc4337EntrypointDeploymentBlock: null, erc4337EffectiveCoverage: item.erc4337_effective_coverage,
+        erc4337FailedRanges: item.erc4337_failed_ranges, evidenceFetchStatus: null,
+        evidenceReasonCodes: null, evidenceCoverageStartBlock: item.evidence_coverage_start_block,
+        evidenceCoverageEndBlock: item.evidence_coverage_end_block,
+      },
+    });
+    edges.push({
+      data: {
+        id: `${interactionId}:wallet-counterparty`, interactionId, edgeRole: "wallet_counterparty",
+        source: item.direction === "out" ? walletNodeId : counterpartyNodeId,
+        target: item.direction === "out" ? counterpartyNodeId : walletNodeId,
+        walletAddress: item.wallet_address, counterpartyAddress: item.counterparty_address,
+        direction: item.direction, tokenAddress: item.token_address, tokenSymbol: item.token_symbol,
+        tokenStatus: item.token_status,
+        counterpartyAccountType: item.account_type, counterpartyIsSafe: item.is_safe,
+        counterpartyIsErc4337Account: item.is_erc4337_account, transferCount: item.transfer_count,
+        counterpartyTransferCount: item.counterparty_transfer_count,
+      },
+    });
+  }
+  return { nodes: [...nodes.values()], edges };
+}
+
+function normalizeEvent(event: WalletEvent): WalletEvent {
+  return {
+    ...event,
+    amount_decimal: event.amount_decimal == null ? null : Number(event.amount_decimal),
+  };
+}
 
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { signal });
   if (!response.ok) {
-    throw new Error(`Could not load ${path} (HTTP ${response.status})`);
+    const payload = typeof response.json === "function"
+      ? await response.json().catch(() => null) as { detail?: string } | null
+      : null;
+    throw new Error(payload?.detail ?? `Could not load ${path} (HTTP ${response.status})`);
   }
   return response.json() as Promise<T>;
 }
@@ -381,4 +558,60 @@ export async function loadDashboardData(signal?: AbortSignal): Promise<Dashboard
   ]);
 
   return { graph, summaries, timeline, events, metadata };
+}
+
+export async function loadApiDashboardData(
+  query: DashboardQuery,
+  signal?: AbortSignal,
+  cachedMetadata?: ApiMetadata,
+): Promise<ApiDashboardData> {
+  const common = apiQuery(query);
+  // Bound concurrent DuckDB readers: a dashboard refresh must not fan out six
+  // analytical scans at once on a developer laptop.
+  const [metadata, summary] = await Promise.all([
+    cachedMetadata ?? fetchJson<ApiMetadata>("/api/v1/metadata", signal),
+    fetchJson<DashboardSummary>(`/api/v1/summary?${common}`, signal),
+  ]);
+  const [events, graph] = await Promise.all([
+    fetchJson<ApiCollection<WalletEvent>>(`/api/v1/events?${apiQuery(query, { limit: 10 })}`, signal),
+    fetchJson<ApiCollection<ApiGraphInteraction>>(
+      `/api/v1/graph?${apiQuery(query, { limit: query.graphLimit })}`,
+      signal,
+    ),
+  ]);
+  const [tokens, counterparties] = await Promise.all([
+    fetchJson<ApiCollection<TokenSummary>>(`/api/v1/tokens?${apiQuery(query, { limit: 500 })}`, signal),
+    fetchJson<ApiCollection<CounterpartySummary>>(
+      `/api/v1/counterparties?${apiQuery(query, { limit: query.counterpartyLimit })}`,
+      signal,
+    ),
+  ]);
+
+  return {
+    data: {
+      graph: apiGraph(graph.items),
+      summaries: { tokens: tokens.items, counterparties: counterparties.items },
+      timeline: [],
+      events: events.items.map(normalizeEvent),
+      metadata,
+    },
+    summary,
+    eventCount: events.complete_matching_count,
+    eventNextCursor: events.next_cursor ?? null,
+    tokenCount: tokens.complete_matching_count,
+    counterpartyCount: counterparties.complete_matching_count,
+    graphInteractionCount: graph.complete_matching_count,
+  };
+}
+
+export async function loadNextApiEvents(
+  query: DashboardQuery,
+  cursor: string,
+  signal?: AbortSignal,
+): Promise<ApiCollection<WalletEvent>> {
+  const response = await fetchJson<ApiCollection<WalletEvent>>(
+    `/api/v1/events?${apiQuery(query, { limit: 10, cursor })}`,
+    signal,
+  );
+  return { ...response, items: response.items.map(normalizeEvent) };
 }

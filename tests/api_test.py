@@ -53,6 +53,16 @@ class DashboardApiTest(unittest.TestCase):
         invalid = self.client.get("/api/v1/summary", params={"account": "human"})
         self.assertEqual(invalid.status_code, 422)
 
+        empty = self.client.get("/api/v1/summary", params={"account": "none"})
+        self.assertEqual(empty.status_code, 200)
+        self.assertEqual(empty.json()["transfer_count"], 0)
+
+        mixed_none = self.client.get(
+            "/api/v1/summary",
+            params=[("account", "none"), ("account", "contract")],
+        )
+        self.assertEqual(mixed_none.status_code, 422)
+
     def test_search_runs_before_exact_counts(self) -> None:
         event = self.client.get(
             "/api/v1/events", params={"include_spam": "true", "limit": 1}
