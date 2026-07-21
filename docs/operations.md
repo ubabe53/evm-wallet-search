@@ -81,9 +81,9 @@ Collect pinned account evidence for the next 500 high-activity counterparties:
 bun run addresses:enrich --limit 500
 ```
 
-The command ranks eligible counterparties by complete ERC-20 transfer count, verifies Ethereum mainnet, pins one block and timestamp, and writes `analytics/seeds/counterparty_code_metadata.csv` atomically. It batches `eth_getCode`, Safe storage/interface reads, and filtered `UserOperationEvent` lookups against the versioned canonical EntryPoints in `account_evidence_manifest.json`. The manifest pins each Ethereum deployment block and transaction. The log scan clamps each EntryPoint to its deployment block, groups sender topics, and splits the remaining range into bounded chunks instead of issuing one full-history request per address. It uses the same `ETHEREUM_RPC_URL` / `config.yaml` / public-fallback precedence as token enrichment.
+The command ranks eligible counterparties by complete captured Transfer-signature event count, verifies Ethereum mainnet, pins one block and timestamp, and writes `analytics/seeds/counterparty_code_metadata.csv` atomically. Because the source does not yet disambiguate token standards, this is not a proven ERC-20-only activity ranking. It batches `eth_getCode`, Safe storage/interface reads, and filtered `UserOperationEvent` lookups against the versioned canonical EntryPoints in `account_evidence_manifest.json`. The manifest pins each Ethereum deployment block and transaction. The log scan clamps each EntryPoint to its deployment block, groups sender topics, and splits the remaining range into bounded chunks instead of issuing one full-history request per address. It uses the same `ETHEREUM_RPC_URL` / `config.yaml` / public-fallback precedence as token enrichment.
 
-By default, ERC-4337 evidence coverage begins at the earliest indexed ERC-20 event block and ends at the pinned observation block. Override the lower bound only when the intended coverage is explicit:
+By default, ERC-4337 evidence coverage begins at the earliest indexed Transfer-signature event block and ends at the pinned observation block. Override the lower bound only when the intended coverage is explicit:
 
 ```sh
 bun run addresses:enrich --limit 500 --erc4337-start-block 17000000
@@ -188,6 +188,6 @@ Dependabot checks Actions, JavaScript, indexer, and Python dependencies weekly. 
 
 ## Local Codex Review
 
-Run `bun run hooks:install` once per clone to set this repository's `core.hooksPath` to `.githooks`. The pre-commit hook delegates to `scripts/codex_review_gate.sh`, which starts a new ephemeral Codex process with a read-only sandbox and no approval prompts. The reviewer is instructed to inspect only the staged diff and emits JSON matching `.codex/review-output.schema.json`; the wrapper validates that response before allowing the commit.
+Run `bun run hooks:install` once per clone to set this repository's `core.hooksPath` to `.githooks`. The pre-commit hook delegates to `scripts/codex_review_gate.sh`, which starts a new ephemeral Codex process with a read-only sandbox and no approval prompts. The reviewer is instructed to inspect only the staged diff and emits JSON matching `.codex/review-output.schema.json`; the wrapper validates that response before allowing the commit. Material drift between changed behavior or architecture and its owning documentation is a blocking correctness finding, while behavior-preserving implementation details do not require mechanical documentation edits.
 
 This is an advisory AI review promoted to a local gate, not a proof of correctness. It adds network latency and consumes Codex usage, so the deterministic test suite and remote CI remain required. The hook fails closed when Codex, Bun, authentication, or connectivity is unavailable. Use `SKIP_CODEX_REVIEW=1` only as an explicit one-commit escape hatch; the bypass is visible in the terminal but is not recorded in Git history.

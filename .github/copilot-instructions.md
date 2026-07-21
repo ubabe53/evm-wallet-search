@@ -3,7 +3,8 @@
 ## Project context
 
 This repository is a locally run Ethereum wallet analytics application. Envio
-HyperIndex captures ERC20 transfers, dbt transforms them into DuckDB marts, a
+HyperIndex captures the ERC-20-intended `Transfer(address,address,uint256)`
+signature without currently disambiguating ERC-721, dbt transforms rows into DuckDB marts, a
 local API is the target query-serving layer, and a React/Vite dashboard displays
 its responses. The API migration is pending: the current frontend still reads
 JSON. Bounded fixture JSON is only the GitHub Pages demo path. Fixture tests and
@@ -38,14 +39,19 @@ bun run dashboard:build
 - When a dbt mart or seed schema changes, verify the related dbt tests,
   `docs/data-model.md`, local API contract, frontend client types, fixture-demo
   exporter, and frontend tests as applicable.
+- Treat material documentation drift as a correctness problem. Use `AGENTS.md`
+  to route changes and `ARCHITECTURE.md` for system boundaries. When code shifts
+  behavior, commands, architecture, data contracts, semantics, setup, or
+  operations, require the owning document to change in the same PR. Do not
+  demand documentation for behavior-preserving implementation details.
 - DuckDB marts retain the complete local dataset. Local API queries must be
   bounded and paginated while returning complete matching counts and provenance.
   Static JSON is a fixture-only demo and must report its provenance and limits in
   `meta.json`; do not expand full-history static precomputation.
 - Dashboard changes must preserve accessibility, loading/error behavior, the
   default-off `Include spam` semantics, and both light and dark themes.
-- Documentation describing behavior must change in the same pull request as the
-  behavior itself.
+- Documentation must not claim behavior or architecture contradicted by the
+  implementation.
 
 When reviewing a pull request, explain the concrete failure mode and point to the
 smallest relevant code location. Suggest a correction when one is clear. Do not

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./node_modules/envio/evm.schema.json
 name: evm-wallet-search
-description: ERC20 Transfer indexer for one pinned Ethereum wallet.
+description: Transfer-signature indexer for one pinned Ethereum wallet; downstream analytics are ERC20-oriented.
 ecosystem: evm
 address_format: lowercase
 storage:

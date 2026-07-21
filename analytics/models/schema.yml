@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: stg_erc20_transfers
-    description: Deduplicated raw ERC20 transfer events normalized to lowercase addresses.
+    description: Deduplicated wallet-relevant Transfer-signature logs normalized to lowercase addresses; downstream models are ERC20-oriented, but the signature alone does not disambiguate ERC721.
     columns:
       - name: transfer_id
         tests:
@@ -99,7 +99,7 @@ models:
         tests:
           - not_null
   - name: int_token_reputation
-    description: One explainable contract-level reputation result per ERC20 address.
+    description: One explainable contract-level reputation result per observed emitting address; classification is ERC20-oriented, but the source signature does not prove token standard.
     columns:
       - name: token_address
         tests:
@@ -153,7 +153,7 @@ models:
         tests:
           - not_null
   - name: wallet_events
-    description: Dashboard event table, one row per wallet-relevant ERC20 transfer.
+    description: Dashboard event table, one row per wallet-relevant Transfer-signature log interpreted by ERC20-oriented models; token standard is not proven by the source signature.
     columns:
       - name: transfer_id
         tests:
@@ -304,7 +304,7 @@ models:
         tests:
           - not_null
   - name: token_summary
-    description: One row per wallet, ERC20 token, effective status, quality, and exact counterparty account-evidence signature, without mixing token units.
+    description: One row per wallet, emitting contract, effective status, quality, and exact counterparty account-evidence signature; models are ERC20-oriented, but the source signature does not prove token standard.
     columns:
       - name: wallet_address
         tests:
@@ -364,7 +364,7 @@ models:
         tests:
           - not_null
   - name: counterparty_summary
-    description: Eligible direct ERC20 counterparties by wallet, effective token status, token quality, and address with observed-at account evidence; excludes mint/burn, self, and token-contract addresses.
+    description: Eligible direct counterparties by wallet, effective token status, token quality, and address with observed-at account evidence, based on captured Transfer-signature events; excludes mint/burn, self, and emitting-contract addresses.
     columns:
       - name: wallet_address
         tests:

@@ -20,6 +20,7 @@ Describe any additional commands or manual checks:
 
 - [ ] No data model, seed, export contract, or classifier behavior changed
 - [ ] Related dbt tests, frontend types/tests, and documentation were updated
+- [ ] `ARCHITECTURE.md` and routed documentation still match the implemented behavior
 - [ ] Generated files and local databases are not included
 
 ## Security and configuration
