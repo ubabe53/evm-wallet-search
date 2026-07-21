@@ -11,19 +11,6 @@ export type GraphNode = {
     observationBlockNumber: number | null;
     observationBlockTimestamp: string | null;
     eip7702DelegationTarget: string | null;
-    isSafe: boolean | null;
-    safeVerificationStatus: SafeVerificationStatus | null;
-    safeVersion: string | null;
-    safeSingletonAddress: string | null;
-    safeOwnerCount: number | null;
-    safeThreshold: number | null;
-    isErc4337Account: boolean | null;
-    erc4337EntrypointAddress: string | null;
-    erc4337EntrypointVersion: string | null;
-    erc4337EntrypointSource: string | null;
-    erc4337EntrypointDeploymentBlock: string | null;
-    erc4337EffectiveCoverage: string | null;
-    erc4337FailedRanges: string | null;
     evidenceFetchStatus: EvidenceFetchStatus | null;
     evidenceReasonCodes: string | null;
     evidenceCoverageStartBlock: number | null;
@@ -64,8 +51,6 @@ export type GraphEdge = {
     interactionLegitimacyScore?: number;
     interactionLegitimacyReasons?: string;
     counterpartyAccountType: AccountType;
-    counterpartyIsSafe: boolean;
-    counterpartyIsErc4337Account: boolean;
     transferCount: number;
     counterpartyTransferCount: number;
     amountDecimalSum?: number | null;
@@ -79,11 +64,10 @@ export type MetadataAvailability = "complete" | "partial" | "unavailable";
 export type InteractionLegitimacy = "not_suspicious" | "uncertain" | "suspicious";
 export type TransactionSenderRelation = "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 export type TransactionTargetRelation = "token_contract" | "transfer_sender" | "transfer_recipient" | "other" | "unknown";
-export type AccountType = "eoa_candidate" | "eip7702_delegated" | "safe" | "erc4337_account" | "contract" | "unknown";
-export type AccountFilter = AccountType;
+export type AccountType = "eoa_candidate" | "contract" | "unknown";
+export type AccountFilter = Exclude<AccountType, "unknown">;
 export type CodeState = "no_code" | "eip7702_delegated" | "contract_code" | "unknown";
-export type SafeVerificationStatus = "verified" | "singleton_not_official" | "calls_inconsistent" | "evidence_unavailable" | "not_applicable" | "not_checked";
-export type EvidenceFetchStatus = "complete" | "partial" | "failed" | "not_fetched";
+export type EvidenceFetchStatus = "complete" | "failed" | "not_fetched";
 
 export type AccountEvidence = {
   account_type: AccountType;
@@ -92,24 +76,6 @@ export type AccountEvidence = {
   observation_block_number: number | null;
   observation_block_timestamp: string | null;
   eip7702_delegation_target: string | null;
-  is_safe: boolean;
-  safe_verification_status: SafeVerificationStatus;
-  safe_version: string | null;
-  safe_singleton_address: string | null;
-  safe_owner_count: number | null;
-  safe_threshold: number | null;
-  is_erc4337_account: boolean;
-  erc4337_user_operation_count: number | null;
-  erc4337_first_observed_block: number | null;
-  erc4337_last_observed_block: number | null;
-  erc4337_entrypoint_address: string | null;
-  erc4337_entrypoint_version: string | null;
-  erc4337_entrypoint_source: string | null;
-  erc4337_entrypoint_deployment_block: string | null;
-  erc4337_effective_coverage: string | null;
-  erc4337_failed_ranges: string | null;
-  erc4337_block_chunk_size: number | null;
-  erc4337_address_batch_size: number | null;
   evidence_fetch_status: EvidenceFetchStatus;
   evidence_reason_codes: string;
   evidence_coverage_scope: string | null;
@@ -163,8 +129,6 @@ export type TokenSummary = {
   token_reputation_reasons: string;
   token_reputation_version: "token-reputation-v2";
   counterparty_account_type: AccountType;
-  counterparty_is_safe: boolean;
-  counterparty_is_erc4337_account: boolean;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -202,8 +166,6 @@ export type TimelineRow = ClassificationEvidence & {
   metadata_source: string | null;
   metadata_source_url: string | null;
   counterparty_account_type: AccountType;
-  counterparty_is_safe: boolean;
-  counterparty_is_erc4337_account: boolean;
   direction: "in" | "out";
   transfer_count: number;
   amount_decimal_sum: number | null;
@@ -237,24 +199,6 @@ export type WalletEvent = ClassificationEvidence & {
   counterparty_observation_block_number: number | null;
   counterparty_observation_block_timestamp: string | null;
   counterparty_eip7702_delegation_target: string | null;
-  counterparty_is_safe: boolean;
-  counterparty_safe_verification_status: SafeVerificationStatus;
-  counterparty_safe_version: string | null;
-  counterparty_safe_singleton_address: string | null;
-  counterparty_safe_owner_count: number | null;
-  counterparty_safe_threshold: number | null;
-  counterparty_is_erc4337_account: boolean;
-  counterparty_erc4337_user_operation_count: number | null;
-  counterparty_erc4337_first_observed_block: number | null;
-  counterparty_erc4337_last_observed_block: number | null;
-  counterparty_erc4337_entrypoint_address: string | null;
-  counterparty_erc4337_entrypoint_version: string | null;
-  counterparty_erc4337_entrypoint_source: string | null;
-  counterparty_erc4337_entrypoint_deployment_block: string | null;
-  counterparty_erc4337_effective_coverage: string | null;
-  counterparty_erc4337_failed_ranges: string | null;
-  counterparty_erc4337_block_chunk_size: number | null;
-  counterparty_erc4337_address_batch_size: number | null;
   counterparty_evidence_fetch_status: EvidenceFetchStatus;
   counterparty_evidence_reason_codes: string;
   counterparty_evidence_coverage_scope: string | null;
@@ -293,16 +237,14 @@ export type PipelineMetadata = {
   interaction_count: number;
   account_evidence_address_count: number;
   account_evidence_complete_count: number;
-  safe_evidence_address_count: number;
-  erc4337_evidence_address_count: number;
-  account_evidence_observation_block_number_min: number;
-  account_evidence_observation_block_number_max: number;
-  account_evidence_observation_block_timestamp_min: string;
-  account_evidence_observation_block_timestamp_max: string;
-  account_evidence_coverage_scope: string;
+  account_evidence_observation_block_number_min: number | null;
+  account_evidence_observation_block_number_max: number | null;
+  account_evidence_observation_block_timestamp_min: string | null;
+  account_evidence_observation_block_timestamp_max: string | null;
+  account_evidence_coverage_scope: string | null;
   account_evidence_coverage_start_block: number | null;
-  account_evidence_coverage_end_block: number;
-  account_evidence_schema_version: string;
+  account_evidence_coverage_end_block: number | null;
+  account_evidence_schema_version: string | null;
   token_summary_row_count: number;
   counterparty_summary_row_count: number;
   timeline_row_count: number;
@@ -362,14 +304,14 @@ export type ApiMetadata = {
   spam_transfer_count: number;
   first_event_at: string | null;
   last_event_at: string | null;
-  account_evidence_observation_block_number_min: number;
-  account_evidence_observation_block_number_max: number;
-  account_evidence_observation_block_timestamp_min: string;
-  account_evidence_observation_block_timestamp_max: string;
-  account_evidence_coverage_scope: string;
+  account_evidence_observation_block_number_min: number | null;
+  account_evidence_observation_block_number_max: number | null;
+  account_evidence_observation_block_timestamp_min: string | null;
+  account_evidence_observation_block_timestamp_max: string | null;
+  account_evidence_coverage_scope: string | null;
   account_evidence_coverage_start_block: number | null;
-  account_evidence_coverage_end_block: number;
-  account_evidence_schema_version: string;
+  account_evidence_coverage_end_block: number | null;
+  account_evidence_schema_version: string | null;
   event_block_number_min: number | null;
   event_block_number_max: number | null;
   api_schema_version: string;
@@ -435,16 +377,8 @@ type ApiGraphInteraction = {
   token_status: TokenStatus;
   direction: "in" | "out";
   account_type: AccountType;
-  is_safe: boolean;
-  is_erc4337_account: boolean;
   observation_block_number: number | null;
   eip7702_delegation_target: string | null;
-  safe_version: string | null;
-  safe_owner_count: number | null;
-  safe_threshold: number | null;
-  erc4337_entrypoint_version: string | null;
-  erc4337_effective_coverage: string | null;
-  erc4337_failed_ranges: string | null;
   evidence_coverage_start_block: number | null;
   evidence_coverage_end_block: number | null;
   transfer_count: number;
@@ -458,7 +392,7 @@ function apiQuery(query: DashboardQuery, extra: Record<string, string | number> 
   parameters.set("include_spam", String(query.includeSpam));
   if (query.accountFilters.length === 0) {
     parameters.append("account", "none");
-  } else {
+  } else if (query.accountFilters.length < 2) {
     for (const account of query.accountFilters) {
       parameters.append("account", account);
     }
@@ -485,11 +419,7 @@ function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
         id: walletNodeId, label: item.ens, type: "wallet", address: item.wallet_address,
         tokenAddress: null, symbol: null, accountType: null, codeState: null,
         observationBlockNumber: null, observationBlockTimestamp: null,
-        eip7702DelegationTarget: null, isSafe: null, safeVerificationStatus: null,
-        safeVersion: null, safeSingletonAddress: null, safeOwnerCount: null, safeThreshold: null,
-        isErc4337Account: null, erc4337EntrypointAddress: null, erc4337EntrypointVersion: null,
-        erc4337EntrypointSource: null, erc4337EntrypointDeploymentBlock: null,
-        erc4337EffectiveCoverage: null, erc4337FailedRanges: null, evidenceFetchStatus: null,
+        eip7702DelegationTarget: null, evidenceFetchStatus: null,
         evidenceReasonCodes: null, evidenceCoverageStartBlock: null, evidenceCoverageEndBlock: null,
       },
     });
@@ -501,13 +431,7 @@ function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
         address: item.counterparty_address, tokenAddress: null, symbol: null,
         accountType: item.account_type, codeState: null,
         observationBlockNumber: item.observation_block_number, observationBlockTimestamp: null,
-        eip7702DelegationTarget: item.eip7702_delegation_target, isSafe: item.is_safe,
-        safeVerificationStatus: null, safeVersion: item.safe_version, safeSingletonAddress: null,
-        safeOwnerCount: item.safe_owner_count, safeThreshold: item.safe_threshold,
-        isErc4337Account: item.is_erc4337_account, erc4337EntrypointAddress: null,
-        erc4337EntrypointVersion: item.erc4337_entrypoint_version, erc4337EntrypointSource: null,
-        erc4337EntrypointDeploymentBlock: null, erc4337EffectiveCoverage: item.erc4337_effective_coverage,
-        erc4337FailedRanges: item.erc4337_failed_ranges, evidenceFetchStatus: null,
+        eip7702DelegationTarget: item.eip7702_delegation_target, evidenceFetchStatus: null,
         evidenceReasonCodes: null, evidenceCoverageStartBlock: item.evidence_coverage_start_block,
         evidenceCoverageEndBlock: item.evidence_coverage_end_block,
       },
@@ -520,8 +444,7 @@ function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
         walletAddress: item.wallet_address, counterpartyAddress: item.counterparty_address,
         direction: item.direction, tokenAddress: item.token_address, tokenSymbol: item.token_symbol,
         tokenStatus: item.token_status,
-        counterpartyAccountType: item.account_type, counterpartyIsSafe: item.is_safe,
-        counterpartyIsErc4337Account: item.is_erc4337_account, transferCount: item.transfer_count,
+        counterpartyAccountType: item.account_type, transferCount: item.transfer_count,
         counterpartyTransferCount: item.counterparty_transfer_count,
       },
     });

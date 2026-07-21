@@ -22,8 +22,6 @@ select
   interaction_legitimacy_score,
   interaction_legitimacy_reasons,
   counterparty_account_type,
-  counterparty_is_safe,
-  counterparty_is_erc4337_account,
   direction,
   count(*) as transfer_count,
   case
@@ -38,4 +36,4 @@ group by wallet_id, wallet_address, block_date, token_address, token_symbol,
   token_quality_version, metadata_source, metadata_source_url, token_reputation,
   token_reputation_score, token_reputation_reasons, token_reputation_version, interaction_legitimacy,
   interaction_legitimacy_score, interaction_legitimacy_reasons,
-  counterparty_account_type, counterparty_is_safe, counterparty_is_erc4337_account, direction
+  counterparty_account_type, direction

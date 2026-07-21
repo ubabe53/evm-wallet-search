@@ -21,11 +21,7 @@ from server.queries import (
 class AccountFilter(str, Enum):
     none = "none"
     eoa_candidate = "eoa_candidate"
-    eip7702_delegated = "eip7702_delegated"
-    safe = "safe"
-    erc4337_account = "erc4337_account"
     contract = "contract"
-    unknown = "unknown"
 
 
 def dashboard_filters(

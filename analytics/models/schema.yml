@@ -226,13 +226,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
-      - name: counterparty_is_safe
-        tests:
-          - not_null
-      - name: counterparty_is_erc4337_account
-        tests:
-          - not_null
+                values: ["eoa_candidate", "contract", "unknown"]
   - name: graph_nodes
     columns:
       - name: node_id
@@ -248,7 +242,7 @@ models:
         tests:
           - accepted_values:
               arguments:
-                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
+                values: ["eoa_candidate", "contract", "unknown"]
   - name: graph_edges
     description: Two directed edge legs per wallet-token-counterparty interaction.
     columns:
@@ -293,13 +287,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
-      - name: counterparty_is_safe
-        tests:
-          - not_null
-      - name: counterparty_is_erc4337_account
-        tests:
-          - not_null
+                values: ["eoa_candidate", "contract", "unknown"]
       - name: counterparty_transfer_count
         tests:
           - not_null
@@ -335,13 +323,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
-      - name: counterparty_is_safe
-        tests:
-          - not_null
-      - name: counterparty_is_erc4337_account
-        tests:
-          - not_null
+                values: ["eoa_candidate", "contract", "unknown"]
       - name: inbound_transfer_count
         tests:
           - not_null
@@ -383,19 +365,13 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
+                values: ["eoa_candidate", "contract", "unknown"]
       - name: token_quality
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["high_confidence", "listed", "unknown"]
-      - name: is_safe
-        tests:
-          - not_null
-      - name: is_erc4337_account
-        tests:
-          - not_null
       - name: transfer_count
         tests:
           - not_null
@@ -440,13 +416,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"]
-      - name: counterparty_is_safe
-        tests:
-          - not_null
-      - name: counterparty_is_erc4337_account
-        tests:
-          - not_null
+                values: ["eoa_candidate", "contract", "unknown"]
   - name: pipeline_metadata
     description: Export provenance and complete mart counts for each configured wallet, including nullable account-evidence observation bounds. Fixture builds intentionally have no account evidence.
     columns:

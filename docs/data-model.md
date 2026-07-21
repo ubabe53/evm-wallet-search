@@ -83,9 +83,9 @@ Application-serving event table. This preserves the immutable one-transfer grain
 
 ### `graph_nodes`
 
-Nodes for tracked addresses, counterparties, and tokens. Counterparty nodes carry primary account type, code observation, independent Safe/ERC-4337 flags and display evidence, fetch status, reasons, and coverage bounds. Tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
+Nodes for tracked addresses, counterparties, and tokens. Counterparty nodes carry primary account type, code observation, fetch status, reasons, and coverage bounds. Tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
 
-The presentation layer shortens counterparty labels for readability while retaining full addresses in the API or demo payload. Labels append independent `Safe` and `ERC-4337` evidence, including both for overlap; the graph also uses Safe shape/border weight and an ERC-4337 dotted border so the flags are not encoded by primary `account_type` or color alone.
+The presentation layer shortens counterparty labels for readability while retaining full addresses in the API or demo payload. It exposes only EOA and Contract labels; internal EIP-7702 evidence appears only in the EOA tooltip, and unresolved rows receive no type badge.
 
 ### `graph_edges`
 
@@ -109,7 +109,7 @@ One row per wallet, emitting contract, effective status, quality, and exact coun
 
 ### `counterparty_summary`
 
-One row per wallet, chain, eligible counterparty, effective token status, and token quality. `transfer_count` is the sheer number of captured Transfer-signature events, not a proven ERC-20-only or distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-emitting-contract count, first/last event timestamps, primary account type, pinned code observation, independent Safe/ERC-4337 evidence, provenance, fetch status/reasons, and coverage bounds.
+One row per wallet, chain, eligible counterparty, effective token status, and token quality. `transfer_count` is the sheer number of captured Transfer-signature events, not a proven ERC-20-only or distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-emitting-contract count, first/last event timestamps, primary account type, pinned code observation, provenance, fetch status/reasons, and coverage bounds.
 
 The ranking-serving mart excludes the zero address, the tracked wallet itself, and any counterparty address observed as an emitting token contract in the indexed wallet dataset. These exclusions do not delete rows from `wallet_events` or alter event totals.
 
@@ -119,13 +119,13 @@ Daily transfer counts and token-flow aggregates by wallet, token, status, qualit
 
 ### `pipeline_metadata`
 
-One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Equal bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch. Local API responses combine this provenance with the active filters, complete matching count, returned row count, ordering, and pagination/ranking limit.
+One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Fixture bounds are null because fixture mode contains no account evidence. Equal live bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch.
 
 The fixture-demo exporter enriches this row in `meta.json` with returned counts, limits, and sampling state. The demo metadata must identify fixture provenance and must not imply that its counts describe complete HyperIndex history.
 
 ## Local API contract
 
-The `/api/v1` service reads only `analytics/artifacts/live.duckdb` in read-only mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. Common `include_spam`, repeated inclusive `account`, and optional literal `q` predicates are applied to `wallet_events` before exact calculations. Omitting `account` selects every supported account evidence value; `account=none` explicitly selects no rows and cannot be combined with another account value. The service exposes:
+The `/api/v1` service currently advertises response schema `dashboard-api-v2`. It reads only `analytics/artifacts/live.duckdb` in read-only mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. Common `include_spam`, repeated inclusive `account`, and optional literal `q` predicates are applied to `wallet_events` before exact calculations. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. The service exposes:
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema are not an indexer checkpoint or a block-continuity claim;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
@@ -138,7 +138,7 @@ Event responses distinguish `complete_matching_count` from `returned_count`, `li
 
 The React live adapter sends the same predicate set to every endpoint, displays summary counts from the complete matching set, and distinguishes those totals from bounded graph, token, counterparty, and event rows. Event expansion follows `next_cursor`; it never infers completeness from the current browser array. The static adapter remains separate and reads only generated fixture JSON.
 
-The current transitional exporter also records exact transfer/token/counterparty statistics for all 6,615 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 63 non-empty inclusive account selections. That full-history candidate-union contract is legacy behavior and is not the target serving model. The local API should compute only the requested selection against DuckDB; the static exporter should be reduced to the deterministic fixture demo.
+The current transitional exporter also records exact transfer/token/counterparty statistics for all 315 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 3 non-empty EOA/Contract selections. The full account selection includes unresolved internal rows. This candidate-union contract is legacy behavior and is not the target serving model.
 
 ## Tests
 
@@ -163,10 +163,8 @@ dbt tests enforce:
 - Synthetic broad-outbound classifier cases proving the initiator component is added for complete sender matches and withheld for unknown or mismatched senders.
 - Manual-spam, automated-suspicion, and trusted-status precedence.
 - Valid account-type/code-state precedence, exact 23-byte EIP-7702 evidence, and pinned observation/coverage consistency.
-- Safe types backed by official-singleton and internally consistent owner-address/threshold evidence; interface-only fixtures cannot become Safe.
-- ERC-4337 types backed by positive canonical EntryPoint sender evidence, with Safe/ERC-4337 overlap retained.
-- Mixed-source results become partial when one RPC source fails but another yields usable evidence.
-- Account-evidence fixture observations occur after Pectra without changing event-time transfer blocks or timestamps.
-- Partial EntryPoint fixtures reconcile every deployment-clamped range into either effective coverage or an explicit failed chunk.
+- Exact EIP-7702 code remains internal code state under an EOA-candidate primary type.
+- Successful cached observations cannot be overwritten automatically, while failed code reads remain retryable.
+- Fixture builds contain no account-evidence rows and keep their provenance bounds null.
 - Reviewed-spam, automated-suspicion, high-confidence-trust, and unverified fallback precedence.
-- The fixture export's legacy 6,615-selection token/counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains. This is deterministic demo compatibility coverage, not the live serving contract, and should be simplified rather than expanded.
+- The fixture export's legacy 315-selection token/counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains. This is deterministic demo compatibility coverage, not the live serving contract, and should be simplified rather than expanded.

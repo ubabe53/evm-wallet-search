@@ -3,7 +3,7 @@ import { loadApiDashboardData, loadNextApiEvents, type DashboardQuery } from "..
 
 const query: DashboardQuery = {
   includeSpam: false,
-  accountFilters: ["contract", "safe"],
+  accountFilters: ["contract"],
   query: "usdc",
   graphLimit: 25,
   counterpartyLimit: 10,
@@ -41,11 +41,8 @@ describe("live dashboard API adapter", () => {
             wallet_id: "vitalik", ens: "vitalik.eth", wallet_address: "0xwallet",
             counterparty_address: "0x1111111111111111111111111111111111111111",
             token_address: "0xtoken", token_symbol: "USDC", token_status: "trusted",
-            direction: "in", account_type: "contract", is_safe: false,
-            is_erc4337_account: false, observation_block_number: 22_500_000,
-            eip7702_delegation_target: null, safe_version: null, safe_owner_count: null,
-            safe_threshold: null, erc4337_entrypoint_version: null,
-            erc4337_effective_coverage: null, erc4337_failed_ranges: null,
+            direction: "in", account_type: "contract", observation_block_number: 22_500_000,
+            eip7702_delegation_target: null,
             evidence_coverage_start_block: 17_000_000, evidence_coverage_end_block: 22_500_000,
             transfer_count: 5, counterparty_transfer_count: 20,
           }],
@@ -74,7 +71,6 @@ describe("live dashboard API adapter", () => {
     const summaryUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/summary?"))?.[0]);
     expect(summaryUrl).toContain("include_spam=false");
     expect(summaryUrl).toContain("account=contract");
-    expect(summaryUrl).toContain("account=safe");
     expect(summaryUrl).toContain("q=usdc");
   });
 

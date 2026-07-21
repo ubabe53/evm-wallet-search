@@ -21,6 +21,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v2")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 6)
@@ -42,16 +43,18 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(with_spam["token_count"], 5)
         self.assertFalse(with_spam["provenance"]["is_sampled"])
 
-    def test_account_filters_are_inclusive_and_validated(self) -> None:
+    def test_public_account_filters_are_binary_and_validated(self) -> None:
         response = self.client.get(
             "/api/v1/summary",
-            params=[("include_spam", "true"), ("account", "safe"), ("account", "erc4337_account")],
+            params=[("include_spam", "true"), ("account", "eoa_candidate"), ("account", "contract")],
         )
         self.assertEqual(response.status_code, 200)
-        self.assertGreater(response.json()["transfer_count"], 0)
+        self.assertEqual(response.json()["transfer_count"], 6)
 
         invalid = self.client.get("/api/v1/summary", params={"account": "human"})
         self.assertEqual(invalid.status_code, 422)
+        internal = self.client.get("/api/v1/summary", params={"account": "unknown"})
+        self.assertEqual(internal.status_code, 422)
 
         empty = self.client.get("/api/v1/summary", params={"account": "none"})
         self.assertEqual(empty.status_code, 200)

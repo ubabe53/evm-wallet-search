@@ -26,30 +26,12 @@ const contractAccountEvidence = {
   observation_block_number: 22_500_000,
   observation_block_timestamp: "2025-05-17T03:11:47+00:00",
   eip7702_delegation_target: null,
-  is_safe: false,
-  safe_verification_status: "singleton_not_official",
-  safe_version: null,
-  safe_singleton_address: null,
-  safe_owner_count: null,
-  safe_threshold: null,
-  is_erc4337_account: false,
-  erc4337_user_operation_count: 0,
-  erc4337_first_observed_block: null,
-  erc4337_last_observed_block: null,
-  erc4337_entrypoint_address: null,
-  erc4337_entrypoint_version: null,
-  erc4337_entrypoint_source: null,
-  erc4337_entrypoint_deployment_block: null,
-  erc4337_effective_coverage: "fixture:17000000-22500000",
-  erc4337_failed_ranges: null,
-  erc4337_block_chunk_size: 10_000,
-  erc4337_address_batch_size: 50,
   evidence_fetch_status: "complete",
-  evidence_reason_codes: "contract_code_observed|erc4337_sender_not_observed|safe_singleton_not_official",
+  evidence_reason_codes: "contract_code_observed",
   evidence_coverage_scope: "fixture_complete",
   evidence_coverage_start_block: 17_000_000,
   evidence_coverage_end_block: 22_500_000,
-  evidence_schema_version: "account-evidence-v1",
+  evidence_schema_version: "account-evidence-v2",
 } as const;
 
 const eoaAccountEvidence = {
@@ -57,8 +39,7 @@ const eoaAccountEvidence = {
   account_type: "eoa_candidate",
   code_state: "no_code",
   code_size_bytes: 0,
-  evidence_reason_codes: "erc4337_sender_not_observed|no_code_observed|safe_not_applicable",
-  safe_verification_status: "not_applicable",
+  evidence_reason_codes: "no_code_observed",
 } as const;
 
 const contractEventEvidence = {
@@ -68,30 +49,12 @@ const contractEventEvidence = {
   counterparty_observation_block_number: 22_500_000,
   counterparty_observation_block_timestamp: "2025-05-17T03:11:47+00:00",
   counterparty_eip7702_delegation_target: null,
-  counterparty_is_safe: false,
-  counterparty_safe_verification_status: "singleton_not_official",
-  counterparty_safe_version: null,
-  counterparty_safe_singleton_address: null,
-  counterparty_safe_owner_count: null,
-  counterparty_safe_threshold: null,
-  counterparty_is_erc4337_account: false,
-  counterparty_erc4337_user_operation_count: 0,
-  counterparty_erc4337_first_observed_block: null,
-  counterparty_erc4337_last_observed_block: null,
-  counterparty_erc4337_entrypoint_address: null,
-  counterparty_erc4337_entrypoint_version: null,
-  counterparty_erc4337_entrypoint_source: null,
-  counterparty_erc4337_entrypoint_deployment_block: null,
-  counterparty_erc4337_effective_coverage: "fixture:17000000-22500000",
-  counterparty_erc4337_failed_ranges: null,
-  counterparty_erc4337_block_chunk_size: 10_000,
-  counterparty_erc4337_address_batch_size: 50,
   counterparty_evidence_fetch_status: "complete",
-  counterparty_evidence_reason_codes: "contract_code_observed|erc4337_sender_not_observed|safe_singleton_not_official",
+  counterparty_evidence_reason_codes: "contract_code_observed",
   counterparty_evidence_coverage_scope: "fixture_complete",
   counterparty_evidence_coverage_start_block: 17_000_000,
   counterparty_evidence_coverage_end_block: 22_500_000,
-  counterparty_evidence_schema_version: "account-evidence-v1",
+  counterparty_evidence_schema_version: "account-evidence-v2",
 } as const;
 
 const eoaEventEvidence = {
@@ -99,8 +62,7 @@ const eoaEventEvidence = {
   counterparty_account_type: "eoa_candidate",
   counterparty_code_state: "no_code",
   counterparty_code_size_bytes: 0,
-  counterparty_safe_verification_status: "not_applicable",
-  counterparty_evidence_reason_codes: "erc4337_sender_not_observed|no_code_observed|safe_not_applicable",
+  counterparty_evidence_reason_codes: "no_code_observed",
 } as const;
 
 const highQualityGraph = {
@@ -113,8 +75,6 @@ const highQualityGraph = {
   tokenQualityVersion: "token-quality-v1",
   tokenReputationVersion: "token-reputation-v2",
   counterpartyAccountType: "contract",
-  counterpartyIsSafe: false,
-  counterpartyIsErc4337Account: false,
 } as const;
 
 const unknownQualityGraph = {
@@ -127,8 +87,6 @@ const unknownQualityGraph = {
   tokenQualityVersion: "token-quality-v1",
   tokenReputationVersion: "token-reputation-v2",
   counterpartyAccountType: "eoa_candidate",
-  counterpartyIsSafe: false,
-  counterpartyIsErc4337Account: false,
 } as const;
 
 const highQuality = {
@@ -141,8 +99,6 @@ const highQuality = {
   token_quality_version: "token-quality-v1",
   token_reputation_version: "token-reputation-v2",
   counterparty_account_type: "contract",
-  counterparty_is_safe: false,
-  counterparty_is_erc4337_account: false,
 } as const;
 
 const unknownQuality = {
@@ -155,17 +111,15 @@ const unknownQuality = {
   token_quality_version: "token-quality-v1",
   token_reputation_version: "token-reputation-v2",
   counterparty_account_type: "eoa_candidate",
-  counterparty_is_safe: false,
-  counterparty_is_erc4337_account: false,
 } as const;
 
 const graph = {
   nodes: [
     { data: { id: "wallet:0x1", label: "vitalik.eth", type: "wallet", address: "0x1", tokenAddress: null, symbol: null, accountType: null } },
     { data: { id: "token:0x2", label: "USDC", type: "token", address: null, tokenAddress: "0x2", symbol: "USDC", accountType: null } },
-    { data: { id: "counterparty:0x1111111111111111111111111111111111111111", label: "0x1111...1111\nContract", type: "counterparty", address: "0x1111111111111111111111111111111111111111", tokenAddress: null, symbol: null, accountType: "contract", isSafe: false, isErc4337Account: false } },
+    { data: { id: "counterparty:0x1111111111111111111111111111111111111111", label: "0x1111...1111\nContract", type: "counterparty", address: "0x1111111111111111111111111111111111111111", tokenAddress: null, symbol: null, accountType: "contract" } },
     { data: { id: "token:0x3", label: "SPAM", type: "token", address: null, tokenAddress: "0x3", symbol: "SPAM", accountType: null } },
-    { data: { id: "counterparty:0x2222222222222222222222222222222222222222", label: "0x2222...2222\nEOA candidate", type: "counterparty", address: "0x2222222222222222222222222222222222222222", tokenAddress: null, symbol: null, accountType: "eoa_candidate", isSafe: false, isErc4337Account: false } },
+    { data: { id: "counterparty:0x2222222222222222222222222222222222222222", label: "0x2222...2222\nEOA", type: "counterparty", address: "0x2222222222222222222222222222222222222222", tokenAddress: null, symbol: null, accountType: "eoa_candidate" } },
   ],
   edges: [
     { data: { ...highQualityGraph, id: "edge:1", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "token_counterparty", source: "counterparty:0x1111111111111111111111111111111111111111", target: "token:0x2", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
@@ -318,8 +272,6 @@ const metadata = {
   interaction_count: 2,
   account_evidence_address_count: 2,
   account_evidence_complete_count: 2,
-  safe_evidence_address_count: 0,
-  erc4337_evidence_address_count: 0,
   account_evidence_observation_block_number_min: 22_500_000,
   account_evidence_observation_block_number_max: 22_500_000,
   account_evidence_observation_block_timestamp_min: "2025-05-17T03:11:47+00:00",
@@ -355,12 +307,12 @@ const metadata = {
     "trusted+unverified+spam|high_confidence+unknown": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
   },
   status_quality_account_counts: {
-    "trusted+unverified|high_confidence+listed+unknown|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
+    "trusted+unverified|high_confidence+listed+unknown|eoa_candidate+contract": {
       transfer_count: 1,
       token_count: 1,
       counterparty_count: 1,
     },
-    "trusted+unverified+suspected_spam+spam|high_confidence+listed+unknown|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
+    "trusted+unverified+suspected_spam+spam|high_confidence+listed+unknown|eoa_candidate+contract": {
       transfer_count: 2,
       token_count: 2,
       counterparty_count: 2,
@@ -375,14 +327,14 @@ const metadata = {
   event_export_limit_per_status_quality_account_evidence: 1000,
   graph_interaction_export_limit_per_status_quality_account_evidence: 250,
   token_summary_ranking_limit_per_status_quality_account_selection: 500,
-  token_summary_ranking_selection_count: 6615,
+  token_summary_ranking_selection_count: 315,
   token_summary_ranking_candidate_token_count: 2,
   token_summary_rankings_exact_for_all_filter_selections: true,
   counterparty_ranking_limit_per_status_quality_account_selection: 50,
   counterparty_token_status_combination_count: 15,
   counterparty_token_quality_combination_count: 7,
-  counterparty_account_filter_combination_count: 63,
-  counterparty_ranking_selection_count: 6615,
+  counterparty_account_filter_combination_count: 3,
+  counterparty_ranking_selection_count: 315,
   counterparty_ranking_candidate_address_count: 2,
   counterparty_rankings_exact_for_all_filter_selections: true,
   timeline_row_export_limit_per_status_quality_account_evidence: 5000,
@@ -394,10 +346,10 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("keeps Safe and ERC-4337 evidence independently filterable", () => {
-    expect(accountMatches("safe", true, true, ["safe"])).toBe(true);
-    expect(accountMatches("safe", true, true, ["erc4337_account"])).toBe(true);
-    expect(accountMatches("safe", true, true, ["contract"])).toBe(false);
+  it("exposes binary account filters while retaining unresolved rows in the all selection", () => {
+    expect(accountMatches("eoa_candidate", ["eoa_candidate"])).toBe(true);
+    expect(accountMatches("contract", ["eoa_candidate"])).toBe(false);
+    expect(accountMatches("unknown", ["eoa_candidate", "contract"])).toBe(true);
   });
 
   it("renders single and mixed account-evidence observation ranges", () => {
@@ -409,10 +361,10 @@ describe("App", () => {
       .toBe("2025-05-17T03:11:47+00:00–2025-05-18T03:11:47+00:00");
   });
 
-  it("styles Safe and ERC-4337 graph evidence as independent channels", () => {
+  it("does not expose removed Safe or ERC-4337 graph channels", () => {
     const selectors = graphStyles(document.createElement("div")).map((rule) => rule.selector);
-    expect(selectors).toContain("node[?isSafe]");
-    expect(selectors).toContain("node[?isErc4337Account]");
+    expect(selectors).not.toContain("node[?isSafe]");
+    expect(selectors).not.toContain("node[?isErc4337Account]");
   });
 
   it("scales counterparty nodes gradually on a stable logarithmic range", () => {
@@ -432,7 +384,7 @@ describe("App", () => {
   });
 
   it("aggregates token-status rows into one transfer-ranked counterparty", () => {
-    const base = summaries.counterparties[0] as CounterpartySummary;
+    const base = summaries.counterparties[0] as unknown as CounterpartySummary;
     const rows = aggregateCounterparties([
       base,
       {
@@ -461,8 +413,7 @@ describe("App", () => {
       { ...base, counterparty_account_type: "contract", transfer_count: 60, value_raw_sum: "60" },
       {
         ...base,
-        counterparty_account_type: "safe",
-        counterparty_is_safe: true,
+        counterparty_account_type: "eoa_candidate",
         transfer_count: 60,
         value_raw_sum: "60",
       },
@@ -489,8 +440,7 @@ describe("App", () => {
       { ...base, counterparty_account_type: "contract", transfer_count: 2, value_raw_sum: "10" },
       {
         ...base,
-        counterparty_account_type: "safe",
-        counterparty_is_safe: true,
+        counterparty_account_type: "eoa_candidate",
         transfer_count: 3,
         value_raw_sum: "20",
       },
@@ -538,7 +488,7 @@ describe("App", () => {
     );
     expect(screen.getAllByText("Contract").find((element) => element.hasAttribute("title"))).toHaveAttribute(
       "title",
-      "Non-delegation contract bytecode observed at pinned block 22500000",
+      "Contract bytecode observed at pinned block 22500000",
     );
     expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" })[0]).toHaveAttribute(
       "href",
@@ -583,9 +533,9 @@ describe("App", () => {
     expect(includeSpam).not.toBeChecked();
     expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Account evidence (6)"));
+    fireEvent.click(screen.getByText("Account evidence (2)"));
     const contractAccount = screen.getByRole("checkbox", { name: "Contract" });
-    const eoaCandidate = screen.getByRole("checkbox", { name: "EOA candidate" });
+    const eoaCandidate = screen.getByRole("checkbox", { name: "EOA" });
     expect(contractAccount).toBeChecked();
     expect(eoaCandidate).toBeChecked();
     fireEvent.click(contractAccount);

@@ -21,8 +21,6 @@ select
   token_reputation_reasons,
   token_reputation_version,
   counterparty_account_type,
-  counterparty_is_safe,
-  counterparty_is_erc4337_account,
   count(*) as transfer_count,
   count(*) filter (where direction = 'in') as inbound_transfer_count,
   count(*) filter (where direction = 'out') as outbound_transfer_count,
@@ -53,4 +51,4 @@ group by wallet_id, wallet_address, token_address, token_symbol, token_name, tok
   metadata_availability, token_quality, token_quality_sources, token_quality_source_count,
   token_quality_reason, token_quality_provenance, token_quality_version,
   token_reputation, token_reputation_score, token_reputation_reasons, token_reputation_version,
-  counterparty_account_type, counterparty_is_safe, counterparty_is_erc4337_account
+  counterparty_account_type

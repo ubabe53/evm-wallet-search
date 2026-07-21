@@ -36,8 +36,6 @@ account_evidence_metrics as (
   select
     count(*) as account_evidence_address_count,
     count(*) filter (where fetch_status = 'complete') as account_evidence_complete_count,
-    count(*) filter (where safe_verified) as safe_evidence_address_count,
-    count(*) filter (where erc4337_observed) as erc4337_evidence_address_count,
     min(observation_block_number) as account_evidence_observation_block_number_min,
     max(observation_block_number) as account_evidence_observation_block_number_max,
     min(cast(observation_block_timestamp as timestamptz)) as account_evidence_observation_block_timestamp_min,
@@ -70,8 +68,6 @@ select
   coalesce(timeline.timeline_row_count, 0) as timeline_row_count,
   evidence.account_evidence_address_count,
   evidence.account_evidence_complete_count,
-  evidence.safe_evidence_address_count,
-  evidence.erc4337_evidence_address_count,
   evidence.account_evidence_observation_block_number_min,
   evidence.account_evidence_observation_block_number_max,
   evidence.account_evidence_observation_block_timestamp_min,

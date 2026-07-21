@@ -23,8 +23,6 @@ with interaction_counts as (
     interaction_legitimacy_score,
     interaction_legitimacy_reasons,
     counterparty_account_type,
-    counterparty_is_safe,
-    counterparty_is_erc4337_account,
     direction,
     count(*) as transfer_count,
     case
@@ -40,7 +38,7 @@ with interaction_counts as (
     token_quality_version, metadata_source, metadata_source_url, token_reputation,
     token_reputation_score, token_reputation_reasons, token_reputation_version, interaction_legitimacy,
     interaction_legitimacy_score, interaction_legitimacy_reasons,
-    counterparty_account_type, counterparty_is_safe, counterparty_is_erc4337_account, direction
+    counterparty_account_type, direction
 ),
 
 interactions as (

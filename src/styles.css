@@ -537,28 +537,6 @@ h2 {
   background: var(--graph-counterparty);
 }
 
-.graphLegend .delegatedSwatch {
-  border-radius: 1px;
-  background: var(--graph-counterparty);
-  transform: rotate(45deg);
-}
-
-.graphLegend .safeSwatch {
-  border-radius: 2px;
-  background: var(--graph-counterparty);
-  box-shadow: 0 0 0 2px var(--live-text);
-}
-
-.graphLegend .erc4337Swatch {
-  border: 2px dotted var(--graph-wallet);
-  border-radius: 2px;
-  background: transparent;
-}
-
-.graphLegend .unknownSwatch {
-  border-style: dashed;
-  background: transparent;
-}
 
 table {
   width: 100%;
@@ -742,8 +720,7 @@ th {
   text-transform: uppercase;
 }
 
-.accountType.contract,
-.accountType.eip7702_delegated {
+.accountType.contract {
   border-color: var(--out);
   color: var(--out);
 }
@@ -751,20 +728,6 @@ th {
 .accountType.eoa_candidate {
   border-color: var(--in);
   color: var(--in);
-}
-
-.accountType.safe {
-  border-color: var(--live-text);
-  color: var(--live-text);
-}
-
-.accountType.erc4337_account {
-  border-color: var(--graph-wallet);
-  color: var(--graph-wallet);
-}
-
-.accountType.unknown {
-  border-style: dashed;
 }
 
 .accountBadges {

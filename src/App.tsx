@@ -22,6 +22,7 @@ import {
   AccountType,
   ApiDashboardData,
   CounterpartySummary,
+  CodeState,
   DashboardData,
   DashboardGraph,
   DashboardMetadata,
@@ -46,7 +47,7 @@ const DEFAULT_COUNTERPARTY_LIMIT = 10;
 const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
 const TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified", "suspected_spam", "spam"];
 const NON_SPAM_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
-const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"];
+const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "contract"];
 const TOKEN_QUALITIES: TokenQuality[] = ["high_confidence", "listed", "unknown"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
@@ -105,8 +106,8 @@ function amountLabel(value: number | null | undefined): string {
 }
 
 type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality">;
-type DisplayedTokenSummary = Omit<TokenSummary, "counterparty_account_type" | "counterparty_is_safe" | "counterparty_is_erc4337_account">;
-type DisplayedTimelineRow = Omit<TimelineRow, "counterparty_account_type" | "counterparty_is_safe" | "counterparty_is_erc4337_account">;
+type DisplayedTokenSummary = Omit<TokenSummary, "counterparty_account_type">;
+type DisplayedTimelineRow = Omit<TimelineRow, "counterparty_account_type">;
 
 export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSummary[] {
   const grouped = new Map<string, DisplayedTokenSummary>();
@@ -116,8 +117,6 @@ export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSum
     if (!existing) {
       const {
         counterparty_account_type: _accountType,
-        counterparty_is_safe: _isSafe,
-        counterparty_is_erc4337_account: _isErc4337Account,
         ...summary
       } = row;
       grouped.set(row.token_address, { ...summary });
@@ -153,8 +152,6 @@ export function aggregateTimelineRows(rows: TimelineRow[]): DisplayedTimelineRow
     if (!existing) {
       const {
         counterparty_account_type: _accountType,
-        counterparty_is_safe: _isSafe,
-        counterparty_is_erc4337_account: _isErc4337Account,
         ...timelineRow
       } = row;
       grouped.set(key, { ...timelineRow });
@@ -211,14 +208,20 @@ export function interactionEdgeLabel(tokenSymbol: string, transferCount: number)
   return `${tokenSymbol} x${transferCount.toLocaleString("en-US")}`;
 }
 
-export function accountEvidenceObservationBlockLabel(minimum: number, maximum: number): string {
+export function accountEvidenceObservationBlockLabel(minimum: number | null, maximum: number | null): string {
+  if (minimum == null || maximum == null) {
+    return "not collected";
+  }
   if (minimum === maximum) {
     return `block ${minimum.toLocaleString("en-US")}`;
   }
   return `blocks ${minimum.toLocaleString("en-US")}–${maximum.toLocaleString("en-US")}`;
 }
 
-export function accountEvidenceObservationTimeLabel(minimum: string, maximum: string): string {
+export function accountEvidenceObservationTimeLabel(minimum: string | null, maximum: string | null): string {
+  if (minimum == null || maximum == null) {
+    return "not collected";
+  }
   return minimum === maximum ? minimum : `${minimum}–${maximum}`;
 }
 
@@ -245,66 +248,41 @@ function SpamBadge({ status }: { status: TokenStatus }) {
   return <span className="tokenStatus spam" title="Flagged by internal token reputation checks">Spam</span>;
 }
 
-const ACCOUNT_LABELS: Record<AccountType, string> = {
-  eoa_candidate: "EOA candidate",
-  eip7702_delegated: "Delegated EOA",
-  safe: "Safe",
-  erc4337_account: "ERC-4337",
+const ACCOUNT_LABELS: Record<AccountFilter, string> = {
+  eoa_candidate: "EOA",
   contract: "Contract",
-  unknown: "Unknown",
 };
 
 export function accountMatches(
   accountType: AccountType,
-  isSafe: boolean,
-  isErc4337Account: boolean,
   selected: AccountFilter[],
 ): boolean {
-  return selected.includes(accountType) ||
-    (isSafe && selected.includes("safe")) ||
-    (isErc4337Account && selected.includes("erc4337_account"));
+  return selected.length === ACCOUNT_FILTERS.length || selected.some((value) => value === accountType);
 }
 
 type BadgeEvidence = {
   accountType: AccountType;
+  codeState: CodeState;
   observationBlock: number | null;
   delegationTarget: string | null;
-  isSafe: boolean;
-  safeVersion: string | null;
-  safeOwnerCount: number | null;
-  safeThreshold: number | null;
-  isErc4337Account: boolean;
-  erc4337Version: string | null;
-  erc4337EffectiveCoverage: string | null;
-  erc4337FailedRanges: string | null;
-  coverageStartBlock: number | null;
-  coverageEndBlock: number | null;
 };
 
-function AccountTypeBadge({ evidence, type = evidence.accountType }: { evidence: BadgeEvidence; type?: AccountType }) {
-  const title = type === "eoa_candidate"
-    ? `No bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}; this does not establish personhood or permanent EOA status`
-    : type === "eip7702_delegated"
-      ? `Exact EIP-7702 delegation indicator observed at pinned block ${evidence.observationBlock ?? "unknown"}${evidence.delegationTarget ? `; target ${evidence.delegationTarget}` : ""}`
-      : type === "safe"
-        ? `Verified Safe address evidence${evidence.safeVersion ? ` v${evidence.safeVersion}` : ""} at pinned block ${evidence.observationBlock ?? "unknown"}; threshold ${evidence.safeThreshold ?? "?"} of ${evidence.safeOwnerCount ?? "?"} addresses`
-        : type === "erc4337_account"
-          ? `Observed as UserOperationEvent.sender at canonical EntryPoint${evidence.erc4337Version ? ` v${evidence.erc4337Version}` : ""}; effective checked coverage ${evidence.erc4337EffectiveCoverage ?? `${evidence.coverageStartBlock ?? "?"}-${evidence.coverageEndBlock ?? "?"}`}${evidence.erc4337FailedRanges ? `; failed chunks ${evidence.erc4337FailedRanges}` : ""}`
-          : type === "contract"
-            ? `Non-delegation contract bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}`
-            : "Account evidence is unavailable or the pinned code lookup failed";
-  const label = type === "safe" && evidence.safeThreshold != null && evidence.safeOwnerCount != null
-    ? `Safe ${evidence.safeThreshold}/${evidence.safeOwnerCount} addresses`
-    : ACCOUNT_LABELS[type];
-  return <span className={`accountType ${type}`} title={title}>{label}</span>;
+function AccountTypeBadge({ evidence }: { evidence: BadgeEvidence }) {
+  if (evidence.accountType === "unknown") {
+    return null;
+  }
+  const title = evidence.accountType === "eoa_candidate"
+    ? evidence.codeState === "eip7702_delegated"
+      ? `EOA with an exact EIP-7702 delegation indicator observed at pinned block ${evidence.observationBlock ?? "unknown"}${evidence.delegationTarget ? `; target ${evidence.delegationTarget}` : ""}`
+      : `No bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}; this does not establish personhood or permanent EOA status`
+    : `Contract bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}`;
+  return <span className={`accountType ${evidence.accountType}`} title={title}>{ACCOUNT_LABELS[evidence.accountType]}</span>;
 }
 
 function AccountBadges({ evidence }: { evidence: BadgeEvidence }) {
   return (
     <span className="accountBadges">
       <AccountTypeBadge evidence={evidence} />
-      {evidence.isSafe && evidence.accountType !== "safe" && <AccountTypeBadge evidence={evidence} type="safe" />}
-      {evidence.isErc4337Account && evidence.accountType !== "erc4337_account" && <AccountTypeBadge evidence={evidence} type="erc4337_account" />}
     </span>
   );
 }
@@ -312,36 +290,18 @@ function AccountBadges({ evidence }: { evidence: BadgeEvidence }) {
 function summaryBadgeEvidence(row: CounterpartySummary | RankedCounterparty): BadgeEvidence {
   return {
     accountType: row.account_type,
+    codeState: row.code_state,
     observationBlock: row.observation_block_number,
     delegationTarget: row.eip7702_delegation_target,
-    isSafe: row.is_safe,
-    safeVersion: row.safe_version,
-    safeOwnerCount: row.safe_owner_count,
-    safeThreshold: row.safe_threshold,
-    isErc4337Account: row.is_erc4337_account,
-    erc4337Version: row.erc4337_entrypoint_version,
-    erc4337EffectiveCoverage: row.erc4337_effective_coverage,
-    erc4337FailedRanges: row.erc4337_failed_ranges,
-    coverageStartBlock: row.evidence_coverage_start_block,
-    coverageEndBlock: row.evidence_coverage_end_block,
   };
 }
 
 function eventBadgeEvidence(event: WalletEvent): BadgeEvidence {
   return {
     accountType: event.counterparty_account_type,
+    codeState: event.counterparty_code_state,
     observationBlock: event.counterparty_observation_block_number,
     delegationTarget: event.counterparty_eip7702_delegation_target,
-    isSafe: event.counterparty_is_safe,
-    safeVersion: event.counterparty_safe_version,
-    safeOwnerCount: event.counterparty_safe_owner_count,
-    safeThreshold: event.counterparty_safe_threshold,
-    isErc4337Account: event.counterparty_is_erc4337_account,
-    erc4337Version: event.counterparty_erc4337_entrypoint_version,
-    erc4337EffectiveCoverage: event.counterparty_erc4337_effective_coverage,
-    erc4337FailedRanges: event.counterparty_erc4337_failed_ranges,
-    coverageStartBlock: event.counterparty_evidence_coverage_start_block,
-    coverageEndBlock: event.counterparty_evidence_coverage_end_block,
   };
 }
 
@@ -384,14 +344,6 @@ export function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
     {
       selector: 'node[accountType = "contract"]',
       style: { shape: "round-rectangle" },
-    },
-    {
-      selector: "node[?isSafe]",
-      style: { shape: "round-rectangle", "border-width": 3 },
-    },
-    {
-      selector: "node[?isErc4337Account]",
-      style: { "border-style": "dotted", "border-width": 4 },
     },
     {
       selector: 'node[accountType = "eip7702_delegated"]',
@@ -615,12 +567,8 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
       {data.nodes.length === 0 && <div className="graphEmpty">No graph matches</div>}
       <div className="graphLegend" aria-label="Graph legend">
         <span><i className="walletSwatch" />Tracked address</span>
-        <span><i className="counterpartySwatch" />EOA candidate</span>
-        <span><i className="delegatedSwatch" />Delegated EOA</span>
-        <span><i className="safeSwatch" />Safe evidence</span>
-        <span><i className="erc4337Swatch" />ERC-4337 evidence</span>
-        <span><i className="contractSwatch" />Other contract</span>
-        <span><i className="unknownSwatch" />Unknown</span>
+        <span><i className="counterpartySwatch" />EOA</span>
+        <span><i className="contractSwatch" />Contract</span>
       </div>
     </div>
   );
@@ -937,24 +885,19 @@ export function App() {
     }
 
     const statusVisible = (status: TokenSummary["token_status"]) => includeSpam || !isSpamStatus(status);
-    const accountVisible = (accountType: AccountType, isSafe: boolean, isErc4337Account: boolean) =>
-      accountMatches(accountType, isSafe, isErc4337Account, selectedAccountFilters);
+    const accountVisible = (accountType: AccountType) => accountMatches(accountType, selectedAccountFilters);
     const visibleEvents = data.events.filter((event) =>
       statusVisible(event.token_status) &&
-      accountVisible(event.counterparty_account_type, event.counterparty_is_safe, event.counterparty_is_erc4337_account));
+      accountVisible(event.counterparty_account_type));
     const visibleTokens = data.summaries.tokens.filter((row) =>
       statusVisible(row.token_status) &&
-      accountVisible(row.counterparty_account_type, row.counterparty_is_safe, row.counterparty_is_erc4337_account));
+      accountVisible(row.counterparty_account_type));
     const visibleCounterparties = data.summaries.counterparties.filter((row) =>
       statusVisible(row.token_status) &&
-      accountVisible(row.account_type, row.is_safe, row.is_erc4337_account));
+      accountVisible(row.account_type));
     const visibleCounterpartyNodeIds = new Set(
       data.graph.nodes
-        .filter((node) => node.data.type === "counterparty" && node.data.accountType && accountVisible(
-          node.data.accountType,
-          node.data.isSafe ?? false,
-          node.data.isErc4337Account ?? false,
-        ))
+        .filter((node) => node.data.type === "counterparty" && node.data.accountType && accountVisible(node.data.accountType))
         .map((node) => node.data.id),
     );
     const visibleGraphEdges = data.graph.edges.filter((edge) =>
@@ -964,7 +907,7 @@ export function App() {
     const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
     const visibleTimeline = data.timeline.filter((row) =>
       statusVisible(row.token_status) &&
-      accountVisible(row.counterparty_account_type, row.counterparty_is_safe, row.counterparty_is_erc4337_account));
+      accountVisible(row.counterparty_account_type));
     const visibleData = {
       ...data,
       events: visibleEvents,
@@ -993,8 +936,6 @@ export function App() {
         event.counterparty_address,
         event.counterparty_account_type,
         event.counterparty_code_state,
-        event.counterparty_safe_version,
-        event.counterparty_erc4337_entrypoint_version,
         event.counterparty_evidence_reason_codes,
         event.token_address,
         event.token_symbol,
@@ -1013,8 +954,7 @@ export function App() {
     const events = visibleData.events.filter(eventMatches);
     const directlyMatchedTokens = visibleData.summaries.tokens.filter(tokenMatches);
     const directlyMatchedCounterparties = visibleData.summaries.counterparties.filter((row) =>
-      [row.counterparty_address, row.account_type, row.code_state, row.safe_version,
-        row.erc4337_entrypoint_version, row.evidence_reason_codes]
+      [row.counterparty_address, row.account_type, row.code_state, row.evidence_reason_codes]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
 
@@ -1317,7 +1257,7 @@ export function App() {
                   <span className={`accountType ${accountType}`}>{ACCOUNT_LABELS[accountType]}</span>
                 </label>
               ))}
-              <small>Applies to every view. Safe and ERC-4337 evidence can overlap without double counting.</small>
+              <small>Applies to every view. Unresolved RPC failures remain included only when both options are selected.</small>
             </div>
           </details>
           <label className="searchbox">

@@ -23,14 +23,11 @@ describe("dashboard export shape", () => {
     expect(Array.isArray(timeline)).toBe(true);
     expect(["fixture", "hyperindex"]).toContain(metadata.data_source);
     expect(typeof metadata.is_sampled).toBe("boolean");
-    expect(metadata.account_evidence_schema_version).toBe("account-evidence-v1");
-    expect(metadata.account_evidence_observation_block_number_min).toBeLessThanOrEqual(
-      metadata.account_evidence_observation_block_number_max,
-    );
-    expect(metadata.account_evidence_observation_block_number_max).toBe(metadata.account_evidence_coverage_end_block);
-    expect(metadata.account_evidence_observation_block_timestamp_min.localeCompare(
-      metadata.account_evidence_observation_block_timestamp_max,
-    )).toBeLessThanOrEqual(0);
+    expect(metadata.account_evidence_schema_version).toBeNull();
+    expect(metadata.account_evidence_observation_block_number_min).toBeNull();
+    expect(metadata.account_evidence_observation_block_number_max).toBeNull();
+    expect(metadata.account_evidence_observation_block_timestamp_min).toBeNull();
+    expect(metadata.account_evidence_observation_block_timestamp_max).toBeNull();
     expect(metadata.account_evidence_complete_count).toBeLessThanOrEqual(metadata.account_evidence_address_count);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(
       metadata.event_export_limit_per_status_quality_account_evidence * metadata.status_quality_account_evidence_cell_count,
@@ -42,14 +39,14 @@ describe("dashboard export shape", () => {
       metadata.timeline_row_export_limit_per_status_quality_account_evidence * metadata.status_quality_account_evidence_cell_count,
     );
     expect(metadata.token_summary_ranking_limit_per_status_quality_account_selection).toBe(500);
-    expect(metadata.token_summary_ranking_selection_count).toBe(6615);
+    expect(metadata.token_summary_ranking_selection_count).toBe(315);
     expect(metadata.token_summary_ranking_candidate_token_count).toBeGreaterThan(0);
     expect(metadata.token_summary_rankings_exact_for_all_filter_selections).toBe(true);
     expect(metadata.counterparty_ranking_limit_per_status_quality_account_selection).toBe(50);
     expect(metadata.counterparty_token_status_combination_count).toBe(15);
     expect(metadata.counterparty_token_quality_combination_count).toBe(7);
-    expect(metadata.counterparty_account_filter_combination_count).toBe(63);
-    expect(metadata.counterparty_ranking_selection_count).toBe(6615);
+    expect(metadata.counterparty_account_filter_combination_count).toBe(3);
+    expect(metadata.counterparty_ranking_selection_count).toBe(315);
     expect(metadata.counterparty_rankings_exact_for_all_filter_selections).toBe(true);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.transfer_count);
     expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.interaction_count);
@@ -111,39 +108,22 @@ describe("dashboard export shape", () => {
       "trusted+unverified+suspected_spam+spam|high_confidence+listed+unknown"
     ].transfer_count).toBe(metadata.transfer_count);
     expect(metadata.status_quality_account_counts[
-      "trusted+unverified+suspected_spam+spam|high_confidence+listed+unknown|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown"
+      "trusted+unverified+suspected_spam+spam|high_confidence+listed+unknown|eoa_candidate+contract"
     ].transfer_count).toBe(metadata.transfer_count);
 
     const endpoints = new Set(graph.edges.flatMap((edge: { data: { source: string; target: string } }) => [edge.data.source, edge.data.target]));
     expect(graph.nodes.every((node: { data: { id: string } }) => endpoints.has(node.data.id))).toBe(true);
     expect(graph.edges.every((edge: { data: { amountDecimalSum: number | null } }) => edge.data.amountDecimalSum == null || typeof edge.data.amountDecimalSum === "number")).toBe(true);
-    const accountTypes = ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"];
+    const accountTypes = ["eoa_candidate", "contract", "unknown"];
     expect(graph.nodes.every((node: { data: { type: string; accountType: string | null } }) =>
       node.data.type !== "counterparty" || accountTypes.includes(node.data.accountType ?? ""))).toBe(true);
     expect(events.every((event: { counterparty_account_type: string }) =>
       accountTypes.includes(event.counterparty_account_type))).toBe(true);
     expect(new Set(summaries.counterparties.map((row: { account_type: string }) => row.account_type))).toEqual(
-      new Set(accountTypes),
+      new Set(["unknown"]),
     );
-    const overlappingSafe = summaries.counterparties.find((row: { account_type: string }) => row.account_type === "safe");
-    expect(overlappingSafe).toMatchObject({
-      is_safe: true,
-      is_erc4337_account: true,
-      safe_owner_count: 3,
-      safe_threshold: 2,
-      erc4337_entrypoint_deployment_block: "19274877",
-      erc4337_failed_ranges: null,
-      erc4337_block_chunk_size: 100000,
-      erc4337_address_batch_size: 50,
-    });
-    expect(overlappingSafe.erc4337_effective_coverage).toContain(":19274877-22500000");
-    const overlappingGraphNode = graph.nodes.find((node: { data: { address: string } }) =>
-      node.data.address === overlappingSafe.counterparty_address);
-    expect(overlappingGraphNode.data.label).toContain("Safe + ERC-4337");
-    const failedEvidence = summaries.counterparties.find((row: { account_type: string }) => row.account_type === "unknown");
-    expect(failedEvidence.erc4337_failed_ranges).toContain(":17012204-17112203");
-    expect(failedEvidence.erc4337_effective_coverage).toContain(":17112204-22500000");
-    expect(failedEvidence.evidence_fetch_status).toBe("partial");
+    expect(summaries.counterparties.every((row: { evidence_fetch_status: string }) =>
+      row.evidence_fetch_status === "not_fetched")).toBe(true);
     expect(events.every((event: {
       from_address: string;
       to_address: string;
@@ -165,9 +145,7 @@ describe("dashboard export shape", () => {
         : event.transaction_target_relation !== "unknown"))).toBe(true);
     expect(graph.edges.every((edge: { data: { transferCount: number; counterpartyTransferCount: number } }) =>
       edge.data.counterpartyTransferCount >= edge.data.transferCount)).toBe(true);
-    expect(graph.edges.every((edge: { data: { counterpartyAccountType: string; counterpartyIsSafe: boolean; counterpartyIsErc4337Account: boolean } }) =>
-      accountTypes.includes(edge.data.counterpartyAccountType) &&
-      typeof edge.data.counterpartyIsSafe === "boolean" &&
-      typeof edge.data.counterpartyIsErc4337Account === "boolean")).toBe(true);
+    expect(graph.edges.every((edge: { data: { counterpartyAccountType: string } }) =>
+      accountTypes.includes(edge.data.counterpartyAccountType))).toBe(true);
   });
 });
