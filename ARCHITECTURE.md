@@ -15,7 +15,7 @@ Envio HyperIndex
 HyperIndex Postgres (ingestion persistence)
       │ read-only dbt source in live mode
       ▼
-dbt + offline enrichment inputs
+dbt + offline token inputs + local account evidence cache
       │ staging → intermediate evidence → marts
       ▼
 DuckDB (complete local analytics artifact)
@@ -39,6 +39,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
 | Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics for the local API | A checked-in artifact or a browser-delivered database |
+| Local account evidence store | `analytics/artifacts/account_evidence.duckdb` | Checkpoint one successful pinned bytecode observation per event counterparty, with retryable failures | A checked-in seed, an implicit build-time RPC job, or proof of permanent identity |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Local API | `server/` | Validate filters and execute exact, bounded, read-only queries against the live artifact | A writer, ingestion service, or fixture-data server |
 | Fixture demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON only to the explicit fixture/static build | The complete-history local serving architecture |
@@ -71,7 +72,7 @@ A captured `Transfer(address,address,uint256)` log establishes that a contract e
 
 ### Enrichment evidence
 
-Token metadata, registry membership, RPC responses, spam reputation, bytecode observations, Safe evidence, and ERC-4337 observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. The current `vitalik.eth` value is a pinned configured label from `analytics/seeds/wallets.csv`, not evidence of a live ENS resolution; a future resolution workflow must add source and observation provenance before making that claim.
+Token metadata, registry membership, RPC responses, spam reputation, and bytecode observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The current `vitalik.eth` value is a pinned configured label from `analytics/seeds/wallets.csv`, not evidence of a live ENS resolution; a future resolution workflow must add source and observation provenance before making that claim.
 
 ### Delivery boundary
 

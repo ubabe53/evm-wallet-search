@@ -10,3 +10,7 @@ evm_wallet_search:
           type: "{{ 'postgres' if env_var('DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN', '') else 'duckdb' }}"
           alias: hyperindex
           read_only: "{{ true if env_var('DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN', '') else false }}"
+        - path: "{{ env_var('ACCOUNT_EVIDENCE_DUCKDB_PATH', 'artifacts/account_evidence.duckdb') }}"
+          type: duckdb
+          alias: account_evidence
+          read_only: true

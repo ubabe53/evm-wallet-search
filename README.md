@@ -24,7 +24,7 @@ bun run api:dev
 bun run analytics:build:fixture
 bun run labels:sync
 bun run labels:enrich --limit 100
-bun run addresses:enrich --limit 500
+bun run addresses:enrich
 bun run test
 ```
 
@@ -34,7 +34,7 @@ bun run test
 
 `analytics:build:fixture` (also available as the compatibility alias `analytics:build`), `export:dashboard`, and the production Vite build form the deterministic fixture-demo path used by CI and, eventually, GitHub Pages. Fixture dbt commands write `analytics/artifacts/fixture.duckdb`, clear the live Postgres DSN from their child environment, and never overwrite `analytics/artifacts/live.duckdb`. Only the generated `public/data` JSON belongs to the static demo.
 
-`labels:sync` refreshes the checked-in metadata registry from Trust Wallet, Uniswap, and CoinGecko. `labels:enrich` reads self-declared ERC20 metadata for the highest-impact unverified contracts. `addresses:enrich` collects pinned-block bytecode, Safe, and canonical ERC-4337 EntryPoint evidence for high-activity counterparties. Ordinary dbt builds remain offline and reproducible; no full live account enrichment is part of the fixture path.
+`labels:sync` refreshes the checked-in metadata registry from Trust Wallet, Uniswap, and CoinGecko. `labels:enrich` reads self-declared ERC20 metadata for the highest-impact unverified contracts. `addresses:enrich` batches pinned-block `eth_getCode` observations for every distinct nonzero, nonself event counterparty and checkpoints them in the ignored local evidence database. Ordinary dbt builds never invoke RPC enrichment, and fixture mode contains no invented account evidence.
 
 ## Layout
 
@@ -137,6 +137,6 @@ Playwright is included as a dev dependency for local rendered-dashboard checks a
 
 `token_rpc_metadata.csv` stores pinned-block `name`, `symbol`, and `decimals` responses for unverified contracts. Run `bun run labels:enrich --limit 100` to process the next unlabeled contracts by transfer count, `--retry-failed` to retry failures, or `--refresh` to reread already attempted contracts. RPC metadata never establishes trust, but its self-declared name and symbol are inputs to explainable spam heuristics.
 
-`counterparty_code_metadata.csv` stores one evidence snapshot per Ethereum address: chain ID, pinned block/time, code state, exact EIP-7702 target when present, verified Safe singleton/version/owner-address count/threshold, canonical EntryPoint sender observations and provenance, fetch status, reason codes, and requested/effective coverage. `account_evidence_manifest.json` pins official Safe mainnet singleton deployments plus versioned EntryPoint releases, deployment blocks, and deployment transactions. Run `bun run addresses:enrich --limit 500` explicitly to process a ranked batch; EntryPoint scans are deployment-clamped, block-chunked, sender-batched, and independently retried. Empty code becomes `eoa_candidate`, ordinary code becomes `contract`, and unavailable code remains `unknown`. A failed code lookup becomes `partial`, not `failed`, when another source still supplied usable evidence. Safe and ERC-4337 evidence can refine the primary type without erasing either independent flag.
+`analytics/artifacts/account_evidence.duckdb` is the ignored live evidence cache, with one row per `(chain_id, address)`. Run `bun run addresses:enrich` to process every unresolved distinct nonzero, nonself event counterparty, or use `--limit` only for a deliberate partial run. The command resolves one concrete Ethereum `safe` block, batches `eth_getCode`, checkpoints each batch, retries failures, and never automatically overwrites a successful prior observation. Empty code becomes internal `eoa_candidate`, exact EIP-7702 delegation remains internal code-state evidence under that public EOA presentation, ordinary code becomes `contract`, and unavailable code remains retryable `unknown`. Safe and ERC-4337 evidence are not collected.
 
 Registry membership supplies display metadata but is not a security guarantee. A reviewed manual approval or exact-address membership in at least two independent registries is `high_confidence`; exactly one registry is `listed`; RPC-only or absent registry evidence is `unknown`. CoinGecko-only OSCAR (`0xebb66a88cedd12bfe3a289df6dfee377f2963f12`) and PUPPIES (`0xcf91b70017eabde82c9671e30e5502d312ea6eb2`) therefore remain listed/unverified, not trusted. The separate classifier scores contract reputation and wallet-token interaction behavior; either can produce `suspected_spam`, while only a reviewed override produces final `spam`. No price, market-cap, volume, or liquidity API is used. Exact thresholds and limitations are documented in `docs/architecture.md` and `docs/data-model.md`.

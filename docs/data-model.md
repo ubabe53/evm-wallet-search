@@ -39,19 +39,13 @@ Unknown tokens remain in event marts as `unverified`, with `amount_decimal = nul
 
 ### `stg_counterparty_metadata`
 
-Reads the fixture or live `counterparty_code_metadata` seed at one row per `(chain_id, address)` evidence snapshot. The current scope fixes `chain_id = 1`. The row preserves:
+In live mode, reads `analytics/artifacts/account_evidence.duckdb` at one row per `(chain_id, address)` historical observation. Fixture mode returns an empty typed relation and does not ship an account-evidence CSV. The current scope fixes `chain_id = 1`. Each row preserves:
 
-- `account_type`: `eoa_candidate`, `eip7702_delegated`, `safe`, `erc4337_account`, `contract`, or `unknown`.
-- `code_state`, exact byte length, observation block/time, and the EIP-7702 target only when code is exactly `0xef0100` plus 20 bytes.
-- Independent `safe_verified` and `erc4337_observed` fields so overlapping evidence is not lost.
-- Safe singleton/version, verification status, owner-address count, and threshold. The addresses themselves are not exported and counts do not imply people.
-- ERC-4337 matched event count, first/last observation blocks, and pipe-delimited canonical EntryPoint address/version/source/deployment-block provenance when multiple versions match.
-- Deployment-clamped effective coverage, exhausted chunk ranges, and the block-chunk and sender-batch sizes used for bounded `eth_getLogs` work. Effective coverage merges adjacent successful chunks; it never spans a failed chunk.
-- `fetch_status`, stable `reason_codes`, evidence schema version, fetch time, coverage scope, and coverage start/end blocks.
+- `account_type`: `eoa_candidate`, `contract`, or retryable `unknown`.
+- `code_state`: `no_code`, internal `eip7702_delegated`, `contract_code`, or `unknown`, plus exact byte length and delegation target when applicable.
+- Concrete observation block number/hash/timestamp, the `safe` or confirmed-head fallback policy, fetch status/reason, schema version, and fetch time.
 
-Primary account-type precedence is delegated EOA, verified Safe, canonical EntryPoint sender, other contract code, no-code EOA candidate, then unknown. A failed code read is unknown unless positive ERC-4337 evidence supplies the bounded primary type. `partial` means some evidence source was unavailable or inconsistent even when another source supports usable evidence; for ERC-4337 it preserves successful effective coverage and names every exhausted block chunk. `failed` means no evidence source yielded a usable result.
-
-The deterministic account-evidence fixture is observed at Ethereum mainnet block `22,500,000`, timestamp `2025-05-17T03:11:47+00:00`, hash `0x12114659c3097400929d30304e6705c846ec534610e7708b3651b3c2a21cdc62`, obtained with `eth_getBlockByNumber`. This is after Pectra activated at epoch `364032` on 2025-05-07, so the EIP-7702 fixture is chronologically possible. Its ERC-20 transfer rows remain at their original event blocks/timestamps: later account evidence describes an address at the observation block and never rewrites event-time facts. See the [Ethereum Foundation Pectra announcement](https://blog.ethereum.org/en/2025/04/23/pectra-mainnet).
+Successful observations are immutable by default and therefore represent “observed at block,” not permanent identity. Failed calls are checkpointed but remain eligible on the next run. Safe and ERC-4337-specific evidence are not collected.
 
 ## Intermediate
 

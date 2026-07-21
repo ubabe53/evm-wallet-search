@@ -15,10 +15,24 @@ import sys
 from pathlib import Path
 
 try:
-    from .artifact_paths import ANALYTICS_DIR, DBT_DUCKDB_PATH_ENV, database_path
+    from .artifact_paths import (
+        ACCOUNT_EVIDENCE_DB_PATH,
+        ACCOUNT_EVIDENCE_DUCKDB_PATH_ENV,
+        ANALYTICS_DIR,
+        DBT_DUCKDB_PATH_ENV,
+        database_path,
+    )
+    from .enrich_counterparty_types import ensure_evidence_store
     from .project_config import resolved_runtime
 except ImportError:
-    from artifact_paths import ANALYTICS_DIR, DBT_DUCKDB_PATH_ENV, database_path
+    from artifact_paths import (
+        ACCOUNT_EVIDENCE_DB_PATH,
+        ACCOUNT_EVIDENCE_DUCKDB_PATH_ENV,
+        ANALYTICS_DIR,
+        DBT_DUCKDB_PATH_ENV,
+        database_path,
+    )
+    from enrich_counterparty_types import ensure_evidence_store
     from project_config import resolved_runtime
 
 
@@ -52,6 +66,8 @@ def run_dbt(
     db_path = database_path(use_fixture=not use_hyperindex)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     env[DBT_DUCKDB_PATH_ENV] = str(db_path)
+    env[ACCOUNT_EVIDENCE_DUCKDB_PATH_ENV] = str(ACCOUNT_EVIDENCE_DB_PATH)
+    ensure_evidence_store(ACCOUNT_EVIDENCE_DB_PATH)
     if use_hyperindex:
         if not hyperindex_dsn:
             raise SystemExit(

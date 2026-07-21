@@ -31,7 +31,9 @@ ethereum:
   rpc_url: ""
   public_rpc_url: "https://ethereum-rpc.publicnode.com"
   account_evidence:
-    erc4337_start_block: ""
+    batch_size: 100
+    max_retries: 2
+    fallback_confirmations: 64
 ```
 
 ## Fixture Demo Mode
@@ -42,7 +44,7 @@ Fixture mode exists for deterministic tests and the eventual GitHub Pages portfo
 bun run analytics:build:fixture
 ```
 
-The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. Their separate observed-at account-evidence fixture covers all six primary types and includes one address that is both verified Safe and observed through ERC-4337. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge. After changing fixture columns, use `python3 scripts/run_dbt.py build --full-refresh` once so dbt recreates the fixture seed schema.
+The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. There is no account-evidence fixture: the fixture build uses an empty typed relation, so it never invents address classifications. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge.
 
 `bun run analytics:build` remains an alias for `analytics:build:fixture` so existing CI and contributor commands stay deterministic. The exporter reads only the fixture database and may overwrite only the ignored files under `public/data/`.
 
@@ -83,51 +85,37 @@ Normal mode skips every attempted contract and advances to the next batch. Retry
 
 ## Counterparty Account Evidence
 
-Collect pinned account evidence for the next 500 high-activity counterparties:
+Collect pinned code evidence for every unresolved event counterparty:
 
 ```sh
-bun run addresses:enrich --limit 500
+bun run addresses:enrich
 ```
 
-The command ranks eligible counterparties by complete captured Transfer-signature event count, verifies Ethereum mainnet, pins one block and timestamp, and writes `analytics/seeds/counterparty_code_metadata.csv` atomically. Because the source does not yet disambiguate token standards, this is not a proven ERC-20-only activity ranking. It batches `eth_getCode`, Safe storage/interface reads, and filtered `UserOperationEvent` lookups against the versioned canonical EntryPoints in `account_evidence_manifest.json`. The manifest pins each Ethereum deployment block and transaction. The log scan clamps each EntryPoint to its deployment block, groups sender topics, and splits the remaining range into bounded chunks instead of issuing one full-history request per address. It uses the same `ETHEREUM_RPC_URL` / `config.yaml` / public-fallback precedence as token enrichment.
+The command selects distinct `wallet_events.counterparty_address` values, excluding the configured wallet and zero address. It verifies Ethereum mainnet, resolves one concrete `safe` block, and passes that block number to every `eth_getCode`. If the provider does not support the `safe` tag, it pins `latest` minus the configured confirmation buffer. Block number, hash, timestamp, finality policy, and fetch time are stored with every result.
 
-By default, ERC-4337 evidence coverage begins at the earliest indexed Transfer-signature event block and ends at the pinned observation block. Override the lower bound only when the intended coverage is explicit:
+The ignored `analytics/artifacts/account_evidence.duckdb` cache is checkpointed after every JSON-RPC batch. Successful rows are never selected or overwritten automatically; failed or malformed results stay `unknown` and are retried by a later invocation. The default run has no address limit. `--limit` exists only for an intentional partial run.
 
-```sh
-bun run addresses:enrich --limit 500 --erc4337-start-block 17000000
-```
-
-The equivalent configuration is `ethereum.account_evidence.erc4337_start_block` or `ACCOUNT_EVIDENCE_START_BLOCK`. The requested lower bound is distinct from per-EntryPoint effective coverage because an EntryPoint cannot be checked before its deployment. A positive result proves only that the address appeared as a canonical EntryPoint event sender in a recorded successful range. A negative result is bounded by merged effective coverage and fetch status; it never silently includes a failed chunk.
-
-The default work unit is 100,000 blocks by 50 sender topics with two retries per failed chunk. Providers with smaller limits can override these values without changing the evidence semantics:
+The default work unit is 100 `eth_getCode` calls with two retries for unresolved calls. Providers with smaller limits can override these values without changing the evidence semantics:
 
 ```sh
 bun run addresses:enrich --limit 500 \
-  --erc4337-block-chunk-size 10000 \
-  --erc4337-address-batch-size 25 \
-  --erc4337-max-retries 3
+  --batch-size 50 \
+  --max-retries 3 \
+  --fallback-confirmations 96
 ```
 
-Use `ethereum.account_evidence.erc4337_block_chunk_size`, `erc4337_address_batch_size`, and `erc4337_max_retries`, or the corresponding `ACCOUNT_EVIDENCE_BLOCK_CHUNK_SIZE`, `ACCOUNT_EVIDENCE_ADDRESS_BATCH_SIZE`, and `ACCOUNT_EVIDENCE_MAX_RETRIES` environment variables. Successful chunks are retained across in-process retries. If a chunk still fails, every affected address records that exact EntryPoint/range in `erc4337_failed_ranges`, retains the other successful ranges in `erc4337_effective_coverage`, and receives `fetch_status = partial`. A failed code lookup is also `partial` when successful EntryPoint coverage or a positive sender event remains usable; `failed` is reserved for no usable source evidence.
+Use `ethereum.account_evidence.batch_size`, `max_retries`, and `fallback_confirmations`, or `ACCOUNT_EVIDENCE_BATCH_SIZE`, `ACCOUNT_EVIDENCE_MAX_RETRIES`, and `ACCOUNT_EVIDENCE_FALLBACK_CONFIRMATIONS`. Batching reduces HTTP overhead but does not remove the underlying state lookups. Very large batches can exceed provider payload or timeout limits.
 
-```sh
-bun run addresses:enrich --limit 500 --retry-failed
-bun run addresses:enrich --limit 500 --refresh
-```
-
-Normal mode advances to unattempted addresses, retry mode retries `failed` and `partial` checks, and refresh mode rechecks ranked addresses at a new pinned block. Run the live analytics build after enrichment, then restart the local API so new requests use that snapshot. A seed-schema migration requires `python3 scripts/run_dbt.py build --full-refresh` once for an existing DuckDB file.
-
-Rows migrated from the earlier code-only snapshot are retained with `coverage_scope = legacy_code_snapshot`, explicit `safe_not_checked` / `erc4337_not_checked` reasons, and `fetch_status = partial`. They preserve the prior pinned code observation without implying that the newer Safe or EntryPoint evidence was collected. Refresh only the desired ranked batch to replace them; this migration does not perform a full live enrichment.
+Run `bun run analytics:build:hyperindex` after enrichment so dbt reads the cache and rebuilds the live marts, then restart the local API. Ordinary dbt and fixture commands never invoke the RPC collector.
 
 Interpretation rules are intentionally strict:
 
 - `eoa_candidate` means no code was observed at the pinned block; it does not prove EOA status, control, personhood, or permanence.
-- `eip7702_delegated` requires exact `0xef0100 || 20-byte target` code.
-- `safe` requires an official mainnet singleton/deployment match and consistent `getOwners()` / `getThreshold()` results. Interface-only matches remain contract evidence.
-- `erc4337_account` requires positive `UserOperationEvent.sender` evidence from a checked-in versioned canonical EntryPoint.
-- Safe and ERC-4337 remain independent flags even though one primary account type is selected by precedence.
+- Exact `0xef0100 || 20-byte target` is retained internally as `eip7702_delegated` but remains an EOA candidate in the public binary presentation.
+- Any other nonempty code is `contract`.
+- Safe and ERC-4337-specific collection are not performed. Deployed instances with bytecode are contracts; undeployed counterfactual addresses are an acknowledged no-code limitation.
 
-This is an explicit, potentially RPC-intensive ranked batch operation. Fixture builds and ordinary dbt runs never invoke it, and this change does not perform a full live refresh.
+This is an explicit, potentially RPC-intensive operation. Fixture builds and ordinary dbt runs never invoke it.
 
 ## HyperIndex Mode
 
