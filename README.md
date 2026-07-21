@@ -43,11 +43,13 @@ The local API and its development command have not been implemented yet. Until t
 
 ## Documentation
 
+- `AGENTS.md`: concise durable instructions, invariants, validation, and change routing for coding agents.
+- `ARCHITECTURE.md`: high-level system map, boundaries, dependency direction, and known implementation gaps.
 - `docs/architecture.md`: pipeline flow, scope, and documentation update rules.
 - `docs/data-model.md`: staging, intermediate, mart grain, and tests.
 - `docs/operations.md`: local database mode, fixture-demo mode, setup, and verification.
 
-When code changes, update the related docs in the same change. For example, a mart schema change must update `docs/data-model.md`, `src/data.ts`, and any affected export or dashboard notes.
+When code changes a documented behavior or boundary, update the owning context in the same change. Use the routing table in `AGENTS.md`; for example, a mart schema change must update `docs/data-model.md`, `analytics/models/schema.yml` as applicable, `src/data.ts`, and any affected export or dashboard notes.
 
 ## GitHub Automation
 
