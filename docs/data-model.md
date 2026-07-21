@@ -79,17 +79,19 @@ One row per wallet and token. It records transfer and distinct-counterparty coun
 
 Joins both evidence layers back to one-row-per-transfer events. Its effective `token_status` is one of `trusted`, `unverified`, `suspected_spam`, or `spam`. Reviewed manual spam has final precedence, followed by automated suspicion, then `high_confidence` quality; every other case is unverified.
 
+These four values are an internal classification contract, not four user choices. The presentation layer maps `suspected_spam` and `spam` to one `Spam` state and maps `trusted` and `unverified` to no reputation badge. The `Include spam` predicate controls whether the first pair is excluded or included. Token quality, scores, reason codes, provenance, and versions remain stored for audit and future product decisions.
+
 ## Marts
 
 ### `wallet_events`
 
-Dashboard-ready event table. This preserves the immutable one-transfer grain and event-time block fields while carrying emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, metadata availability, token quality evidence, effective status, both classification scores, reason codes, and classifier versions. Enrichment observation time never replaces event block number or timestamp.
+Application-serving event table. This preserves the immutable one-transfer grain and event-time block fields while carrying emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, metadata availability, token quality evidence, effective status, both classification scores, reason codes, and classifier versions. Enrichment observation time never replaces event block number or timestamp. The local API queries this mart with explicit filters, ordering, and pagination; the fixture demo exports a bounded subset.
 
 ### `graph_nodes`
 
 Nodes for tracked addresses, counterparties, and tokens. Counterparty nodes carry primary account type, code observation, independent Safe/ERC-4337 flags and display evidence, fetch status, reasons, and coverage bounds. Tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
 
-The dashboard export shortens counterparty labels for readability while keeping full addresses in the JSON node `address` field. Labels append independent `Safe` and `ERC-4337` evidence, including both for overlap; the graph also uses Safe shape/border weight and an ERC-4337 dotted border so the flags are not encoded by primary `account_type` or color alone.
+The presentation layer shortens counterparty labels for readability while retaining full addresses in the API or demo payload. Labels append independent `Safe` and `ERC-4337` evidence, including both for overlap; the graph also uses Safe shape/border weight and an ERC-4337 dotted border so the flags are not encoded by primary `account_type` or color alone.
 
 ### `graph_edges`
 
@@ -97,13 +99,13 @@ Each wallet-counterparty-token-direction interaction produces two directed legs:
 
 `amount_decimal_sum` remains null when token metadata is unavailable. It is never replaced with zero.
 
-Graph edges carry effective status, metadata provenance, and both evidence layers so the static dashboard can remove suspected and reviewed spam before projecting direct wallet-counterparty links.
+Graph edges carry effective status, metadata provenance, and both evidence layers so the application query can exclude suspected and reviewed spam before projecting direct wallet-counterparty links.
 
 `counterparty_transfer_count` is the complete number of wallet-relevant ERC20 transfers for the wallet-counterparty pair across all tokens and both directions. It is repeated on each interaction edge so bounded graph exports retain the full-history activity metric used for gradual node sizing.
 
 ### `token_summary`
 
-One row per wallet, token, effective status, quality, and exact counterparty account-evidence signature across inbound and outbound activity. This serving grain supports inclusive account filtering. The browser filters cell rows first and then aggregates them back to one row per wallet and token before ranking and rendering. It records total, inbound, and outbound ERC20 transfer-event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
+One row per wallet, token, effective status, quality, and exact counterparty account-evidence signature across inbound and outbound activity. This serving grain supports inclusive account filtering. The local API filters cell rows and aggregates them back to one row per wallet and token before ranking and returning a bounded page; the fixture demo performs the equivalent operation over its small static payload. It records total, inbound, and outbound ERC20 transfer-event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when available; and exact raw total.
 
 `indirect_inbound_transfer_count` and `indirect_outbound_transfer_count` count only `is_indirect = true`. Legacy nulls are excluded rather than treated as direct or indirect, so each indirect count is bounded by its corresponding direction total.
 
@@ -119,13 +121,15 @@ The ranking-serving mart excludes the zero address, the tracked wallet itself, a
 
 ### `timeline_daily`
 
-Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. The browser applies the inclusive account predicate and aggregates matching cells back to wallet-date-token-status-quality-direction before use. Token addresses remain part of the displayed grain because decimal amounts from different assets cannot be meaningfully summed together. Raw totals are exact strings and decimal totals remain null without metadata.
+Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. The local API applies the inclusive account predicate and aggregates matching cells back to wallet-date-token-status-quality-direction before returning a bounded time range. Token addresses remain part of the displayed grain because decimal amounts from different assets cannot be meaningfully summed together. Raw totals are exact strings and decimal totals remain null without metadata.
 
 ### `pipeline_metadata`
 
-One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Equal bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch.
+One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, Safe and ERC-4337 positive-evidence counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Equal bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch. Local API responses combine this provenance with the active filters, complete matching count, returned row count, ordering, and pagination/ranking limit.
 
-The exporter enriches this row in `meta.json` with complete mart row counts; status-quality-account-evidence cell counts and per-cell limits for events, interactions, and timeline; actual exported counts; and `is_sampled`. It also records exact transfer/token/counterparty statistics for all 6,615 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 63 non-empty inclusive account selections. Token and counterparty candidate selection ranks combined activity before limiting for the same 6,615 selections and exports every account cell for the resulting candidate unions, preserving exact top-500 token and top-50 counterparty browser rankings. Safe and ERC-4337 membership is inclusive and independent. `is_sampled` is true whenever any exported mart is smaller than its complete mart; it does not negate the separately recorded exact candidate-union guarantees. These fields distinguish complete DuckDB marts from bounded static views.
+The fixture-demo exporter enriches this row in `meta.json` with returned counts, limits, and sampling state. The demo metadata must identify fixture provenance and must not imply that its counts describe complete HyperIndex history.
+
+The current transitional exporter also records exact transfer/token/counterparty statistics for all 6,615 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 63 non-empty inclusive account selections. That full-history candidate-union contract is legacy behavior and is not the target serving model. The local API should compute only the requested selection against DuckDB; the static exporter should be reduced to the deterministic fixture demo.
 
 ## Tests
 
@@ -156,4 +160,4 @@ dbt tests enforce:
 - Account-evidence fixture observations occur after Pectra without changing event-time transfer blocks or timestamps.
 - Partial EntryPoint fixtures reconcile every deployment-clamped range into either effective coverage or an explicit failed chunk.
 - Reviewed-spam, automated-suspicion, high-confidence-trust, and unverified fallback precedence.
-- Exact 6,615-selection token/counterparty candidate unions plus browser aggregation from account cells back to displayed token and timeline grains.
+- The current transitional export's exact 6,615-selection token/counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains. Replace this legacy export test when the DuckDB API and fixture-only demo contracts are implemented.

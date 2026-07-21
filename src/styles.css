@@ -24,8 +24,6 @@
   --out: #b45309;
   --spam: #b42318;
   --spam-bg: #fef3f2;
-  --suspected-spam: #a15c00;
-  --suspected-spam-bg: #fff8e6;
   --unverified-bg: #f2f4f7;
   color: var(--text);
   background: var(--page-bg);
@@ -61,8 +59,6 @@
   --out: #fbbf24;
   --spam: #fda29b;
   --spam-bg: #3b1717;
-  --suspected-spam: #fbbf24;
-  --suspected-spam-bg: #33270d;
   --unverified-bg: #273241;
 }
 
@@ -170,6 +166,33 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.spamToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--control-bg);
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.spamToggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--spam);
+}
+
+.spamToggle small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .statusFilter {
@@ -679,6 +702,7 @@ th {
 .tokenStatus {
   display: inline-flex;
   align-items: center;
+  margin-left: 6px;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--unverified-bg);
@@ -690,52 +714,10 @@ th {
   text-transform: uppercase;
 }
 
-.tokenStatus.trusted {
-  border-color: var(--live-text);
-  background: var(--live-bg);
-  color: var(--live-text);
-}
-
 .tokenStatus.spam {
   border-color: var(--spam);
   background: var(--spam-bg);
   color: var(--spam);
-}
-
-.tokenStatus.suspected_spam {
-  border-color: var(--suspected-spam);
-  background: var(--suspected-spam-bg);
-  color: var(--suspected-spam);
-}
-
-.tokenQuality {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 5px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--unverified-bg);
-  padding: 3px 6px;
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.statusMenu .tokenQuality {
-  margin-left: 0;
-}
-
-.tokenQuality.high_confidence {
-  border-color: var(--live-text);
-  background: var(--live-bg);
-  color: var(--live-text);
-}
-
-.tokenQuality.listed {
-  border-color: var(--graph-wallet);
-  color: var(--graph-wallet);
 }
 
 .accountType {

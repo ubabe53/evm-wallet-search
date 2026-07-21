@@ -15,6 +15,7 @@ import {
   graphStyles,
   interactionEdgeLabel,
   INDIRECT_TRANSFER_EXPLANATION,
+  isSpamStatus,
 } from "../src/App";
 import type { CounterpartySummary, TimelineRow, TokenSummary } from "../src/data";
 
@@ -354,15 +355,15 @@ const metadata = {
     "trusted+unverified+spam|high_confidence+unknown": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
   },
   status_quality_account_counts: {
-    "trusted+unverified|high_confidence|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
+    "trusted+unverified|high_confidence+listed+unknown|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
       transfer_count: 1,
       token_count: 1,
       counterparty_count: 1,
     },
-    "trusted+unverified+spam|high_confidence|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
-      transfer_count: 1,
-      token_count: 1,
-      counterparty_count: 1,
+    "trusted+unverified+suspected_spam+spam|high_confidence+listed+unknown|eoa_candidate+eip7702_delegated+safe+erc4337_account+contract+unknown": {
+      transfer_count: 2,
+      token_count: 2,
+      counterparty_count: 2,
     },
   },
   exported_event_count: 2,
@@ -421,6 +422,13 @@ describe("App", () => {
   it("labels graph interactions with token and transfer count", () => {
     expect(interactionEdgeLabel("USDC", 5)).toBe("USDC x5");
     expect(interactionEdgeLabel("DAI", 12_500)).toBe("DAI x12,500");
+  });
+
+  it("merges automated and reviewed spam into one presentation state", () => {
+    expect(isSpamStatus("suspected_spam")).toBe(true);
+    expect(isSpamStatus("spam")).toBe(true);
+    expect(isSpamStatus("trusted")).toBe(false);
+    expect(isSpamStatus("unverified")).toBe(false);
   });
 
   it("aggregates token-status rows into one transfer-ranked counterparty", () => {
@@ -553,39 +561,27 @@ describe("App", () => {
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
     expect(screen.getByLabelText("Maximum graph interactions")).toHaveValue("25");
     expect(screen.getByText("10 of 11 events")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Include spam")).not.toBeInTheDocument();
+    const includeSpam = screen.getByRole("checkbox", { name: /Include spam/ });
+    expect(includeSpam).not.toBeChecked();
+    expect(screen.getByText("1 hidden")).toBeInTheDocument();
+    expect(screen.queryByText("Status (2)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quality (1)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Status" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^trusted$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^high confidence$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show less" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     expect(screen.getByText("11 of 11 events")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show less" }));
     expect(screen.getByText("10 of 11 events")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Status (2)"));
-    const trustedStatus = screen.getByRole("checkbox", { name: "trusted" });
-    const unverifiedStatus = screen.getByRole("checkbox", { name: "unverified" });
-    const suspectedStatus = screen.getByRole("checkbox", { name: "suspected spam" });
-    const spamStatus = screen.getByRole("checkbox", { name: "spam" });
-    expect(trustedStatus).toBeChecked();
-    expect(unverifiedStatus).toBeChecked();
-    expect(suspectedStatus).toBeEnabled();
-    expect(suspectedStatus).not.toBeChecked();
-    expect(spamStatus).toBeEnabled();
-    expect(spamStatus).not.toBeChecked();
-    fireEvent.click(trustedStatus);
-    expect(screen.queryByText("USDC")).not.toBeInTheDocument();
-    fireEvent.click(trustedStatus);
     expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
-    fireEvent.click(spamStatus);
-    expect(spamStatus).toBeChecked();
-    expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Quality (1)"));
-    const highQualityCheckbox = screen.getByRole("checkbox", { name: "high confidence" });
-    const listedQualityCheckbox = screen.getByRole("checkbox", { name: "listed" });
-    const unknownQualityCheckbox = screen.getByRole("checkbox", { name: "unknown" });
-    expect(highQualityCheckbox).toBeChecked();
-    expect(listedQualityCheckbox).not.toBeChecked();
-    expect(unknownQualityCheckbox).not.toBeChecked();
-    fireEvent.click(unknownQualityCheckbox);
+    fireEvent.click(includeSpam);
+    expect(includeSpam).toBeChecked();
     expect(screen.getAllByText("SPAM").length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle("Flagged by internal token reputation checks").length).toBeGreaterThan(0);
+    fireEvent.click(includeSpam);
+    expect(includeSpam).not.toBeChecked();
+    expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Account evidence (6)"));
     const contractAccount = screen.getByRole("checkbox", { name: "Contract" });

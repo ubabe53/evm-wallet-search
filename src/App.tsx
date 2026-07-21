@@ -26,10 +26,9 @@ const GRAPH_INTERACTION_LIMITS = [10, 25, 50, 100] as const;
 const DEFAULT_COUNTERPARTY_LIMIT = 10;
 const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
 const TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified", "suspected_spam", "spam"];
-const DEFAULT_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
+const NON_SPAM_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
 const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"];
 const TOKEN_QUALITIES: TokenQuality[] = ["high_confidence", "listed", "unknown"];
-const DEFAULT_TOKEN_QUALITIES: TokenQuality[] = ["high_confidence"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
 export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic/spam event emission; the mismatch alone does not prove spam.";
@@ -216,62 +215,15 @@ function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
   );
 }
 
-function TokenStatusBadge({
-  status,
-  source,
-  reputationScore,
-  reputationReasons,
-  reputationVersion,
-  interactionScore,
-  interactionReasons,
-}: {
-  status: TokenSummary["token_status"];
-  source: string | null;
-  reputationScore?: number;
-  reputationReasons?: string;
-  reputationVersion?: string;
-  interactionScore?: number;
-  interactionReasons?: string;
-}) {
-  const title = status === "trusted"
-    ? source
-      ? `Trusted because token quality is high confidence; display metadata from ${source.replaceAll("+", " and ")}`
-      : "Trusted because token quality is high confidence"
-    : status === "spam"
-      ? "Explicitly reviewed as spam"
-      : status === "suspected_spam"
-        ? [
-          `Automated suspected-spam classification`,
-          reputationScore != null ? `token score ${reputationScore}: ${reputationReasons}` : null,
-          interactionScore != null ? `interaction score ${interactionScore}: ${interactionReasons}` : null,
-        ].filter(Boolean).join("; ")
-        : "No spam classification; token quality is not high confidence";
-  const versionedTitle = [title, reputationVersion].filter(Boolean).join("; ");
-  return <span className={`tokenStatus ${status}`} title={versionedTitle}>{status.replace("_", " ")}</span>;
+export function isSpamStatus(status: TokenStatus): boolean {
+  return status === "suspected_spam" || status === "spam";
 }
 
-function TokenQualityBadge({
-  quality,
-  sources,
-  sourceCount,
-  reason,
-  provenance,
-}: {
-  quality: TokenQuality;
-  sources?: string[];
-  sourceCount?: number;
-  reason?: string;
-  provenance?: string;
-}) {
-  const evidence = sources?.length ? sources.join(", ") : "no registry sources";
-  const title = [
-    `${quality.replace("_", " ")} token quality`,
-    sourceCount != null ? `${sourceCount} independent registry source${sourceCount === 1 ? "" : "s"}: ${evidence}` : null,
-    reason,
-    provenance,
-    "token-quality-v1",
-  ].filter(Boolean).join("; ");
-  return <span className={`tokenQuality ${quality}`} title={title}>{quality.replace("_", " ")}</span>;
+function SpamBadge({ status }: { status: TokenStatus }) {
+  if (!isSpamStatus(status)) {
+    return null;
+  }
+  return <span className="tokenStatus spam" title="Flagged by internal token reputation checks">Spam</span>;
 }
 
 const ACCOUNT_LABELS: Record<AccountType, string> = {
@@ -661,7 +613,6 @@ function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
       <thead>
         <tr>
           <th>Token</th>
-          <th>Status</th>
           <th>Transfers</th>
           <th>Indirect In / Out</th>
           <th>Senders | Recipients</th>
@@ -671,7 +622,7 @@ function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
       <tbody>
         {rows.length === 0 && (
           <tr>
-            <td className="tableEmpty" colSpan={6}>No token flows match</td>
+            <td className="tableEmpty" colSpan={5}>No token flows match</td>
           </tr>
         )}
         {rows.map((row) => (
@@ -684,20 +635,8 @@ function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
               >
                 {row.token_symbol}
               </EtherscanLink>
+              <SpamBadge status={row.token_status} />
             </td>
-            <td><TokenStatusBadge
-              status={row.token_status}
-              source={row.metadata_source}
-              reputationScore={row.token_reputation_score}
-              reputationReasons={row.token_reputation_reasons}
-              reputationVersion={row.token_reputation_version}
-            /><TokenQualityBadge
-              quality={row.token_quality}
-              sources={row.token_quality_sources}
-              sourceCount={row.token_quality_source_count}
-              reason={row.token_quality_reason}
-              provenance={row.token_quality_provenance}
-            /></td>
             <td>{row.transfer_count.toLocaleString("en-US")}</td>
             <td>
               <span className="flowIndicator" title={INDIRECT_TRANSFER_EXPLANATION}>
@@ -808,22 +747,7 @@ function EventList({
                 {event.token_symbol ?? shortAddress(event.token_address)}
               </EtherscanLink>
             </strong>
-            <TokenStatusBadge
-              status={event.token_status}
-              source={event.metadata_source}
-              reputationScore={event.token_reputation_score}
-              reputationReasons={event.token_reputation_reasons}
-              reputationVersion={event.token_reputation_version}
-              interactionScore={event.interaction_legitimacy_score}
-              interactionReasons={event.interaction_legitimacy_reasons}
-            />
-            <TokenQualityBadge
-              quality={event.token_quality}
-              sources={event.token_quality_sources}
-              sourceCount={event.token_quality_source_count}
-              reason={event.token_quality_reason}
-              provenance={event.token_quality_provenance}
-            />
+            <SpamBadge status={event.token_status} />
             <span>{new Date(event.block_timestamp).toLocaleString()}</span>
             <EtherscanLink
               className="transactionLink"
@@ -882,9 +806,8 @@ export function App() {
   const [graphInteractionLimit, setGraphInteractionLimit] = useState(DEFAULT_GRAPH_INTERACTION_LIMIT);
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
   const [graphTheaterMode, setGraphTheaterMode] = useState(false);
-  const [selectedStatuses, setSelectedStatuses] = useState<TokenStatus[]>(DEFAULT_TOKEN_STATUSES);
+  const [includeSpam, setIncludeSpam] = useState(false);
   const [selectedAccountFilters, setSelectedAccountFilters] = useState<AccountFilter[]>(ACCOUNT_FILTERS);
-  const [selectedQualities, setSelectedQualities] = useState<TokenQuality[]>(DEFAULT_TOKEN_QUALITIES);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("theme");
     if (saved === "light" || saved === "dark") {
@@ -909,8 +832,8 @@ export function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, selectedStatuses, selectedQualities, selectedAccountFilters]);
-  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [data, query, selectedStatuses, selectedQualities, selectedAccountFilters]);
+  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [data, query, includeSpam, selectedAccountFilters]);
+  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [data, query, includeSpam, selectedAccountFilters]);
 
   useEffect(() => {
     if (!graphTheaterMode) {
@@ -936,20 +859,17 @@ export function App() {
       return null;
     }
 
-    const statusVisible = (status: TokenSummary["token_status"]) =>
-      selectedStatuses.includes(status);
-    const qualityVisible = (quality: TokenQuality) => selectedQualities.includes(quality);
+    const statusVisible = (status: TokenSummary["token_status"]) => includeSpam || !isSpamStatus(status);
     const accountVisible = (accountType: AccountType, isSafe: boolean, isErc4337Account: boolean) =>
       accountMatches(accountType, isSafe, isErc4337Account, selectedAccountFilters);
     const visibleEvents = data.events.filter((event) =>
       statusVisible(event.token_status) &&
-      qualityVisible(event.token_quality) &&
       accountVisible(event.counterparty_account_type, event.counterparty_is_safe, event.counterparty_is_erc4337_account));
     const visibleTokens = data.summaries.tokens.filter((row) =>
-      statusVisible(row.token_status) && qualityVisible(row.token_quality) &&
+      statusVisible(row.token_status) &&
       accountVisible(row.counterparty_account_type, row.counterparty_is_safe, row.counterparty_is_erc4337_account));
     const visibleCounterparties = data.summaries.counterparties.filter((row) =>
-      statusVisible(row.token_status) && qualityVisible(row.token_quality) &&
+      statusVisible(row.token_status) &&
       accountVisible(row.account_type, row.is_safe, row.is_erc4337_account));
     const visibleCounterpartyNodeIds = new Set(
       data.graph.nodes
@@ -962,12 +882,11 @@ export function App() {
     );
     const visibleGraphEdges = data.graph.edges.filter((edge) =>
       statusVisible(edge.data.tokenStatus) &&
-      qualityVisible(edge.data.tokenQuality) &&
       visibleCounterpartyNodeIds.has(`counterparty:${edge.data.counterpartyAddress}`));
     const visibleNodeIds = new Set(visibleGraphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
     const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
     const visibleTimeline = data.timeline.filter((row) =>
-      statusVisible(row.token_status) && qualityVisible(row.token_quality) &&
+      statusVisible(row.token_status) &&
       accountVisible(row.counterparty_account_type, row.counterparty_is_safe, row.counterparty_is_erc4337_account));
     const visibleData = {
       ...data,
@@ -1003,27 +922,14 @@ export function App() {
         event.token_address,
         event.token_symbol,
         event.token_name,
-        event.token_status,
         event.metadata_availability,
-        event.token_quality,
-        event.token_quality_sources,
-        event.token_quality_reason,
-        event.token_quality_provenance,
-        event.token_reputation,
-        event.token_reputation_reasons,
-        event.token_reputation_version,
-        event.interaction_legitimacy,
-        event.interaction_legitimacy_reasons,
         event.metadata_source,
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const tokenMatches = (row: DisplayedTokenSummary) =>
-      [row.token_symbol, row.token_name, row.token_address, row.token_status, row.metadata_source,
-        row.metadata_availability, row.token_quality, row.token_quality_sources,
-        row.token_quality_reason, row.token_quality_provenance,
-        row.token_reputation, row.token_reputation_reasons, row.token_reputation_version]
+      [row.token_symbol, row.token_name, row.token_address, row.metadata_source, row.metadata_availability]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
@@ -1031,7 +937,7 @@ export function App() {
     const directlyMatchedTokens = visibleData.summaries.tokens.filter(tokenMatches);
     const directlyMatchedCounterparties = visibleData.summaries.counterparties.filter((row) =>
       [row.counterparty_address, row.account_type, row.code_state, row.safe_version,
-        row.erc4337_entrypoint_version, row.evidence_reason_codes, row.token_status, row.token_quality]
+        row.erc4337_entrypoint_version, row.evidence_reason_codes]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
 
@@ -1064,12 +970,8 @@ export function App() {
       interactionIds.has(edge.data.interactionId) ||
       tokenAddresses.has(edge.data.tokenAddress) ||
       counterpartyAddresses.has(edge.data.counterpartyAddress) ||
-      [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.tokenStatus,
-        edge.data.metadataAvailability, edge.data.tokenQuality, edge.data.tokenQualitySources,
-        edge.data.tokenQualityReason, edge.data.tokenQualityProvenance,
-        edge.data.metadataSource, edge.data.tokenReputation, edge.data.tokenReputationReasons,
-        edge.data.tokenReputationVersion,
-        edge.data.interactionLegitimacy, edge.data.interactionLegitimacyReasons, edge.data.target, edge.data.source]
+      [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.metadataAvailability,
+        edge.data.metadataSource, edge.data.target, edge.data.source]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
     const connectedNodeIds = new Set(graphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
@@ -1085,11 +987,11 @@ export function App() {
       timeline: visibleData.timeline.filter(
         (row) =>
           tokenAddresses.has(row.token_address) ||
-          [row.block_date, row.direction, row.token_address, row.token_symbol, row.token_quality]
+          [row.block_date, row.direction, row.token_address, row.token_symbol]
             .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
       ),
     };
-  }, [data, query, selectedStatuses, selectedQualities, selectedAccountFilters]);
+  }, [data, query, includeSpam, selectedAccountFilters]);
 
   const rankedCounterparties = useMemo(
     () => filtered ? aggregateCounterparties(filtered.summaries.counterparties) : [],
@@ -1101,8 +1003,8 @@ export function App() {
       return null;
     }
     if (!query.trim()) {
-      const statusKey = TOKEN_STATUSES.filter((status) => selectedStatuses.includes(status)).join("+");
-      const qualityKey = TOKEN_QUALITIES.filter((quality) => selectedQualities.includes(quality)).join("+");
+      const statusKey = (includeSpam ? TOKEN_STATUSES : NON_SPAM_TOKEN_STATUSES).join("+");
+      const qualityKey = TOKEN_QUALITIES.join("+");
       const accountKey = ACCOUNT_FILTERS.filter((account) => selectedAccountFilters.includes(account)).join("+");
       const statusMetrics = data.metadata.status_quality_account_counts[`${statusKey}|${qualityKey}|${accountKey}`] ?? {
         transfer_count: 0,
@@ -1119,7 +1021,7 @@ export function App() {
     const tokenCount = new Set(filtered.events.map((event) => event.token_address)).size;
     const counterpartyCount = new Set(filtered.events.map((event) => event.counterparty_address)).size;
     return { transferCount, tokenCount, counterpartyCount };
-  }, [data, filtered, query, selectedStatuses, selectedQualities, selectedAccountFilters]);
+  }, [data, filtered, query, includeSpam, selectedAccountFilters]);
 
   const displayedGraph = useMemo(() => {
     if (!filtered) {
@@ -1253,26 +1155,15 @@ export function App() {
           </div>
         </div>
         <div className="toolbar">
-          <details className="statusFilter">
-            <summary>
-              Status ({selectedStatuses.length})
-              <ChevronDown size={14} aria-hidden="true" />
-            </summary>
-            <div className="statusMenu" role="group" aria-label="Token status filter">
-              {TOKEN_STATUSES.map((status) => (
-                <label key={status}>
-                  <input
-                    type="checkbox"
-                    checked={selectedStatuses.includes(status)}
-                    onChange={(event) => setSelectedStatuses((current) => event.target.checked
-                      ? [...current.filter((value) => value !== status), status]
-                      : current.filter((value) => value !== status))}
-                  />
-                  <TokenStatusBadge status={status} source={null} />
-                </label>
-              ))}
-            </div>
-          </details>
+          <label className="spamToggle">
+            <input
+              type="checkbox"
+              checked={includeSpam}
+              onChange={(event) => setIncludeSpam(event.target.checked)}
+            />
+            <span>Include spam</span>
+            {!includeSpam && <small>{data.metadata.spam_transfer_count.toLocaleString("en-US")} hidden</small>}
+          </label>
           <details className="statusFilter accountFilter">
             <summary title="Filters the graph, counterparty ranking, and recent events by pinned-block account evidence">
               Account evidence ({selectedAccountFilters.length})
@@ -1292,26 +1183,6 @@ export function App() {
                 </label>
               ))}
               <small>Applies to every view. Safe and ERC-4337 evidence can overlap without double counting.</small>
-            </div>
-          </details>
-          <details className="statusFilter">
-            <summary>
-              Quality ({selectedQualities.length})
-              <ChevronDown size={14} aria-hidden="true" />
-            </summary>
-            <div className="statusMenu" role="group" aria-label="Token quality filter">
-              {TOKEN_QUALITIES.map((quality) => (
-                <label key={quality}>
-                  <input
-                    type="checkbox"
-                    checked={selectedQualities.includes(quality)}
-                    onChange={(event) => setSelectedQualities((current) => event.target.checked
-                      ? [...current.filter((value) => value !== quality), quality]
-                      : current.filter((value) => value !== quality))}
-                  />
-                  <TokenQualityBadge quality={quality} />
-                </label>
-              ))}
             </div>
           </details>
           <label className="searchbox">
