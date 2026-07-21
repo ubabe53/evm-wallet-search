@@ -21,8 +21,7 @@ dbt + offline enrichment inputs
 DuckDB (complete local analytics artifact)
       ├──────────── intended local product ────────────┐
       │                                                ▼
-      │                                      local read-only API
-      │                                      (not implemented)
+      │                                      local read-only FastAPI
       │                                                │
       │                                                ▼
       │                                         React dashboard
@@ -38,9 +37,10 @@ The current frontend uses the JSON path. The target local application replaces t
 | --- | --- | --- | --- |
 | Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
-| Orchestration and enrichment | `scripts/` | Run dbt/indexer commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
+| Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
 | Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics for the local API | A checked-in artifact or a browser-delivered database |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
+| Local API | `server/` | Validate filters and execute exact, bounded, read-only queries against the live artifact | A writer, ingestion service, or fixture-data server |
 | Transitional/demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON to the current frontend and fixture demo | The long-term complete-history serving architecture |
 | Dashboard | `src/` | Present graph, summary, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
 | Tests | `tests/`, `analytics/tests/`, `analytics/models/unit_tests.yml` | Enforce UI, export, enrichment, grain, and semantic contracts | A substitute for documenting system intent and boundaries |
@@ -75,7 +75,7 @@ Token metadata, registry membership, RPC responses, spam reputation, bytecode ob
 
 ### Delivery boundary
 
-Complete local counts live in DuckDB and, once implemented, are returned by the local API with filters, bounds, limits, and provenance. Static JSON is a bounded fixture demo and must never imply complete live-wallet history.
+Complete local counts live in DuckDB and are returned by the local API with filters, bounds, limits, and provenance. Static JSON is a bounded fixture demo and must never imply complete live-wallet history.
 
 ## Stable invariants
 
@@ -96,7 +96,7 @@ Detailed field grains and tests are in `docs/data-model.md`.
 ### Local analytics path
 
 ```text
-HyperIndex Postgres → dbt live source → DuckDB → local API (planned) → React
+HyperIndex Postgres → dbt live source → `live.duckdb` → FastAPI → React
 ```
 
 The indexer and live analytics are explicit operations. Builds must not silently start indexing, backfills, registry refreshes, or RPC enrichment.
@@ -109,25 +109,23 @@ checked-in fixtures → dbt → DuckDB → bounded JSON exporter → React/stati
 
 This path is deterministic and suitable for CI and GitHub Pages. It is not proof of live-source integration behavior. Fixture builds write only `analytics/artifacts/fixture.duckdb` and deliberately remove the HyperIndex DSN from dbt's environment. Live builds write only `analytics/artifacts/live.duckdb`; fixture validation cannot overwrite that cache.
 
-## Intended local API boundary
+## Local API boundary
 
-The API is not implemented. When added, it should:
+The loopback-only FastAPI service:
 
 - own read-only DuckDB connections;
-- expose typed, bounded, paginated queries;
+- validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, enrichment coverage, complete matching counts, and returned limits;
 - expose `include_spam` as the public reputation control while retaining detailed evidence internally;
 - keep secrets and database paths server-side.
 
-Adding the API requires updating this file, `docs/data-model.md`, operations documentation, frontend client types, and focused server/client contract tests together.
+The API opens one read-only DuckDB connection per request rather than sharing a thread-unsafe global connection. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The remaining implementation gap is migrating React from static JSON to these endpoints.
 
 ## Known implementation gaps
 
-- The local DuckDB API does not exist yet.
 - React still loads generated JSON.
 - The static exporter retains legacy candidate-union machinery that should not expand into the local serving model.
-- Fixture and live dbt builds share the DuckDB output path.
 - The wildcard `Transfer` source does not yet disambiguate ERC-20 from ERC-721-like contracts that emit the identical signature.
 - Docker packaging is an approved direction, but service topology, volumes, health checks, secrets, and startup order are not designed or implemented.
 

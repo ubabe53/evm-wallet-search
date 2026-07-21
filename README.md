@@ -20,6 +20,7 @@ The repository is currently migrating from a static-JSON frontend to that local 
 bun install
 bun run indexer:dev
 bun run analytics:build:hyperindex
+bun run api:dev
 bun run analytics:build:fixture
 bun run labels:sync
 bun run labels:enrich --limit 100
@@ -29,7 +30,7 @@ bun run test
 
 `analytics:build:hyperindex` is the local-product analytics path. It reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN` and materializes complete marts in `analytics/artifacts/live.duckdb`; see `docs/operations.md`.
 
-The local API and its development command have not been implemented yet. Until that migration lands, `bun run dashboard:dev` still reads generated files from `public/data/`; do not treat that transitional behavior as the target architecture.
+`bun run api:dev` starts a loopback-only FastAPI service on `http://127.0.0.1:8000`. It opens `analytics/artifacts/live.duckdb` read-only, requires HyperIndex provenance, validates filters, performs exact calculations across every matching row, and returns bounded rankings or cursor-paginated event pages with complete matching counts. FastAPI supplies query validation and OpenAPI at `/docs`; the added server dependency is intentionally limited to FastAPI and Uvicorn rather than a second data or persistence layer. Until the React migration lands, `bun run dashboard:dev` still reads generated files from `public/data/`.
 
 `analytics:build:fixture` (also available as the compatibility alias `analytics:build`), `export:dashboard`, and the production Vite build form the deterministic fixture-demo path used by CI and, eventually, GitHub Pages. Fixture dbt commands write `analytics/artifacts/fixture.duckdb`, clear the live Postgres DSN from their child environment, and never overwrite `analytics/artifacts/live.duckdb`. Only the generated `public/data` JSON belongs to the static demo.
 
@@ -39,6 +40,7 @@ The local API and its development command have not been implemented yet. Until t
 
 - `indexer/`: Envio HyperIndex config, schema, and handlers for the ERC-20-intended `Transfer` signature.
 - `analytics/`: dbt project plus isolated `artifacts/live.duckdb` and `artifacts/fixture.duckdb` outputs.
+- `server/`: loopback-only read API for exact, bounded queries over the live DuckDB marts.
 - `src/`: React dashboard; currently static-data-backed and pending migration to the local API client.
 - `scripts/`: dbt orchestration, enrichment, and the fixture-demo JSON exporter.
 - `config.example.yaml`: shared Envio, Postgres, and Ethereum RPC configuration template; copy it to the git-ignored `config.yaml` for local values.

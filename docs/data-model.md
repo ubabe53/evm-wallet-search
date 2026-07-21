@@ -129,6 +129,19 @@ One row per configured wallet containing chain, fixture-versus-HyperIndex source
 
 The fixture-demo exporter enriches this row in `meta.json` with returned counts, limits, and sampling state. The demo metadata must identify fixture provenance and must not imply that its counts describe complete HyperIndex history.
 
+## Local API contract
+
+The `/api/v1` service reads only `analytics/artifacts/live.duckdb` in read-only mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. Common `include_spam`, repeated inclusive `account`, and optional literal `q` predicates are applied to `wallet_events` before exact calculations. The service exposes:
+
+- `metadata`: one provenance object for the configured wallet, including DuckDB generation time, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema are not an indexer checkpoint or a block-continuity claim;
+- `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
+- `events`: one row per immutable `wallet_events` row, ordered newest-first by block/transaction/log position and traversed with an opaque keyset cursor;
+- `tokens`: one exact aggregate per emitting token contract, ranked after filtering and limited only after aggregation;
+- `counterparties`: one exact aggregate per eligible address, with the same zero/self/emitting-token exclusions as the mart ranking, ranked after filtering;
+- `graph`: one exact wallet-counterparty-token-direction interaction per row, ranked after filtering while retaining the counterparty's complete cross-token activity count for stable node sizing.
+
+Event responses distinguish `complete_matching_count` from `returned_count`, `limit`, `next_cursor`, and `is_paginated`. Ranked responses distinguish the complete matching item count from the returned top-N and `is_truncated`. `is_sampled` is always false because no matching source rows are randomly or permanently discarded. A top-N graph or ranking is a bounded presentation over a complete calculation, not a sample.
+
 The current transitional exporter also records exact transfer/token/counterparty statistics for all 6,615 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 63 non-empty inclusive account selections. That full-history candidate-union contract is legacy behavior and is not the target serving model. The local API should compute only the requested selection against DuckDB; the static exporter should be reduced to the deterministic fixture demo.
 
 ## Tests

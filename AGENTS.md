@@ -25,8 +25,8 @@ Treat documentation as part of the implementation. If code and documentation dis
 - One configured wallet, currently the pinned address for `vitalik.eth`.
 - One `Transfer(address,address,uint256)` event signature, intended for ERC-20 analytics. ERC-721 uses the same signature, and the current wildcard indexer does not disambiguate standards; never claim every captured row is proven ERC-20.
 - HyperIndex Postgres is ingestion persistence; `analytics/artifacts/live.duckdb` is the complete local analytics artifact. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
-- The intended local product is React → local read-only API → DuckDB. The API is not implemented yet.
-- The current React app still reads generated JSON as a transitional implementation.
+- The local read-only FastAPI service in `server/` queries only `analytics/artifacts/live.duckdb`; it must reject fixture provenance.
+- The current React app still reads generated JSON as a transitional implementation and has not yet migrated to the API client.
 - Static JSON is only the bounded fixture-backed GitHub Pages demo path.
 
 Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, arbitrary wallet lookup, USD prices, and an implemented Docker stack are outside the current MVP. Adding one requires an explicit architecture and data-contract decision.
@@ -93,6 +93,7 @@ Do not update documentation mechanically when behavior did not change. Do block 
 - React/TypeScript: `bunx tsc --noEmit` and `bun run test:js`
 - Dashboard presentation/build: `bun run dashboard:build`
 - Python/enrichment: `bun run test:labels`
+- Local API: `bun run test:api`
 - dbt models or seeds: `bun run analytics:build`. Use `bun run test:analytics` only after the relevant models have been built when a separate dbt-test pass is useful; it does not materialize changed SQL.
 - Fixture export contract: `bun run export:dashboard` before export-shape tests
 - Cross-layer changes: `bun run test`
@@ -117,6 +118,7 @@ bun run labels:sync
 bun run labels:enrich --limit 100
 bun run addresses:enrich --limit 500
 bun run export:dashboard
+bun run api:dev
 bun run dashboard:dev
 bun run dashboard:build
 bun run test

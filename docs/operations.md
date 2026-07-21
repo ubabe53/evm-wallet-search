@@ -10,7 +10,15 @@ bun run analytics:build:hyperindex
 
 This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads the already indexed HyperIndex entity table, and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
 
-The DuckDB-backed local API and its launch command are not implemented yet. The current `dashboard:dev` command still serves generated JSON and therefore does not represent the target local runtime. Fixture and live dbt artifacts are isolated, so deterministic validation cannot replace the live database.
+Start the read-only API after the live build:
+
+```sh
+bun run api:dev
+```
+
+The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. Stop the API before rebuilding `live.duckdb`; DuckDB permits multiple read-only processes, but the dbt writer and API reader must not access the same file concurrently. Restart the API after a successful live build so every request uses the new snapshot.
+
+The current `dashboard:dev` command still serves generated JSON until the frontend client migration is complete. Fixture and live dbt artifacts are isolated, so deterministic validation cannot replace the live database.
 
 Copy `config.example.yaml` to the git-ignored `config.yaml` for one local configuration file, or use the variable names from `.env.example`. Shell environment values take precedence over YAML. Envio and dbt wrappers load the shared configuration without printing secrets.
 
@@ -142,7 +150,7 @@ bun run analytics:build:hyperindex
 
 dbt-duckdb attaches that database read-only as the `hyperindex` catalog. The wrapper stops with a clear error when live mode is requested without the DSN. Confirm the mapped local port with `docker port envio-postgres 5432`; this project currently maps it to `5433`. Store the URI under `analytics.hyperindex_postgres_dsn` in ignored `config.yaml` to avoid exporting it in every shell.
 
-The resulting `analytics/artifacts/live.duckdb` is the local application's query source. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The pending API layer will open the live database read-only for bounded, filtered, paginated queries.
+The resulting `analytics/artifacts/live.duckdb` is the local application's query source. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API opens one read-only DuckDB connection per request, applies filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
 
 ## Fixture Demo Export
 
