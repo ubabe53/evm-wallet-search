@@ -69,7 +69,7 @@ An ERC-20 `Transfer` log establishes that a contract emitted the event with spec
 
 ### Enrichment evidence
 
-Token metadata, registry membership, RPC responses, ENS, spam reputation, bytecode observations, Safe evidence, and ERC-4337 observations are sourced and time-varying. Every enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification.
+Token metadata, registry membership, RPC responses, spam reputation, bytecode observations, Safe evidence, and ERC-4337 observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. The current `vitalik.eth` value is a pinned configured label from `analytics/seeds/wallets.csv`, not evidence of a live ENS resolution; a future resolution workflow must add source and observation provenance before making that claim.
 
 ### Delivery boundary
 

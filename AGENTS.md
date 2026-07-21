@@ -38,7 +38,7 @@ Native ETH transfers, traces, calls, approvals, NFTs, arbitrary wallet lookup, U
 - Store raw token quantities as arbitrary-precision integers or exact strings. Never aggregate quantities across token contracts.
 - Define direction relative to the configured wallet and keep self-transfer and zero-address policies explicit.
 - A `Transfer` log proves emission, not intent, economic ownership, transaction initiation, standards compliance, or historical account type.
-- Symbols, names, ENS, reputation, spam status, and account type are sourced, time-varying enrichment—not identity facts.
+- Token symbols/names, reputation, spam status, and account type are sourced, time-varying enrichment—not identity facts. The configured `vitalik.eth` value is a pinned project label, not a live ENS-resolution claim; any future ENS resolution must record its source and observation time/block.
 - Preserve detailed token reputation evidence internally. The dashboard exposes only a default-off `Include spam` toggle; no spam flag is not proof of trust.
 - `eoa_candidate` means no bytecode was observed at a pinned block. It does not prove personhood, control, permanence, or EOA history.
 - Distinguish complete DuckDB/API results from bounded demo exports. Always carry source, block/time boundaries, generation time, limits, and sampling state.
@@ -93,7 +93,7 @@ Do not update documentation mechanically when behavior did not change. Do block 
 - React/TypeScript: `bunx tsc --noEmit` and `bun run test:js`
 - Dashboard presentation/build: `bun run dashboard:build`
 - Python/enrichment: `bun run test:labels`
-- dbt models/seeds/tests: `bun run analytics:build` and/or `bun run test:analytics`
+- dbt models or seeds: `bun run analytics:build`. Use `bun run test:analytics` only after the relevant models have been built when a separate dbt-test pass is useful; it does not materialize changed SQL.
 - Fixture export contract: `bun run export:dashboard` before export-shape tests
 - Cross-layer changes: `bun run test`
 

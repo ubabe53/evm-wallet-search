@@ -69,7 +69,7 @@ Install the repository-managed Git hooks once after cloning:
 bun run hooks:install
 ```
 
-Every commit with staged changes then starts a fresh, ephemeral Codex session in a read-only sandbox. It reviews only `git diff --cached`, returns a schema-validated result, and blocks the commit only for concrete correctness, security, data-integrity, regression, portability, or materially missing-test errors. The hook requires authenticated `codex` and `bun` commands and may take longer than deterministic checks because it calls an agent.
+Every commit with staged changes then starts a fresh, ephemeral Codex session in a read-only sandbox. It reviews only `git diff --cached`, returns a schema-validated result, and blocks the commit only for concrete correctness, security, data-integrity, regression, portability, materially missing-test, or material documentation-drift errors. Documentation drift is blocking only when staged behavior or architecture changes leave the owning context missing, stale, or contradictory; behavior-preserving implementation details do not require mechanical documentation edits. The hook requires authenticated `codex` and `bun` commands and may take longer than deterministic checks because it calls an agent.
 
 Run the same gate without committing with `bun run review:staged`. For an exceptional offline or recovery commit, bypass it once with `SKIP_CODEX_REVIEW=1 git commit ...`; GitHub CI still remains the shared enforcement layer.
 
