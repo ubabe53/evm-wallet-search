@@ -19,8 +19,17 @@ def ensure_dependencies() -> None:
     subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS)], check=True)
 
 
+def prepare_import_path() -> None:
+    """Make the repository package importable when this script is executed by path."""
+
+    root = str(ROOT)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+
+
 def main() -> None:
     ensure_dependencies()
+    prepare_import_path()
     import uvicorn
 
     uvicorn.run("server.app:app", host="127.0.0.1", port=8000, reload=False)

@@ -27,7 +27,7 @@ Treat documentation as part of the implementation. If code and documentation dis
 - HyperIndex Postgres is ingestion persistence; `analytics/artifacts/live.duckdb` is the complete local analytics artifact. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
 - The local read-only FastAPI service in `server/` queries only `analytics/artifacts/live.duckdb`; it must reject fixture provenance.
 - The React app has two explicit build-time modes: local development queries the live API, while the fixture-demo build reads generated JSON. Do not add a runtime switch that can mix them.
-- Static JSON is only the bounded fixture-backed GitHub Pages demo path.
+- Static JSON is only the bounded fixture-backed GitHub Pages demo path. Account-type evidence has no checked-in fixture; fixture builds expose an empty typed relation.
 
 Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, arbitrary wallet lookup, USD prices, and an implemented Docker stack are outside the current MVP. Adding one requires an explicit architecture and data-contract decision.
 
@@ -39,8 +39,9 @@ Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, 
 - Define direction relative to the configured wallet and keep self-transfer and zero-address policies explicit.
 - A `Transfer` log proves emission, not intent, economic ownership, transaction initiation, standards compliance, or historical account type.
 - Token symbols/names, reputation, spam status, and account type are sourced, time-varying enrichment—not identity facts. The configured `vitalik.eth` value is a pinned project label, not a live ENS-resolution claim; any future ENS resolution must record its source and observation time/block.
-- Preserve detailed token reputation evidence internally. The dashboard exposes only a default-off `Include spam` toggle; no spam flag is not proof of trust.
+- Preserve detailed token reputation evidence internally. The dashboard exposes only `All`, `Recognized`, and `Other`: recognition means exact-address registry membership or a manual local override and is not a safety claim.
 - `eoa_candidate` means no bytecode was observed at a pinned block. It does not prove personhood, control, permanence, or EOA history.
+- Live account evidence is an ignored local DuckDB cache. Successful bytecode observations are not automatically refreshed; failures remain retryable. Do not reintroduce Safe/ERC-4337 RPC collection or a generated account-evidence CSV without a new architecture decision.
 - Distinguish complete DuckDB/API results from bounded demo exports. Always carry source, block/time boundaries, generation time, limits, and sampling state.
 
 ## Working method

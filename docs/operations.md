@@ -10,13 +10,13 @@ bun run analytics:build:hyperindex
 
 This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads the already indexed HyperIndex entity table, and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
 
-Start the read-only API after the live build:
+Start the local API after the live build:
 
 ```sh
 bun run api:dev
 ```
 
-The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. Stop the API before rebuilding `live.duckdb`; DuckDB permits multiple read-only processes, but the dbt writer and API reader must not access the same file concurrently. Restart the API and reload the dashboard after a successful live build so every request and the browser's snapshot metadata use the new artifact.
+The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. It owns short-lived DuckDB connections and may write only `app.token_recognition_overrides`. Stop the API before rebuilding `live.duckdb`; the dbt writer and application process must not access the same file concurrently. Normal in-place builds preserve overrides because dbt does not own the `app` schema. Deleting or replacing `live.duckdb` removes them. Restart the API and reload the dashboard after a successful live build so every request and the browser's snapshot metadata use the new artifact.
 
 In a second terminal, run `bun run dashboard:dev`. Vite selects the live API adapter and proxies `/api` to `127.0.0.1:8000`; it does not load `public/data`. Fixture and live dbt artifacts are isolated, so deterministic validation cannot replace the live database.
 
@@ -31,7 +31,9 @@ ethereum:
   rpc_url: ""
   public_rpc_url: "https://ethereum-rpc.publicnode.com"
   account_evidence:
-    erc4337_start_block: ""
+    batch_size: 100
+    max_retries: 2
+    fallback_confirmations: 64
 ```
 
 ## Fixture Demo Mode
@@ -42,7 +44,7 @@ Fixture mode exists for deterministic tests and the eventual GitHub Pages portfo
 bun run analytics:build:fixture
 ```
 
-The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. Their separate observed-at account-evidence fixture covers all six primary types and includes one address that is both verified Safe and observed through ERC-4337. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge. After changing fixture columns, use `python3 scripts/run_dbt.py build --full-refresh` once so dbt recreates the fixture seed schema.
+The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. There is no account-evidence fixture: the fixture build uses an empty typed relation, so it never invents address classifications. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge.
 
 `bun run analytics:build` remains an alias for `analytics:build:fixture` so existing CI and contributor commands stay deterministic. The exporter reads only the fixture database and may overwrite only the ignored files under `public/data/`.
 
@@ -51,18 +53,18 @@ The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixtu
 Ordinary analytics builds use the checked-in registry without internet access. Refresh it explicitly with:
 
 ```sh
-bun run labels:sync
+bun run tokens:refresh
 ```
 
-The command validates Ethereum addresses and decimals, fails on cross-source decimal conflicts, and rewrites `analytics/seeds/token_metadata.csv` plus `token_metadata_manifest.json`. Naming precedence is Trust Wallet, Uniswap, then CoinGecko; manual entries in `token_label_overrides.csv` override every generated source.
+`labels:sync` remains an alias. The command downloads Trust Wallet, Uniswap, CoinGecko, and online Coinbase Exchange Ethereum contract entries; validates exact Ethereum addresses and available token decimals; fails on cross-source decimal conflicts; and rewrites `analytics/seeds/token_metadata.csv` plus `token_metadata_manifest.json`. Naming precedence is Trust Wallet, Uniswap, CoinGecko, then Coinbase. Coinbase trading precision is not used as token decimals, so a Coinbase-only row may have unknown decimals. Manual entries in `token_label_overrides.csv` override every generated source.
 
-Each reviewed manual `trusted` approval or `spam` entry must include a reason and evidence URL. Suspected spam is automated rather than manually assigned. Unknown tokens should be left unlisted and will receive `unknown` quality plus `unverified` status automatically; CoinGecko absence never implies spam. After a seed schema change, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
+Each reviewed manual `trusted` approval or `spam` entry must include a reason and evidence URL. Any exact-address source match is automatically `recognized`; unmatched tokens are `other`. Detailed quality and spam evidence remains internal and independent. After a seed schema change, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
 
 ## Spam Classification
 
 Classification runs during every dbt build and makes no network calls. Inspect contract-level evidence in `int_token_reputation`, wallet-token behavior in `int_wallet_token_interactions`, and the effective event status in `wallet_events`. Scores, reason codes, provenance, and classifier versions remain available internally in DuckDB and the typed transitional payload; the dashboard does not expose that evidence.
 
-The dashboard has one `Include spam` toggle, off by default. Off excludes both automated `suspected_spam` and reviewed `spam`; on includes both under one user-facing `Spam` label. It does not show a trusted label or a quality filter. To change a threshold or reason rule, update the corresponding model, its version string, dbt tests, and `docs/architecture.md` in the same change.
+The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only. Internal reputation and quality evidence are not shown. To change a classifier rule, update the corresponding model, its version string, dbt tests, and `docs/architecture.md` in the same change.
 
 ## RPC Metadata Enrichment
 
@@ -83,51 +85,37 @@ Normal mode skips every attempted contract and advances to the next batch. Retry
 
 ## Counterparty Account Evidence
 
-Collect pinned account evidence for the next 500 high-activity counterparties:
+Collect pinned code evidence for every unresolved event counterparty:
 
 ```sh
-bun run addresses:enrich --limit 500
+bun run addresses:enrich
 ```
 
-The command ranks eligible counterparties by complete captured Transfer-signature event count, verifies Ethereum mainnet, pins one block and timestamp, and writes `analytics/seeds/counterparty_code_metadata.csv` atomically. Because the source does not yet disambiguate token standards, this is not a proven ERC-20-only activity ranking. It batches `eth_getCode`, Safe storage/interface reads, and filtered `UserOperationEvent` lookups against the versioned canonical EntryPoints in `account_evidence_manifest.json`. The manifest pins each Ethereum deployment block and transaction. The log scan clamps each EntryPoint to its deployment block, groups sender topics, and splits the remaining range into bounded chunks instead of issuing one full-history request per address. It uses the same `ETHEREUM_RPC_URL` / `config.yaml` / public-fallback precedence as token enrichment.
+The command selects distinct `wallet_events.counterparty_address` values, excluding the configured wallet and zero address. It verifies Ethereum mainnet, resolves one concrete `safe` block, and passes that block number to every `eth_getCode`. If the provider does not support the `safe` tag, it pins `latest` minus the configured confirmation buffer. Block number, hash, timestamp, finality policy, and fetch time are stored with every result.
 
-By default, ERC-4337 evidence coverage begins at the earliest indexed Transfer-signature event block and ends at the pinned observation block. Override the lower bound only when the intended coverage is explicit:
+The ignored `analytics/artifacts/account_evidence.duckdb` cache is checkpointed after every JSON-RPC batch. Successful rows are never selected or overwritten automatically; failed or malformed results stay `unknown` and are retried by a later invocation. The default run has no address limit. `--limit` exists only for an intentional partial run.
 
-```sh
-bun run addresses:enrich --limit 500 --erc4337-start-block 17000000
-```
-
-The equivalent configuration is `ethereum.account_evidence.erc4337_start_block` or `ACCOUNT_EVIDENCE_START_BLOCK`. The requested lower bound is distinct from per-EntryPoint effective coverage because an EntryPoint cannot be checked before its deployment. A positive result proves only that the address appeared as a canonical EntryPoint event sender in a recorded successful range. A negative result is bounded by merged effective coverage and fetch status; it never silently includes a failed chunk.
-
-The default work unit is 100,000 blocks by 50 sender topics with two retries per failed chunk. Providers with smaller limits can override these values without changing the evidence semantics:
+The default work unit is 100 `eth_getCode` calls with two retries for unresolved calls. Providers with smaller limits can override these values without changing the evidence semantics:
 
 ```sh
 bun run addresses:enrich --limit 500 \
-  --erc4337-block-chunk-size 10000 \
-  --erc4337-address-batch-size 25 \
-  --erc4337-max-retries 3
+  --batch-size 50 \
+  --max-retries 3 \
+  --fallback-confirmations 96
 ```
 
-Use `ethereum.account_evidence.erc4337_block_chunk_size`, `erc4337_address_batch_size`, and `erc4337_max_retries`, or the corresponding `ACCOUNT_EVIDENCE_BLOCK_CHUNK_SIZE`, `ACCOUNT_EVIDENCE_ADDRESS_BATCH_SIZE`, and `ACCOUNT_EVIDENCE_MAX_RETRIES` environment variables. Successful chunks are retained across in-process retries. If a chunk still fails, every affected address records that exact EntryPoint/range in `erc4337_failed_ranges`, retains the other successful ranges in `erc4337_effective_coverage`, and receives `fetch_status = partial`. A failed code lookup is also `partial` when successful EntryPoint coverage or a positive sender event remains usable; `failed` is reserved for no usable source evidence.
+Use `ethereum.account_evidence.batch_size`, `max_retries`, and `fallback_confirmations`, or `ACCOUNT_EVIDENCE_BATCH_SIZE`, `ACCOUNT_EVIDENCE_MAX_RETRIES`, and `ACCOUNT_EVIDENCE_FALLBACK_CONFIRMATIONS`. Batching reduces HTTP overhead but does not remove the underlying state lookups. Very large batches can exceed provider payload or timeout limits.
 
-```sh
-bun run addresses:enrich --limit 500 --retry-failed
-bun run addresses:enrich --limit 500 --refresh
-```
-
-Normal mode advances to unattempted addresses, retry mode retries `failed` and `partial` checks, and refresh mode rechecks ranked addresses at a new pinned block. Run the live analytics build after enrichment, then restart the local API so new requests use that snapshot. A seed-schema migration requires `python3 scripts/run_dbt.py build --full-refresh` once for an existing DuckDB file.
-
-Rows migrated from the earlier code-only snapshot are retained with `coverage_scope = legacy_code_snapshot`, explicit `safe_not_checked` / `erc4337_not_checked` reasons, and `fetch_status = partial`. They preserve the prior pinned code observation without implying that the newer Safe or EntryPoint evidence was collected. Refresh only the desired ranked batch to replace them; this migration does not perform a full live enrichment.
+Run `bun run analytics:build:hyperindex` after enrichment so dbt reads the cache and rebuilds the live marts, then restart the local API. Ordinary dbt and fixture commands never invoke the RPC collector.
 
 Interpretation rules are intentionally strict:
 
 - `eoa_candidate` means no code was observed at the pinned block; it does not prove EOA status, control, personhood, or permanence.
-- `eip7702_delegated` requires exact `0xef0100 || 20-byte target` code.
-- `safe` requires an official mainnet singleton/deployment match and consistent `getOwners()` / `getThreshold()` results. Interface-only matches remain contract evidence.
-- `erc4337_account` requires positive `UserOperationEvent.sender` evidence from a checked-in versioned canonical EntryPoint.
-- Safe and ERC-4337 remain independent flags even though one primary account type is selected by precedence.
+- Exact `0xef0100 || 20-byte target` is retained internally as `eip7702_delegated` but remains an EOA candidate in the public binary presentation.
+- Any other nonempty code is `contract`.
+- Safe and ERC-4337-specific collection are not performed. Deployed instances with bytecode are contracts; undeployed counterfactual addresses are an acknowledged no-code limitation.
 
-This is an explicit, potentially RPC-intensive ranked batch operation. Fixture builds and ordinary dbt runs never invoke it, and this change does not perform a full live refresh.
+This is an explicit, potentially RPC-intensive operation. Fixture builds and ordinary dbt runs never invoke it.
 
 ## HyperIndex Mode
 
@@ -150,7 +138,7 @@ bun run analytics:build:hyperindex
 
 dbt-duckdb attaches that database read-only as the `hyperindex` catalog. The wrapper stops with a clear error when live mode is requested without the DSN. Confirm the mapped local port with `docker port envio-postgres 5432`; this project currently maps it to `5433`. Store the URI under `analytics.hyperindex_postgres_dsn` in ignored `config.yaml` to avoid exporting it in every shell.
 
-The resulting `analytics/artifacts/live.duckdb` is the local application's query source. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API opens one read-only DuckDB connection per request, applies filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
+The resulting `analytics/artifacts/live.duckdb` is the local application's query source and contains the isolated application-owned recognition override table. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API opens one short-lived DuckDB connection per request, applies overrides and filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
 
 ## Fixture Demo Export
 
@@ -168,7 +156,7 @@ Run this only after the fixture build. It creates:
 
 These files are the static GitHub Pages demonstration contract. They must remain bounded, identify fixture provenance, and never claim to be complete HyperIndex history. Files are replaced atomically so readers never observe a partially written individual JSON file.
 
-The exporter still contains legacy candidate-union logic across 6,615 composed filter selections. Do not use that behavior for live local data or expand it; the live dashboard now computes only the requested selection through DuckDB-backed API endpoints.
+The exporter still contains legacy candidate-union logic across 315 composed filter selections. Do not use that behavior for live local data or expand it; the live dashboard now computes only the requested selection through DuckDB-backed API endpoints.
 
 `bun run dashboard:build` always produces the fixture/static build used by CI and Pages. To inspect that exact adapter locally, run `bun run dashboard:dev:fixture`. Do not use the fixture command to validate the live API path.
 

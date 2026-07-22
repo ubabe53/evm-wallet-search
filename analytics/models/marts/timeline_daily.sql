@@ -5,6 +5,10 @@ select
   token_address,
   coalesce(token_symbol, substr(token_address, 1, 10)) as token_symbol,
   token_status,
+  recognition_status,
+  recognition_reason,
+  recognition_source,
+  recognition_version,
   metadata_availability,
   token_quality,
   token_quality_sources,
@@ -22,8 +26,6 @@ select
   interaction_legitimacy_score,
   interaction_legitimacy_reasons,
   counterparty_account_type,
-  counterparty_is_safe,
-  counterparty_is_erc4337_account,
   direction,
   count(*) as transfer_count,
   case
@@ -33,9 +35,10 @@ select
   sum(cast(value_raw as bignum)) as value_raw_sum
 from {{ ref('wallet_events') }}
 group by wallet_id, wallet_address, block_date, token_address, token_symbol,
-  token_status, metadata_availability, token_quality, token_quality_sources,
+  token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
+  metadata_availability, token_quality, token_quality_sources,
   token_quality_source_count, token_quality_reason, token_quality_provenance,
   token_quality_version, metadata_source, metadata_source_url, token_reputation,
   token_reputation_score, token_reputation_reasons, token_reputation_version, interaction_legitimacy,
   interaction_legitimacy_score, interaction_legitimacy_reasons,
-  counterparty_account_type, counterparty_is_safe, counterparty_is_erc4337_account, direction
+  counterparty_account_type, direction

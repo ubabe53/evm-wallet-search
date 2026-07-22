@@ -10,6 +10,7 @@
     "analytics:build:fixture": "python3 scripts/run_dbt.py build",
     "analytics:build:hyperindex": "python3 scripts/run_dbt.py build --vars '{\"use_fixture\": false}'",
     "labels:sync": "python3 scripts/sync_token_registry.py",
+    "tokens:refresh": "python3 scripts/sync_token_registry.py",
     "labels:enrich": "python3 scripts/enrich_token_metadata.py",
     "addresses:enrich": "python3 scripts/enrich_counterparty_types.py",
     "export:dashboard": "python3 scripts/export_dashboard.py",

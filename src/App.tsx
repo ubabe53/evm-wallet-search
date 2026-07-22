@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import cytoscape from "cytoscape";
 import {
   Activity,
@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Database,
   ExternalLink,
+  Info,
   Maximize2,
   Minimize2,
   Moon,
@@ -22,18 +23,21 @@ import {
   AccountType,
   ApiDashboardData,
   CounterpartySummary,
+  CodeState,
   DashboardData,
   DashboardGraph,
   DashboardMetadata,
   DashboardQuery,
   GraphEdge,
+  RecognitionFilter,
+  RecognitionStatus,
   dashboardDataMode,
   loadApiDashboardData,
   loadDashboardData,
   loadNextApiEvents,
+  resetTokenRecognition,
+  setTokenRecognition,
   TimelineRow,
-  TokenQuality,
-  TokenStatus,
   TokenSummary,
   WalletEvent,
 } from "./data";
@@ -44,13 +48,11 @@ const DEFAULT_GRAPH_INTERACTION_LIMIT = 25;
 const GRAPH_INTERACTION_LIMITS = [10, 25, 50, 100] as const;
 const DEFAULT_COUNTERPARTY_LIMIT = 10;
 const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
-const TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified", "suspected_spam", "spam"];
-const NON_SPAM_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
-const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown"];
-const TOKEN_QUALITIES: TokenQuality[] = ["high_confidence", "listed", "unknown"];
+const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "contract"];
+const RECOGNITION_FILTERS: RecognitionFilter[] = ["all", "recognized", "other"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
-export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic/spam event emission; the mismatch alone does not prove spam.";
+export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic event emission; the mismatch alone does not prove intent or legitimacy.";
 
 export function etherscanAddressUrl(address: string): string {
   return `${ETHERSCAN_BASE_URL}/address/${address}`;
@@ -62,6 +64,17 @@ export function etherscanTokenUrl(address: string): string {
 
 export function etherscanTransactionUrl(hash: string): string {
   return `${ETHERSCAN_BASE_URL}/tx/${hash}`;
+}
+
+export function etherscanInteractionUrl(walletAddress: string, counterpartyAddress: string): string {
+  const parameters = new URLSearchParams();
+  parameters.set("txntype", "2");
+  parameters.append("fadd", walletAddress);
+  parameters.append("fadd", counterpartyAddress);
+  parameters.append("tadd", walletAddress);
+  parameters.append("tadd", counterpartyAddress);
+  parameters.set("qt", "1");
+  return `${ETHERSCAN_BASE_URL}/advanced-filter?${parameters.toString()}`;
 }
 
 function openEtherscan(url: string) {
@@ -89,6 +102,36 @@ function EtherscanLink({
   );
 }
 
+function InfoTooltip({
+  label,
+  title,
+  children,
+  align = "right",
+}: {
+  label: string;
+  title: string;
+  children: ReactNode;
+  align?: "left" | "right";
+}) {
+  const tooltipId = useId();
+  return (
+    <span className={`infoTooltip ${align}`}>
+      <button
+        className="infoTooltipTrigger"
+        type="button"
+        aria-label={label}
+        aria-describedby={tooltipId}
+      >
+        <Info size={15} aria-hidden="true" />
+      </button>
+      <span className="infoTooltipContent" id={tooltipId} role="tooltip">
+        <strong>{title}</strong>
+        <span>{children}</span>
+      </span>
+    </span>
+  );
+}
+
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -104,9 +147,9 @@ function amountLabel(value: number | null | undefined): string {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value);
 }
 
-type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality">;
-type DisplayedTokenSummary = Omit<TokenSummary, "counterparty_account_type" | "counterparty_is_safe" | "counterparty_is_erc4337_account">;
-type DisplayedTimelineRow = Omit<TimelineRow, "counterparty_account_type" | "counterparty_is_safe" | "counterparty_is_erc4337_account">;
+type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality" | "recognition_status">;
+type DisplayedTokenSummary = Omit<TokenSummary, "counterparty_account_type">;
+type DisplayedTimelineRow = Omit<TimelineRow, "counterparty_account_type">;
 
 export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSummary[] {
   const grouped = new Map<string, DisplayedTokenSummary>();
@@ -116,8 +159,6 @@ export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSum
     if (!existing) {
       const {
         counterparty_account_type: _accountType,
-        counterparty_is_safe: _isSafe,
-        counterparty_is_erc4337_account: _isErc4337Account,
         ...summary
       } = row;
       grouped.set(row.token_address, { ...summary });
@@ -148,13 +189,11 @@ export function aggregateTimelineRows(rows: TimelineRow[]): DisplayedTimelineRow
   const grouped = new Map<string, DisplayedTimelineRow>();
 
   for (const row of rows) {
-    const key = [row.wallet_id, row.block_date, row.token_address, row.token_status, row.token_quality, row.direction].join("|");
+    const key = [row.wallet_id, row.block_date, row.token_address, row.recognition_status, row.direction].join("|");
     const existing = grouped.get(key);
     if (!existing) {
       const {
         counterparty_account_type: _accountType,
-        counterparty_is_safe: _isSafe,
-        counterparty_is_erc4337_account: _isErc4337Account,
         ...timelineRow
       } = row;
       grouped.set(key, { ...timelineRow });
@@ -182,7 +221,12 @@ export function aggregateCounterparties(rows: CounterpartySummary[]): RankedCoun
   for (const row of rows) {
     const existing = grouped.get(row.counterparty_address);
     if (!existing) {
-      const { token_status: _tokenStatus, token_quality: _tokenQuality, ...summary } = row;
+      const {
+        token_status: _tokenStatus,
+        token_quality: _tokenQuality,
+        recognition_status: _recognitionStatus,
+        ...summary
+      } = row;
       grouped.set(row.counterparty_address, { ...summary });
       continue;
     }
@@ -207,18 +251,92 @@ export function counterpartyNodeSize(transferCount: number): number {
   return Math.round(26 + Math.max(0, Math.min(1, ratio)) * 42);
 }
 
-export function interactionEdgeLabel(tokenSymbol: string, transferCount: number): string {
-  return `${tokenSymbol} x${transferCount.toLocaleString("en-US")}`;
+export function interactionEdgeLabel(transferCount: number): string {
+  return `${transferCount.toLocaleString("en-US")} ${transferCount === 1 ? "transfer" : "transfers"}`;
 }
 
-export function accountEvidenceObservationBlockLabel(minimum: number, maximum: number): string {
+export function buildCounterpartyGraph(
+  data: {
+    graph: DashboardGraph;
+    summaries: { counterparties: CounterpartySummary[] };
+  },
+  limit: number,
+): DashboardGraph {
+  const rankedSummaries = aggregateCounterparties(data.summaries.counterparties);
+  const counterpartyCounts = new Map(
+    rankedSummaries.map((row) => [row.counterparty_address, row.transfer_count]),
+  );
+  const representatives = new Map<string, GraphEdge>();
+
+  for (const edge of data.graph.edges) {
+    if (
+      edge.data.counterpartyAddress !== ZERO_ADDRESS &&
+      counterpartyCounts.has(edge.data.counterpartyAddress) &&
+      !representatives.has(edge.data.counterpartyAddress)
+    ) {
+      representatives.set(edge.data.counterpartyAddress, edge);
+    }
+  }
+
+  const rankedCounterparties = rankedSummaries
+    .map((row) => [row.counterparty_address, representatives.get(row.counterparty_address)] as const)
+    .filter((entry): entry is readonly [string, GraphEdge] => entry[1] != null)
+    .slice(0, limit);
+
+  const edges = rankedCounterparties.map(([counterpartyAddress, edge]): GraphEdge => {
+    const transferCount = counterpartyCounts.get(counterpartyAddress) ?? 0;
+    const walletNodeId = `wallet:${edge.data.walletAddress}`;
+    const counterpartyNodeId = `counterparty:${counterpartyAddress}`;
+    return {
+      data: {
+        ...edge.data,
+        id: `counterparty:${edge.data.walletAddress}:${counterpartyAddress}:edge`,
+        interactionId: `counterparty:${edge.data.walletAddress}:${counterpartyAddress}`,
+        label: interactionEdgeLabel(transferCount),
+        edgeRole: "wallet_counterparty",
+        source: walletNodeId,
+        target: counterpartyNodeId,
+        direction: "both",
+        tokenAddress: null,
+        tokenSymbol: null,
+        transferCount,
+        counterpartyTransferCount: transferCount,
+      },
+    };
+  });
+  const nodeIds = new Set(edges.flatMap((edge) => [edge.data.source, edge.data.target]));
+  const nodes = data.graph.nodes
+    .filter((node) => node.data.type !== "token" && nodeIds.has(node.data.id))
+    .map((node) => {
+      if (node.data.type === "wallet") {
+        return { data: { ...node.data, size: 44 } };
+      }
+      const transferCount = counterpartyCounts.get(node.data.address ?? "") ?? 1;
+      return {
+        data: {
+          ...node.data,
+          size: counterpartyNodeSize(transferCount),
+          transferCount,
+        },
+      };
+    });
+  return { nodes, edges };
+}
+
+export function accountEvidenceObservationBlockLabel(minimum: number | null, maximum: number | null): string {
+  if (minimum == null || maximum == null) {
+    return "not collected";
+  }
   if (minimum === maximum) {
     return `block ${minimum.toLocaleString("en-US")}`;
   }
   return `blocks ${minimum.toLocaleString("en-US")}–${maximum.toLocaleString("en-US")}`;
 }
 
-export function accountEvidenceObservationTimeLabel(minimum: string, maximum: string): string {
+export function accountEvidenceObservationTimeLabel(minimum: string | null, maximum: string | null): string {
+  if (minimum == null || maximum == null) {
+    return "not collected";
+  }
   return minimum === maximum ? minimum : `${minimum}–${maximum}`;
 }
 
@@ -234,77 +352,41 @@ function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
   );
 }
 
-export function isSpamStatus(status: TokenStatus): boolean {
-  return status === "suspected_spam" || status === "spam";
-}
-
-function SpamBadge({ status }: { status: TokenStatus }) {
-  if (!isSpamStatus(status)) {
-    return null;
-  }
-  return <span className="tokenStatus spam" title="Flagged by internal token reputation checks">Spam</span>;
-}
-
-const ACCOUNT_LABELS: Record<AccountType, string> = {
-  eoa_candidate: "EOA candidate",
-  eip7702_delegated: "Delegated EOA",
-  safe: "Safe",
-  erc4337_account: "ERC-4337",
+const ACCOUNT_LABELS: Record<AccountFilter, string> = {
+  eoa_candidate: "EOA",
   contract: "Contract",
-  unknown: "Unknown",
 };
 
 export function accountMatches(
   accountType: AccountType,
-  isSafe: boolean,
-  isErc4337Account: boolean,
   selected: AccountFilter[],
 ): boolean {
-  return selected.includes(accountType) ||
-    (isSafe && selected.includes("safe")) ||
-    (isErc4337Account && selected.includes("erc4337_account"));
+  return selected.length === ACCOUNT_FILTERS.length || selected.some((value) => value === accountType);
 }
 
 type BadgeEvidence = {
   accountType: AccountType;
+  codeState: CodeState;
   observationBlock: number | null;
   delegationTarget: string | null;
-  isSafe: boolean;
-  safeVersion: string | null;
-  safeOwnerCount: number | null;
-  safeThreshold: number | null;
-  isErc4337Account: boolean;
-  erc4337Version: string | null;
-  erc4337EffectiveCoverage: string | null;
-  erc4337FailedRanges: string | null;
-  coverageStartBlock: number | null;
-  coverageEndBlock: number | null;
 };
 
-function AccountTypeBadge({ evidence, type = evidence.accountType }: { evidence: BadgeEvidence; type?: AccountType }) {
-  const title = type === "eoa_candidate"
-    ? `No bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}; this does not establish personhood or permanent EOA status`
-    : type === "eip7702_delegated"
-      ? `Exact EIP-7702 delegation indicator observed at pinned block ${evidence.observationBlock ?? "unknown"}${evidence.delegationTarget ? `; target ${evidence.delegationTarget}` : ""}`
-      : type === "safe"
-        ? `Verified Safe address evidence${evidence.safeVersion ? ` v${evidence.safeVersion}` : ""} at pinned block ${evidence.observationBlock ?? "unknown"}; threshold ${evidence.safeThreshold ?? "?"} of ${evidence.safeOwnerCount ?? "?"} addresses`
-        : type === "erc4337_account"
-          ? `Observed as UserOperationEvent.sender at canonical EntryPoint${evidence.erc4337Version ? ` v${evidence.erc4337Version}` : ""}; effective checked coverage ${evidence.erc4337EffectiveCoverage ?? `${evidence.coverageStartBlock ?? "?"}-${evidence.coverageEndBlock ?? "?"}`}${evidence.erc4337FailedRanges ? `; failed chunks ${evidence.erc4337FailedRanges}` : ""}`
-          : type === "contract"
-            ? `Non-delegation contract bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}`
-            : "Account evidence is unavailable or the pinned code lookup failed";
-  const label = type === "safe" && evidence.safeThreshold != null && evidence.safeOwnerCount != null
-    ? `Safe ${evidence.safeThreshold}/${evidence.safeOwnerCount} addresses`
-    : ACCOUNT_LABELS[type];
-  return <span className={`accountType ${type}`} title={title}>{label}</span>;
+function AccountTypeBadge({ evidence }: { evidence: BadgeEvidence }) {
+  if (evidence.accountType === "unknown") {
+    return null;
+  }
+  const title = evidence.accountType === "eoa_candidate"
+    ? evidence.codeState === "eip7702_delegated"
+      ? `EOA with an exact EIP-7702 delegation indicator observed at pinned block ${evidence.observationBlock ?? "unknown"}${evidence.delegationTarget ? `; target ${evidence.delegationTarget}` : ""}`
+      : `No bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}; this does not establish personhood or permanent EOA status`
+    : `Contract bytecode observed at pinned block ${evidence.observationBlock ?? "unknown"}`;
+  return <span className={`accountType ${evidence.accountType}`} title={title}>{ACCOUNT_LABELS[evidence.accountType]}</span>;
 }
 
 function AccountBadges({ evidence }: { evidence: BadgeEvidence }) {
   return (
     <span className="accountBadges">
       <AccountTypeBadge evidence={evidence} />
-      {evidence.isSafe && evidence.accountType !== "safe" && <AccountTypeBadge evidence={evidence} type="safe" />}
-      {evidence.isErc4337Account && evidence.accountType !== "erc4337_account" && <AccountTypeBadge evidence={evidence} type="erc4337_account" />}
     </span>
   );
 }
@@ -312,36 +394,18 @@ function AccountBadges({ evidence }: { evidence: BadgeEvidence }) {
 function summaryBadgeEvidence(row: CounterpartySummary | RankedCounterparty): BadgeEvidence {
   return {
     accountType: row.account_type,
+    codeState: row.code_state,
     observationBlock: row.observation_block_number,
     delegationTarget: row.eip7702_delegation_target,
-    isSafe: row.is_safe,
-    safeVersion: row.safe_version,
-    safeOwnerCount: row.safe_owner_count,
-    safeThreshold: row.safe_threshold,
-    isErc4337Account: row.is_erc4337_account,
-    erc4337Version: row.erc4337_entrypoint_version,
-    erc4337EffectiveCoverage: row.erc4337_effective_coverage,
-    erc4337FailedRanges: row.erc4337_failed_ranges,
-    coverageStartBlock: row.evidence_coverage_start_block,
-    coverageEndBlock: row.evidence_coverage_end_block,
   };
 }
 
 function eventBadgeEvidence(event: WalletEvent): BadgeEvidence {
   return {
     accountType: event.counterparty_account_type,
+    codeState: event.counterparty_code_state,
     observationBlock: event.counterparty_observation_block_number,
     delegationTarget: event.counterparty_eip7702_delegation_target,
-    isSafe: event.counterparty_is_safe,
-    safeVersion: event.counterparty_safe_version,
-    safeOwnerCount: event.counterparty_safe_owner_count,
-    safeThreshold: event.counterparty_safe_threshold,
-    isErc4337Account: event.counterparty_is_erc4337_account,
-    erc4337Version: event.counterparty_erc4337_entrypoint_version,
-    erc4337EffectiveCoverage: event.counterparty_erc4337_effective_coverage,
-    erc4337FailedRanges: event.counterparty_erc4337_failed_ranges,
-    coverageStartBlock: event.counterparty_evidence_coverage_start_block,
-    coverageEndBlock: event.counterparty_evidence_coverage_end_block,
   };
 }
 
@@ -350,6 +414,7 @@ export function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
   const nodeText = styles.getPropertyValue("--graph-label").trim();
   const edgeColor = styles.getPropertyValue("--graph-edge").trim();
   const counterpartyColor = styles.getPropertyValue("--graph-counterparty").trim();
+  const unknownColor = styles.getPropertyValue("--graph-unknown").trim();
   const walletColor = styles.getPropertyValue("--graph-wallet").trim();
   const nodeBorder = styles.getPropertyValue("--graph-node-border").trim();
   const nodeOutline = styles.getPropertyValue("--graph-label-outline").trim();
@@ -386,31 +451,17 @@ export function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
       style: { shape: "round-rectangle" },
     },
     {
-      selector: "node[?isSafe]",
-      style: { shape: "round-rectangle", "border-width": 3 },
-    },
-    {
-      selector: "node[?isErc4337Account]",
-      style: { "border-style": "dotted", "border-width": 4 },
-    },
-    {
-      selector: 'node[accountType = "eip7702_delegated"]',
-      style: { shape: "diamond" },
-    },
-    {
       selector: 'node[accountType = "unknown"]',
-      style: { "border-style": "dashed" },
+      style: { "background-color": unknownColor, "border-style": "solid" },
     },
     {
       selector: "edge",
       style: {
-        width: "mapData(transferCount, 1, 100, 0.65, 2.2)",
+        width: "mapData(transferCount, 1, 10000, 0.8, 3.2)",
         "line-color": edgeColor,
-        "target-arrow-color": edgeColor,
-        "target-arrow-shape": "triangle",
-        "arrow-scale": 0.65,
+        "target-arrow-shape": "none",
         opacity: 0.58,
-        "curve-style": "bezier",
+        "curve-style": "straight",
         color: nodeText,
         label: "data(label)",
         "font-family": "SFMono-Regular, Consolas, Liberation Mono, monospace",
@@ -527,7 +578,16 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
       maxZoom: 5,
       wheelSensitivity: 0.18,
       style: graphStyles(containerRef.current),
-      layout: { name: "cose", animate: false, fit: true, padding: 30 },
+      layout: {
+        name: "concentric",
+        animate: false,
+        fit: true,
+        padding: 42,
+        avoidOverlap: true,
+        minNodeSpacing: 28,
+        concentric: (node) => node.data("type") === "wallet" ? 2 : 1,
+        levelWidth: () => 1,
+      },
     });
     cyRef.current = cy;
     const fitFrame = window.requestAnimationFrame(fitGraph);
@@ -564,9 +624,10 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
       }
     });
     cy.on("tap", "edge", (event) => {
-      const tokenAddress = event.target.data("tokenAddress");
-      if (tokenAddress) {
-        openEtherscan(etherscanTokenUrl(tokenAddress));
+      const walletAddress = event.target.data("walletAddress");
+      const counterpartyAddress = event.target.data("counterpartyAddress");
+      if (walletAddress && counterpartyAddress) {
+        openEtherscan(etherscanInteractionUrl(walletAddress, counterpartyAddress));
       }
     });
 
@@ -610,28 +671,44 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
         className="graph"
         ref={containerRef}
         role="img"
-        aria-label={`Wallet interaction graph with ${data.nodes.length} nodes and ${data.edges.length} edges`}
+        aria-label={`Wallet counterparty graph with ${data.nodes.length} nodes and ${data.edges.length} edges`}
       />
       {data.nodes.length === 0 && <div className="graphEmpty">No graph matches</div>}
       <div className="graphLegend" aria-label="Graph legend">
         <span><i className="walletSwatch" />Tracked address</span>
-        <span><i className="counterpartySwatch" />EOA candidate</span>
-        <span><i className="delegatedSwatch" />Delegated EOA</span>
-        <span><i className="safeSwatch" />Safe evidence</span>
-        <span><i className="erc4337Swatch" />ERC-4337 evidence</span>
-        <span><i className="contractSwatch" />Other contract</span>
-        <span><i className="unknownSwatch" />Unknown</span>
+        <span><i className="counterpartySwatch" />EOA</span>
+        <span><i className="contractSwatch" />Contract</span>
+        <span><i className="unknownSwatch" />Unclassified</span>
       </div>
     </div>
   );
 }
 
-function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
+export function TokenTable({
+  rows,
+  editable,
+  updatingToken,
+  onRecognitionChange,
+}: {
+  rows: DisplayedTokenSummary[];
+  editable: boolean;
+  updatingToken: string | null;
+  onRecognitionChange: (row: DisplayedTokenSummary, value: RecognitionStatus | "automatic") => void;
+}) {
   return (
     <table>
       <thead>
         <tr>
           <th>Token</th>
+          <th aria-label="Recognition">
+            <span className="tableHeaderInfo">
+              Recognition
+              <InfoTooltip label="How token recognition works" title="Recognition controls" align="left">
+                Automatic uses the stored exact-address registry or reviewed seed result. Recognized
+                and Other save a local override in this dashboard; choosing Automatic removes it.
+              </InfoTooltip>
+            </span>
+          </th>
           <th>Transfers</th>
           <th>Indirect In / Out</th>
           <th>Senders | Recipients</th>
@@ -641,7 +718,7 @@ function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
       <tbody>
         {rows.length === 0 && (
           <tr>
-            <td className="tableEmpty" colSpan={5}>No token flows match</td>
+            <td className="tableEmpty" colSpan={6}>No token flows match</td>
           </tr>
         )}
         {rows.map((row) => (
@@ -654,7 +731,27 @@ function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
               >
                 {row.token_symbol}
               </EtherscanLink>
-              <SpamBadge status={row.token_status} />
+            </td>
+            <td>
+              <div className="recognitionCell">
+                <span className={`recognitionStatus ${row.recognition_status}`}>
+                  {row.recognition_status === "recognized" ? "Recognized" : "Other"}
+                </span>
+                <select
+                  aria-label={`Recognition for ${row.token_symbol}`}
+                  value={row.recognition_override_status ?? "automatic"}
+                  disabled={!editable || updatingToken === row.token_address}
+                  title={editable ? "Set a local recognition override" : "Manual overrides are available in live API mode"}
+                  onChange={(event) => onRecognitionChange(
+                    row,
+                    event.target.value as RecognitionStatus | "automatic",
+                  )}
+                >
+                  <option value="automatic">Automatic</option>
+                  <option value="recognized">Recognized</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
             </td>
             <td>{row.transfer_count.toLocaleString("en-US")}</td>
             <td>
@@ -770,7 +867,6 @@ function EventList({
                 {event.token_symbol ?? shortAddress(event.token_address)}
               </EtherscanLink>
             </strong>
-            <SpamBadge status={event.token_status} />
             <span>{new Date(event.block_timestamp).toLocaleString()}</span>
             <EtherscanLink
               className="transactionLink"
@@ -834,7 +930,16 @@ export function App() {
   const [graphInteractionLimit, setGraphInteractionLimit] = useState(DEFAULT_GRAPH_INTERACTION_LIMIT);
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
   const [graphTheaterMode, setGraphTheaterMode] = useState(false);
-  const [includeSpam, setIncludeSpam] = useState(false);
+  const [recognitionFilter, setRecognitionFilter] = useState<RecognitionFilter>("all");
+  const [dataRevision, setDataRevision] = useState(0);
+  const [updatingToken, setUpdatingToken] = useState<string | null>(null);
+  const [undoAction, setUndoAction] = useState<{
+    tokenAddress: string;
+    tokenLabel: string;
+    previousOverride: RecognitionStatus | null;
+  } | null>(null);
+  const [recognitionActionError, setRecognitionActionError] = useState<string | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
   const [selectedAccountFilters, setSelectedAccountFilters] = useState<AccountFilter[]>(ACCOUNT_FILTERS);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("theme");
@@ -864,14 +969,15 @@ export function App() {
   }, [query]);
 
   const dashboardQuery = useMemo((): DashboardQuery => ({
-    includeSpam,
+    recognition: recognitionFilter,
     accountFilters: selectedAccountFilters,
     query: debouncedQuery,
     graphLimit: graphInteractionLimit,
     counterpartyLimit,
-  }), [includeSpam, selectedAccountFilters, debouncedQuery, graphInteractionLimit, counterpartyLimit]);
+  }), [recognitionFilter, selectedAccountFilters, debouncedQuery, graphInteractionLimit, counterpartyLimit]);
   const dashboardQueryKey = JSON.stringify(dashboardQuery);
   const dashboardQueryKeyRef = useRef(dashboardQueryKey);
+  const dashboardLoadGenerationRef = useRef(0);
   useEffect(() => {
     dashboardQueryKeyRef.current = dashboardQueryKey;
   }, [dashboardQueryKey]);
@@ -882,10 +988,14 @@ export function App() {
     }
     const controller = new AbortController();
     const requestedQueryKey = dashboardQueryKey;
+    const requestedGeneration = ++dashboardLoadGenerationRef.current;
     setError(null);
     setLoadingMoreEvents(false);
     loadApiDashboardData(dashboardQuery, controller.signal, apiMetadataRef.current).then((result) => {
-      if (dashboardQueryKeyRef.current !== requestedQueryKey) {
+      if (
+        dashboardQueryKeyRef.current !== requestedQueryKey ||
+        dashboardLoadGenerationRef.current !== requestedGeneration
+      ) {
         return;
       }
       apiMetadataRef.current = result.data.metadata;
@@ -896,18 +1006,27 @@ export function App() {
       if (loadError instanceof Error && loadError.name === "AbortError") {
         return;
       }
+      if (dashboardLoadGenerationRef.current !== requestedGeneration) {
+        return;
+      }
       setError(loadError instanceof Error ? loadError.message : "Could not load live dashboard data");
     });
     return () => controller.abort();
-  }, [dashboardQuery, dashboardQueryKey]);
+  }, [dashboardQuery, dashboardQueryKey, dataRevision]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [debouncedQuery, includeSpam, selectedAccountFilters]);
-  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [debouncedQuery, includeSpam, selectedAccountFilters]);
+  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [debouncedQuery, recognitionFilter, selectedAccountFilters]);
+  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [debouncedQuery, recognitionFilter, selectedAccountFilters]);
+
+  useEffect(() => () => {
+    if (undoTimerRef.current != null) {
+      window.clearTimeout(undoTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!graphTheaterMode) {
@@ -936,35 +1055,31 @@ export function App() {
       return data;
     }
 
-    const statusVisible = (status: TokenSummary["token_status"]) => includeSpam || !isSpamStatus(status);
-    const accountVisible = (accountType: AccountType, isSafe: boolean, isErc4337Account: boolean) =>
-      accountMatches(accountType, isSafe, isErc4337Account, selectedAccountFilters);
+    const recognitionVisible = (status: RecognitionStatus) =>
+      recognitionFilter === "all" || recognitionFilter === status;
+    const accountVisible = (accountType: AccountType) => accountMatches(accountType, selectedAccountFilters);
     const visibleEvents = data.events.filter((event) =>
-      statusVisible(event.token_status) &&
-      accountVisible(event.counterparty_account_type, event.counterparty_is_safe, event.counterparty_is_erc4337_account));
+      recognitionVisible(event.recognition_status) &&
+      accountVisible(event.counterparty_account_type));
     const visibleTokens = data.summaries.tokens.filter((row) =>
-      statusVisible(row.token_status) &&
-      accountVisible(row.counterparty_account_type, row.counterparty_is_safe, row.counterparty_is_erc4337_account));
+      recognitionVisible(row.recognition_status) &&
+      accountVisible(row.counterparty_account_type));
     const visibleCounterparties = data.summaries.counterparties.filter((row) =>
-      statusVisible(row.token_status) &&
-      accountVisible(row.account_type, row.is_safe, row.is_erc4337_account));
+      recognitionVisible(row.recognition_status) &&
+      accountVisible(row.account_type));
     const visibleCounterpartyNodeIds = new Set(
       data.graph.nodes
-        .filter((node) => node.data.type === "counterparty" && node.data.accountType && accountVisible(
-          node.data.accountType,
-          node.data.isSafe ?? false,
-          node.data.isErc4337Account ?? false,
-        ))
+        .filter((node) => node.data.type === "counterparty" && node.data.accountType && accountVisible(node.data.accountType))
         .map((node) => node.data.id),
     );
     const visibleGraphEdges = data.graph.edges.filter((edge) =>
-      statusVisible(edge.data.tokenStatus) &&
+      edge.data.recognitionStatus != null && recognitionVisible(edge.data.recognitionStatus) &&
       visibleCounterpartyNodeIds.has(`counterparty:${edge.data.counterpartyAddress}`));
     const visibleNodeIds = new Set(visibleGraphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
     const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
     const visibleTimeline = data.timeline.filter((row) =>
-      statusVisible(row.token_status) &&
-      accountVisible(row.counterparty_account_type, row.counterparty_is_safe, row.counterparty_is_erc4337_account));
+      recognitionVisible(row.recognition_status) &&
+      accountVisible(row.counterparty_account_type));
     const visibleData = {
       ...data,
       events: visibleEvents,
@@ -993,12 +1108,12 @@ export function App() {
         event.counterparty_address,
         event.counterparty_account_type,
         event.counterparty_code_state,
-        event.counterparty_safe_version,
-        event.counterparty_erc4337_entrypoint_version,
         event.counterparty_evidence_reason_codes,
         event.token_address,
         event.token_symbol,
         event.token_name,
+        event.recognition_status,
+        event.recognition_source,
         event.metadata_availability,
         event.metadata_source,
       ]
@@ -1006,15 +1121,15 @@ export function App() {
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const tokenMatches = (row: DisplayedTokenSummary) =>
-      [row.token_symbol, row.token_name, row.token_address, row.metadata_source, row.metadata_availability]
+      [row.token_symbol, row.token_name, row.token_address, row.recognition_status,
+        row.recognition_source, row.metadata_source, row.metadata_availability]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const events = visibleData.events.filter(eventMatches);
     const directlyMatchedTokens = visibleData.summaries.tokens.filter(tokenMatches);
     const directlyMatchedCounterparties = visibleData.summaries.counterparties.filter((row) =>
-      [row.counterparty_address, row.account_type, row.code_state, row.safe_version,
-        row.erc4337_entrypoint_version, row.evidence_reason_codes]
+      [row.counterparty_address, row.account_type, row.code_state, row.evidence_reason_codes]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
 
@@ -1045,9 +1160,10 @@ export function App() {
     const graphEdges = visibleData.graph.edges.filter((edge) =>
       walletMatches ||
       interactionIds.has(edge.data.interactionId) ||
-      tokenAddresses.has(edge.data.tokenAddress) ||
+      (edge.data.tokenAddress != null && tokenAddresses.has(edge.data.tokenAddress)) ||
       counterpartyAddresses.has(edge.data.counterpartyAddress) ||
-      [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.metadataAvailability,
+      [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.recognitionStatus,
+        edge.data.recognitionSource, edge.data.metadataAvailability,
         edge.data.metadataSource, edge.data.target, edge.data.source]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
@@ -1068,7 +1184,7 @@ export function App() {
             .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
       ),
     };
-  }, [data, query, includeSpam, selectedAccountFilters]);
+  }, [data, query, recognitionFilter, selectedAccountFilters]);
 
   const rankedCounterparties = useMemo(
     () => filtered ? aggregateCounterparties(filtered.summaries.counterparties) : [],
@@ -1086,94 +1202,17 @@ export function App() {
         counterpartyCount: apiResult.summary.counterparty_count,
       } : null;
     }
-    if (!query.trim()) {
-      if (!("status_quality_account_counts" in data.metadata)) {
-        return null;
-      }
-      const statusKey = (includeSpam ? TOKEN_STATUSES : NON_SPAM_TOKEN_STATUSES).join("+");
-      const qualityKey = TOKEN_QUALITIES.join("+");
-      const accountKey = ACCOUNT_FILTERS.filter((account) => selectedAccountFilters.includes(account)).join("+");
-      const statusMetrics = data.metadata.status_quality_account_counts[`${statusKey}|${qualityKey}|${accountKey}`] ?? {
-        transfer_count: 0,
-        token_count: 0,
-        counterparty_count: 0,
-      };
-      return {
-        transferCount: statusMetrics.transfer_count,
-        tokenCount: statusMetrics.token_count,
-        counterpartyCount: statusMetrics.counterparty_count,
-      };
-    }
     const transferCount = filtered.events.length;
     const tokenCount = new Set(filtered.events.map((event) => event.token_address)).size;
     const counterpartyCount = new Set(filtered.events.map((event) => event.counterparty_address)).size;
     return { transferCount, tokenCount, counterpartyCount };
-  }, [apiResult, data, filtered, query, includeSpam, selectedAccountFilters]);
+  }, [apiResult, data, filtered]);
 
   const displayedGraph = useMemo(() => {
     if (!filtered) {
       return null;
     }
-
-    const interactionIds = new Set<string>();
-    for (const edge of filtered.graph.edges) {
-      if (edge.data.counterpartyAddress === ZERO_ADDRESS) {
-        continue;
-      }
-      if (interactionIds.has(edge.data.interactionId)) {
-        continue;
-      }
-      if (interactionIds.size === graphInteractionLimit) {
-        break;
-      }
-      interactionIds.add(edge.data.interactionId);
-    }
-
-    const representativeEdges = new Map<string, GraphEdge>();
-    for (const edge of filtered.graph.edges) {
-      if (interactionIds.has(edge.data.interactionId) && !representativeEdges.has(edge.data.interactionId)) {
-        representativeEdges.set(edge.data.interactionId, edge);
-      }
-    }
-
-    const edges = [...representativeEdges.values()].map((edge): GraphEdge => {
-      const walletNodeId = `wallet:${edge.data.walletAddress}`;
-      const counterpartyNodeId = `counterparty:${edge.data.counterpartyAddress}`;
-      return {
-        data: {
-          ...edge.data,
-          id: `${edge.data.interactionId}:wallet-counterparty`,
-          label: interactionEdgeLabel(edge.data.tokenSymbol, edge.data.transferCount),
-          edgeRole: "wallet_counterparty",
-          source: edge.data.direction === "out" ? walletNodeId : counterpartyNodeId,
-          target: edge.data.direction === "out" ? counterpartyNodeId : walletNodeId,
-        },
-      };
-    });
-    const nodeIds = new Set(edges.flatMap((edge) => [edge.data.source, edge.data.target]));
-    const counterpartyCounts = new Map<string, number>();
-    for (const edge of edges) {
-      counterpartyCounts.set(
-        `counterparty:${edge.data.counterpartyAddress}`,
-        edge.data.counterpartyTransferCount,
-      );
-    }
-    const nodes = filtered.graph.nodes
-      .filter((node) => node.data.type !== "token" && nodeIds.has(node.data.id))
-      .map((node) => {
-        if (node.data.type === "wallet") {
-          return { data: { ...node.data, size: 44 } };
-        }
-        const transferCount = counterpartyCounts.get(node.data.id) ?? 1;
-        return {
-          data: {
-            ...node.data,
-            size: counterpartyNodeSize(transferCount),
-            transferCount,
-          },
-        };
-      });
-    return { nodes, edges };
+    return buildCounterpartyGraph(filtered, graphInteractionLimit);
   }, [filtered, graphInteractionLimit]);
 
   const eventCount = dashboardDataMode === "api"
@@ -1217,6 +1256,73 @@ export function App() {
       if (dashboardQueryKeyRef.current === requestedQueryKey) {
         setLoadingMoreEvents(false);
       }
+    }
+  }
+
+  function startUndoWindow(action: NonNullable<typeof undoAction>) {
+    if (undoTimerRef.current != null) {
+      window.clearTimeout(undoTimerRef.current);
+    }
+    setUndoAction(action);
+    undoTimerRef.current = window.setTimeout(() => {
+      setUndoAction(null);
+      undoTimerRef.current = null;
+    }, 4000);
+  }
+
+  async function changeTokenRecognition(
+    row: DisplayedTokenSummary,
+    nextStatus: RecognitionStatus | "automatic",
+  ) {
+    if (dashboardDataMode !== "api") {
+      return;
+    }
+    setUpdatingToken(row.token_address);
+    setRecognitionActionError(null);
+    try {
+      const result = nextStatus === "automatic"
+        ? await resetTokenRecognition(row.token_address)
+        : await setTokenRecognition(row.token_address, nextStatus);
+      startUndoWindow({
+        tokenAddress: row.token_address,
+        tokenLabel: row.token_symbol,
+        previousOverride: result.previous_override_status,
+      });
+      setDataRevision((current) => current + 1);
+    } catch (actionError) {
+      setRecognitionActionError(
+        actionError instanceof Error ? actionError.message : "Could not update token recognition",
+      );
+    } finally {
+      setUpdatingToken(null);
+    }
+  }
+
+  async function undoTokenRecognition() {
+    if (!undoAction || updatingToken) {
+      return;
+    }
+    if (undoTimerRef.current != null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    const action = undoAction;
+    setUndoAction(null);
+    setUpdatingToken(action.tokenAddress);
+    setRecognitionActionError(null);
+    try {
+      if (action.previousOverride == null) {
+        await resetTokenRecognition(action.tokenAddress);
+      } else {
+        await setTokenRecognition(action.tokenAddress, action.previousOverride);
+      }
+      setDataRevision((current) => current + 1);
+    } catch (actionError) {
+      setRecognitionActionError(
+        actionError instanceof Error ? actionError.message : "Could not undo token recognition",
+      );
+    } finally {
+      setUpdatingToken(null);
     }
   }
 
@@ -1281,8 +1387,8 @@ export function App() {
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
             <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
-            <span title={`Account evidence observed at ${accountEvidenceObservationTimeLabel(data.metadata.account_evidence_observation_block_timestamp_min, data.metadata.account_evidence_observation_block_timestamp_max)}; coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
-              account evidence at {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
+            <span title={`Address type observed at ${accountEvidenceObservationTimeLabel(data.metadata.account_evidence_observation_block_timestamp_min, data.metadata.account_evidence_observation_block_timestamp_max)}; coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
+              address type snapshot at {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
             </span>
             {data.metadata.is_sampled && (
               <span>{data.metadata.exported_event_count.toLocaleString()} recent events shown</span>
@@ -1290,36 +1396,57 @@ export function App() {
           </div>
         </div>
         <div className="toolbar">
-          <label className="spamToggle">
-            <input
-              type="checkbox"
-              checked={includeSpam}
-              onChange={(event) => setIncludeSpam(event.target.checked)}
-            />
-            <span>Include spam</span>
-            {!includeSpam && <small>{data.metadata.spam_transfer_count.toLocaleString("en-US")} hidden</small>}
-          </label>
-          <details className="statusFilter accountFilter">
-            <summary title="Filters the graph, counterparty ranking, and recent events by pinned-block account evidence">
-              Account evidence ({selectedAccountFilters.length})
-              <ChevronDown size={14} aria-hidden="true" />
-            </summary>
-            <div className="statusMenu accountMenu" role="group" aria-label="Account evidence filter">
-              {ACCOUNT_FILTERS.map((accountType) => (
-                <label key={accountType}>
+          <div className="recognitionControls">
+            <fieldset className="recognitionFilter">
+              <legend className="srOnly">Token recognition</legend>
+              {RECOGNITION_FILTERS.map((value) => (
+                <label key={value}>
                   <input
-                    type="checkbox"
-                    checked={selectedAccountFilters.includes(accountType)}
-                    onChange={(event) => setSelectedAccountFilters((current) => event.target.checked
-                      ? [...current.filter((value) => value !== accountType), accountType]
-                      : current.filter((value) => value !== accountType))}
+                    type="radio"
+                    name="recognition-filter"
+                    value={value}
+                    checked={recognitionFilter === value}
+                    onChange={() => setRecognitionFilter(value)}
                   />
-                  <span className={`accountType ${accountType}`}>{ACCOUNT_LABELS[accountType]}</span>
+                  <span>{value === "all" ? "All" : value === "recognized" ? "Recognized" : "Other"}</span>
                 </label>
               ))}
-              <small>Applies to every view. Safe and ERC-4337 evidence can overlap without double counting.</small>
-            </div>
-          </details>
+            </fieldset>
+            <InfoTooltip label="What recognized means" title="Recognized tokens">
+              The token&apos;s exact Ethereum contract address appears in Uniswap, CoinGecko,
+              Trust Wallet, or qualifying Coinbase Exchange data, or was manually marked as recognized.
+              Registry inclusion changes over time and does not prove safety, legitimacy, value,
+              or standards compliance.
+            </InfoTooltip>
+          </div>
+          <div className="addressTypeControls">
+            <details className="statusFilter accountFilter">
+              <summary title="Filter every view by the address type observed at the pinned block">
+                Address type ({selectedAccountFilters.length})
+                <ChevronDown size={14} aria-hidden="true" />
+              </summary>
+              <div className="statusMenu accountMenu" role="group" aria-label="Address type filter">
+                {ACCOUNT_FILTERS.map((accountType) => (
+                  <label key={accountType}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAccountFilters.includes(accountType)}
+                      onChange={(event) => setSelectedAccountFilters((current) => event.target.checked
+                        ? [...current.filter((value) => value !== accountType), accountType]
+                        : current.filter((value) => value !== accountType))}
+                    />
+                    <span className={`accountType ${accountType}`}>{ACCOUNT_LABELS[accountType]}</span>
+                  </label>
+                ))}
+                <small>Applies to every view. Unclassified addresses remain included only when both options are selected.</small>
+              </div>
+            </details>
+            <InfoTooltip label="How address type works" title="Address type">
+              EOA means no contract bytecode was observed at the pinned block; Contract means bytecode
+              was observed. This is a point-in-time classification, not proof of ownership, personhood,
+              or permanent account type. Unclassified addresses appear when both options are selected.
+            </InfoTooltip>
+          </div>
           <label className="searchbox">
             <Search size={16} aria-hidden="true" />
             <input
@@ -1355,20 +1482,23 @@ export function App() {
           className={`panel graphPanel${graphTheaterMode ? " theater" : ""}`}
           role={graphTheaterMode ? "dialog" : undefined}
           aria-modal={graphTheaterMode ? "true" : undefined}
-          aria-label={graphTheaterMode ? "Interaction Graph theater mode" : undefined}
+          aria-label={graphTheaterMode ? "Counterparty Graph theater mode" : undefined}
           onKeyDown={trapTheaterFocus}
         >
           <div className="panelHeader">
-            <h2>Interaction Graph</h2>
+            <div className="panelTitle">
+              <h2>Counterparty Graph</h2>
+              <p>One edge per address, ranked by captured transfers with the tracked wallet.</p>
+            </div>
             <div className="graphHeaderControls">
               <span>{displayedGraph.nodes.length} nodes / {displayedGraph.edges.length} edges</span>
               {dashboardDataMode === "api" && apiResult && (
-                <span>{displayedGraph.edges.length} of {apiResult.graphInteractionCount.toLocaleString("en-US")} interactions</span>
+                <span>{displayedGraph.edges.length} of {apiResult.graphCounterpartyCount.toLocaleString("en-US")} counterparties</span>
               )}
               <label className="graphLimit">
-                <span>Interactions</span>
+                <span>Counterparties</span>
                 <select
-                  aria-label="Maximum graph interactions"
+                  aria-label="Maximum graph counterparties"
                   value={graphInteractionLimit}
                   onChange={(event) => setGraphInteractionLimit(Number(event.target.value))}
                 >
@@ -1415,7 +1545,7 @@ export function App() {
           </div>
           {dashboardDataMode === "api" && apiResult && (
             <p className="boundedNote">
-              Showing {rankedCounterparties.length.toLocaleString("en-US")} of {apiResult.counterpartyCount.toLocaleString("en-US")} matching counterparties.
+              Showing {Math.min(counterpartyLimit, rankedCounterparties.length).toLocaleString("en-US")} of {apiResult.counterpartyCount.toLocaleString("en-US")} matching counterparties.
             </p>
           )}
         </div>
@@ -1451,9 +1581,24 @@ export function App() {
           </span>
         </div>
         <div className="tokenTableScroll compact">
-          <TokenTable rows={filtered.summaries.tokens} />
+          <TokenTable
+            rows={filtered.summaries.tokens}
+            editable={dashboardDataMode === "api"}
+            updatingToken={updatingToken}
+            onRecognitionChange={changeTokenRecognition}
+          />
         </div>
       </section>
+      {(undoAction || recognitionActionError) && (
+        <div className="recognitionToast" role="status" aria-live="polite">
+          <span>
+            {recognitionActionError ?? `Updated recognition for ${undoAction?.tokenLabel}.`}
+          </span>
+          {undoAction && !recognitionActionError && (
+            <button type="button" onClick={undoTokenRecognition} disabled={updatingToken != null}>Undo</button>
+          )}
+        </div>
+      )}
     </main>
   );
 }

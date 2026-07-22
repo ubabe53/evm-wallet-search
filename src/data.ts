@@ -11,19 +11,6 @@ export type GraphNode = {
     observationBlockNumber: number | null;
     observationBlockTimestamp: string | null;
     eip7702DelegationTarget: string | null;
-    isSafe: boolean | null;
-    safeVerificationStatus: SafeVerificationStatus | null;
-    safeVersion: string | null;
-    safeSingletonAddress: string | null;
-    safeOwnerCount: number | null;
-    safeThreshold: number | null;
-    isErc4337Account: boolean | null;
-    erc4337EntrypointAddress: string | null;
-    erc4337EntrypointVersion: string | null;
-    erc4337EntrypointSource: string | null;
-    erc4337EntrypointDeploymentBlock: string | null;
-    erc4337EffectiveCoverage: string | null;
-    erc4337FailedRanges: string | null;
     evidenceFetchStatus: EvidenceFetchStatus | null;
     evidenceReasonCodes: string | null;
     evidenceCoverageStartBlock: number | null;
@@ -42,11 +29,14 @@ export type GraphEdge = {
     target: string;
     walletAddress: string;
     counterpartyAddress: string;
-    direction: "in" | "out";
-    tokenAddress: string;
-    tokenSymbol: string;
+    direction: "in" | "out" | "both";
+    tokenAddress: string | null;
+    tokenSymbol: string | null;
     label?: string;
-    tokenStatus: TokenStatus;
+    tokenStatus?: TokenStatus;
+    recognitionStatus?: RecognitionStatus;
+    recognitionSource?: string;
+    recognitionOverrideStatus?: RecognitionStatus | null;
     metadataAvailability?: MetadataAvailability;
     tokenQuality?: TokenQuality;
     tokenQualitySources?: string[];
@@ -64,26 +54,28 @@ export type GraphEdge = {
     interactionLegitimacyScore?: number;
     interactionLegitimacyReasons?: string;
     counterpartyAccountType: AccountType;
-    counterpartyIsSafe: boolean;
-    counterpartyIsErc4337Account: boolean;
     transferCount: number;
     counterpartyTransferCount: number;
+    inboundTransferCount?: number;
+    outboundTransferCount?: number;
+    tokenCount?: number;
     amountDecimalSum?: number | null;
   };
 };
 
 export type TokenStatus = "trusted" | "unverified" | "suspected_spam" | "spam";
+export type RecognitionStatus = "recognized" | "other";
+export type RecognitionFilter = "all" | RecognitionStatus;
 export type TokenReputation = TokenStatus;
 export type TokenQuality = "high_confidence" | "listed" | "unknown";
 export type MetadataAvailability = "complete" | "partial" | "unavailable";
 export type InteractionLegitimacy = "not_suspicious" | "uncertain" | "suspicious";
 export type TransactionSenderRelation = "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 export type TransactionTargetRelation = "token_contract" | "transfer_sender" | "transfer_recipient" | "other" | "unknown";
-export type AccountType = "eoa_candidate" | "eip7702_delegated" | "safe" | "erc4337_account" | "contract" | "unknown";
-export type AccountFilter = AccountType;
+export type AccountType = "eoa_candidate" | "contract" | "unknown";
+export type AccountFilter = Exclude<AccountType, "unknown">;
 export type CodeState = "no_code" | "eip7702_delegated" | "contract_code" | "unknown";
-export type SafeVerificationStatus = "verified" | "singleton_not_official" | "calls_inconsistent" | "evidence_unavailable" | "not_applicable" | "not_checked";
-export type EvidenceFetchStatus = "complete" | "partial" | "failed" | "not_fetched";
+export type EvidenceFetchStatus = "complete" | "failed" | "not_fetched";
 
 export type AccountEvidence = {
   account_type: AccountType;
@@ -92,24 +84,6 @@ export type AccountEvidence = {
   observation_block_number: number | null;
   observation_block_timestamp: string | null;
   eip7702_delegation_target: string | null;
-  is_safe: boolean;
-  safe_verification_status: SafeVerificationStatus;
-  safe_version: string | null;
-  safe_singleton_address: string | null;
-  safe_owner_count: number | null;
-  safe_threshold: number | null;
-  is_erc4337_account: boolean;
-  erc4337_user_operation_count: number | null;
-  erc4337_first_observed_block: number | null;
-  erc4337_last_observed_block: number | null;
-  erc4337_entrypoint_address: string | null;
-  erc4337_entrypoint_version: string | null;
-  erc4337_entrypoint_source: string | null;
-  erc4337_entrypoint_deployment_block: string | null;
-  erc4337_effective_coverage: string | null;
-  erc4337_failed_ranges: string | null;
-  erc4337_block_chunk_size: number | null;
-  erc4337_address_batch_size: number | null;
   evidence_fetch_status: EvidenceFetchStatus;
   evidence_reason_codes: string;
   evidence_coverage_scope: string | null;
@@ -119,6 +93,11 @@ export type AccountEvidence = {
 };
 
 export type ClassificationEvidence = {
+  recognition_status: RecognitionStatus;
+  recognition_reason: string;
+  recognition_source: string;
+  recognition_version: "token-recognition-v1";
+  recognition_override_status?: RecognitionStatus | null;
   metadata_availability: MetadataAvailability;
   token_quality: TokenQuality;
   token_quality_sources: string[];
@@ -148,6 +127,11 @@ export type TokenSummary = {
   token_name: string | null;
   token_decimals: number | null;
   token_status: TokenStatus;
+  recognition_status: RecognitionStatus;
+  recognition_reason: string;
+  recognition_source: string;
+  recognition_version: "token-recognition-v1";
+  recognition_override_status?: RecognitionStatus | null;
   metadata_source: string | null;
   metadata_source_url: string | null;
   token_label_reason: string | null;
@@ -163,8 +147,6 @@ export type TokenSummary = {
   token_reputation_reasons: string;
   token_reputation_version: "token-reputation-v2";
   counterparty_account_type: AccountType;
-  counterparty_is_safe: boolean;
-  counterparty_is_erc4337_account: boolean;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -183,6 +165,7 @@ export type CounterpartySummary = AccountEvidence & {
   wallet_address: string;
   counterparty_address: string;
   token_status: TokenStatus;
+  recognition_status: RecognitionStatus;
   token_quality: TokenQuality;
   transfer_count: number;
   inbound_transfer_count: number;
@@ -202,8 +185,6 @@ export type TimelineRow = ClassificationEvidence & {
   metadata_source: string | null;
   metadata_source_url: string | null;
   counterparty_account_type: AccountType;
-  counterparty_is_safe: boolean;
-  counterparty_is_erc4337_account: boolean;
   direction: "in" | "out";
   transfer_count: number;
   amount_decimal_sum: number | null;
@@ -237,24 +218,6 @@ export type WalletEvent = ClassificationEvidence & {
   counterparty_observation_block_number: number | null;
   counterparty_observation_block_timestamp: string | null;
   counterparty_eip7702_delegation_target: string | null;
-  counterparty_is_safe: boolean;
-  counterparty_safe_verification_status: SafeVerificationStatus;
-  counterparty_safe_version: string | null;
-  counterparty_safe_singleton_address: string | null;
-  counterparty_safe_owner_count: number | null;
-  counterparty_safe_threshold: number | null;
-  counterparty_is_erc4337_account: boolean;
-  counterparty_erc4337_user_operation_count: number | null;
-  counterparty_erc4337_first_observed_block: number | null;
-  counterparty_erc4337_last_observed_block: number | null;
-  counterparty_erc4337_entrypoint_address: string | null;
-  counterparty_erc4337_entrypoint_version: string | null;
-  counterparty_erc4337_entrypoint_source: string | null;
-  counterparty_erc4337_entrypoint_deployment_block: string | null;
-  counterparty_erc4337_effective_coverage: string | null;
-  counterparty_erc4337_failed_ranges: string | null;
-  counterparty_erc4337_block_chunk_size: number | null;
-  counterparty_erc4337_address_batch_size: number | null;
   counterparty_evidence_fetch_status: EvidenceFetchStatus;
   counterparty_evidence_reason_codes: string;
   counterparty_evidence_coverage_scope: string | null;
@@ -282,6 +245,10 @@ export type PipelineMetadata = {
   generated_at: string;
   transfer_count: number;
   token_count: number;
+  recognized_transfer_count: number;
+  recognized_token_count: number;
+  other_transfer_count: number;
+  other_token_count: number;
   counterparty_count: number;
   non_spam_transfer_count: number;
   non_spam_token_count: number;
@@ -293,16 +260,14 @@ export type PipelineMetadata = {
   interaction_count: number;
   account_evidence_address_count: number;
   account_evidence_complete_count: number;
-  safe_evidence_address_count: number;
-  erc4337_evidence_address_count: number;
-  account_evidence_observation_block_number_min: number;
-  account_evidence_observation_block_number_max: number;
-  account_evidence_observation_block_timestamp_min: string;
-  account_evidence_observation_block_timestamp_max: string;
-  account_evidence_coverage_scope: string;
+  account_evidence_observation_block_number_min: number | null;
+  account_evidence_observation_block_number_max: number | null;
+  account_evidence_observation_block_timestamp_min: string | null;
+  account_evidence_observation_block_timestamp_max: string | null;
+  account_evidence_coverage_scope: string | null;
   account_evidence_coverage_start_block: number | null;
-  account_evidence_coverage_end_block: number;
-  account_evidence_schema_version: string;
+  account_evidence_coverage_end_block: number | null;
+  account_evidence_schema_version: string | null;
   token_summary_row_count: number;
   counterparty_summary_row_count: number;
   timeline_row_count: number;
@@ -362,14 +327,14 @@ export type ApiMetadata = {
   spam_transfer_count: number;
   first_event_at: string | null;
   last_event_at: string | null;
-  account_evidence_observation_block_number_min: number;
-  account_evidence_observation_block_number_max: number;
-  account_evidence_observation_block_timestamp_min: string;
-  account_evidence_observation_block_timestamp_max: string;
-  account_evidence_coverage_scope: string;
+  account_evidence_observation_block_number_min: number | null;
+  account_evidence_observation_block_number_max: number | null;
+  account_evidence_observation_block_timestamp_min: string | null;
+  account_evidence_observation_block_timestamp_max: string | null;
+  account_evidence_coverage_scope: string | null;
   account_evidence_coverage_start_block: number | null;
-  account_evidence_coverage_end_block: number;
-  account_evidence_schema_version: string;
+  account_evidence_coverage_end_block: number | null;
+  account_evidence_schema_version: string | null;
   event_block_number_min: number | null;
   event_block_number_max: number | null;
   api_schema_version: string;
@@ -394,7 +359,7 @@ export type DashboardData<Metadata extends DashboardMetadata = PipelineMetadata>
 };
 
 export type DashboardQuery = {
-  includeSpam: boolean;
+  recognition: RecognitionFilter;
   accountFilters: AccountFilter[];
   query: string;
   graphLimit: number;
@@ -422,43 +387,37 @@ export type ApiDashboardData = {
   eventNextCursor: string | null;
   tokenCount: number;
   counterpartyCount: number;
-  graphInteractionCount: number;
+  graphCounterpartyCount: number;
 };
 
-type ApiGraphInteraction = {
+type ApiGraphCounterparty = {
   wallet_id: string;
   ens: string;
   wallet_address: string;
   counterparty_address: string;
-  token_address: string;
-  token_symbol: string;
-  token_status: TokenStatus;
-  direction: "in" | "out";
   account_type: AccountType;
-  is_safe: boolean;
-  is_erc4337_account: boolean;
+  code_state: CodeState;
+  observation_block_timestamp: string | null;
   observation_block_number: number | null;
   eip7702_delegation_target: string | null;
-  safe_version: string | null;
-  safe_owner_count: number | null;
-  safe_threshold: number | null;
-  erc4337_entrypoint_version: string | null;
-  erc4337_effective_coverage: string | null;
-  erc4337_failed_ranges: string | null;
+  evidence_fetch_status: EvidenceFetchStatus;
+  evidence_reason_codes: string;
   evidence_coverage_start_block: number | null;
   evidence_coverage_end_block: number | null;
   transfer_count: number;
-  counterparty_transfer_count: number;
+  inbound_transfer_count: number;
+  outbound_transfer_count: number;
+  token_count: number;
 };
 
 export const dashboardDataMode = import.meta.env.VITE_DATA_MODE === "api" ? "api" : "static";
 
 function apiQuery(query: DashboardQuery, extra: Record<string, string | number> = {}): string {
   const parameters = new URLSearchParams();
-  parameters.set("include_spam", String(query.includeSpam));
+  parameters.set("recognition", query.recognition);
   if (query.accountFilters.length === 0) {
     parameters.append("account", "none");
-  } else {
+  } else if (query.accountFilters.length < 2) {
     for (const account of query.accountFilters) {
       parameters.append("account", account);
     }
@@ -472,24 +431,20 @@ function apiQuery(query: DashboardQuery, extra: Record<string, string | number> 
   return parameters.toString();
 }
 
-function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
+function apiGraph(items: ApiGraphCounterparty[]): DashboardGraph {
   const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
 
   for (const item of items) {
     const walletNodeId = `wallet:${item.wallet_address}`;
     const counterpartyNodeId = `counterparty:${item.counterparty_address}`;
-    const interactionId = `interaction:${item.wallet_address}:${item.counterparty_address}:${item.token_address}:${item.direction}`;
+    const interactionId = `counterparty:${item.wallet_address}:${item.counterparty_address}`;
     nodes.set(walletNodeId, {
       data: {
         id: walletNodeId, label: item.ens, type: "wallet", address: item.wallet_address,
         tokenAddress: null, symbol: null, accountType: null, codeState: null,
         observationBlockNumber: null, observationBlockTimestamp: null,
-        eip7702DelegationTarget: null, isSafe: null, safeVerificationStatus: null,
-        safeVersion: null, safeSingletonAddress: null, safeOwnerCount: null, safeThreshold: null,
-        isErc4337Account: null, erc4337EntrypointAddress: null, erc4337EntrypointVersion: null,
-        erc4337EntrypointSource: null, erc4337EntrypointDeploymentBlock: null,
-        erc4337EffectiveCoverage: null, erc4337FailedRanges: null, evidenceFetchStatus: null,
+        eip7702DelegationTarget: null, evidenceFetchStatus: null,
         evidenceReasonCodes: null, evidenceCoverageStartBlock: null, evidenceCoverageEndBlock: null,
       },
     });
@@ -499,30 +454,28 @@ function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
         label: `${item.counterparty_address.slice(0, 6)}...${item.counterparty_address.slice(-4)}`,
         type: "counterparty",
         address: item.counterparty_address, tokenAddress: null, symbol: null,
-        accountType: item.account_type, codeState: null,
-        observationBlockNumber: item.observation_block_number, observationBlockTimestamp: null,
-        eip7702DelegationTarget: item.eip7702_delegation_target, isSafe: item.is_safe,
-        safeVerificationStatus: null, safeVersion: item.safe_version, safeSingletonAddress: null,
-        safeOwnerCount: item.safe_owner_count, safeThreshold: item.safe_threshold,
-        isErc4337Account: item.is_erc4337_account, erc4337EntrypointAddress: null,
-        erc4337EntrypointVersion: item.erc4337_entrypoint_version, erc4337EntrypointSource: null,
-        erc4337EntrypointDeploymentBlock: null, erc4337EffectiveCoverage: item.erc4337_effective_coverage,
-        erc4337FailedRanges: item.erc4337_failed_ranges, evidenceFetchStatus: null,
-        evidenceReasonCodes: null, evidenceCoverageStartBlock: item.evidence_coverage_start_block,
+        accountType: item.account_type, codeState: item.code_state,
+        observationBlockNumber: item.observation_block_number,
+        observationBlockTimestamp: item.observation_block_timestamp,
+        eip7702DelegationTarget: item.eip7702_delegation_target,
+        evidenceFetchStatus: item.evidence_fetch_status,
+        evidenceReasonCodes: item.evidence_reason_codes,
+        evidenceCoverageStartBlock: item.evidence_coverage_start_block,
         evidenceCoverageEndBlock: item.evidence_coverage_end_block,
       },
     });
     edges.push({
       data: {
         id: `${interactionId}:wallet-counterparty`, interactionId, edgeRole: "wallet_counterparty",
-        source: item.direction === "out" ? walletNodeId : counterpartyNodeId,
-        target: item.direction === "out" ? counterpartyNodeId : walletNodeId,
+        source: walletNodeId,
+        target: counterpartyNodeId,
         walletAddress: item.wallet_address, counterpartyAddress: item.counterparty_address,
-        direction: item.direction, tokenAddress: item.token_address, tokenSymbol: item.token_symbol,
-        tokenStatus: item.token_status,
-        counterpartyAccountType: item.account_type, counterpartyIsSafe: item.is_safe,
-        counterpartyIsErc4337Account: item.is_erc4337_account, transferCount: item.transfer_count,
-        counterpartyTransferCount: item.counterparty_transfer_count,
+        direction: "both", tokenAddress: null, tokenSymbol: null,
+        counterpartyAccountType: item.account_type, transferCount: item.transfer_count,
+        counterpartyTransferCount: item.transfer_count,
+        inboundTransferCount: item.inbound_transfer_count,
+        outboundTransferCount: item.outbound_transfer_count,
+        tokenCount: item.token_count,
       },
     });
   }
@@ -536,8 +489,8 @@ function normalizeEvent(event: WalletEvent): WalletEvent {
   };
 }
 
-async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, { signal });
+async function fetchJson<T>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, { ...init, signal });
   if (!response.ok) {
     const payload = typeof response.json === "function"
       ? await response.json().catch(() => null) as { detail?: string } | null
@@ -574,7 +527,7 @@ export async function loadApiDashboardData(
   ]);
   const [events, graph] = await Promise.all([
     fetchJson<ApiCollection<WalletEvent>>(`/api/v1/events?${apiQuery(query, { limit: 10 })}`, signal),
-    fetchJson<ApiCollection<ApiGraphInteraction>>(
+    fetchJson<ApiCollection<ApiGraphCounterparty>>(
       `/api/v1/graph?${apiQuery(query, { limit: query.graphLimit })}`,
       signal,
     ),
@@ -582,7 +535,7 @@ export async function loadApiDashboardData(
   const [tokens, counterparties] = await Promise.all([
     fetchJson<ApiCollection<TokenSummary>>(`/api/v1/tokens?${apiQuery(query, { limit: 500 })}`, signal),
     fetchJson<ApiCollection<CounterpartySummary>>(
-      `/api/v1/counterparties?${apiQuery(query, { limit: query.counterpartyLimit })}`,
+      `/api/v1/counterparties?${apiQuery(query, { limit: Math.max(query.graphLimit, query.counterpartyLimit) })}`,
       signal,
     ),
   ]);
@@ -600,7 +553,7 @@ export async function loadApiDashboardData(
     eventNextCursor: events.next_cursor ?? null,
     tokenCount: tokens.complete_matching_count,
     counterpartyCount: counterparties.complete_matching_count,
-    graphInteractionCount: graph.complete_matching_count,
+    graphCounterpartyCount: graph.complete_matching_count,
   };
 }
 
@@ -614,4 +567,36 @@ export async function loadNextApiEvents(
     signal,
   );
   return { ...response, items: response.items.map(normalizeEvent) };
+}
+
+export type RecognitionOverrideResponse = {
+  chain_id: 1;
+  token_address: string;
+  automatic_status: RecognitionStatus;
+  automatic_reason: string;
+  override_status: RecognitionStatus | null;
+  recognition_status: RecognitionStatus;
+  recognition_source: "automatic" | "manual";
+  previous_override_status: RecognitionStatus | null;
+};
+
+export function setTokenRecognition(
+  tokenAddress: string,
+  status: RecognitionStatus,
+  signal?: AbortSignal,
+): Promise<RecognitionOverrideResponse> {
+  return fetchJson(`/api/v1/tokens/${encodeURIComponent(tokenAddress)}/recognition`, signal, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function resetTokenRecognition(
+  tokenAddress: string,
+  signal?: AbortSignal,
+): Promise<RecognitionOverrideResponse> {
+  return fetchJson(`/api/v1/tokens/${encodeURIComponent(tokenAddress)}/recognition`, signal, {
+    method: "DELETE",
+  });
 }

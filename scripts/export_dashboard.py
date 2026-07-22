@@ -35,7 +35,7 @@ COUNTERPARTY_RANKING_LIMIT_PER_STATUS_QUALITY_ACCOUNT_SELECTION = 50
 TIMELINE_ROW_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE = 5_000
 TOKEN_STATUSES = ("trusted", "unverified", "suspected_spam", "spam")
 TOKEN_QUALITIES = ("high_confidence", "listed", "unknown")
-ACCOUNT_FILTERS = ("eoa_candidate", "eip7702_delegated", "safe", "erc4337_account", "contract", "unknown")
+ACCOUNT_FILTERS = ("eoa_candidate", "contract")
 REQUIRED_EXPORT_COLUMNS = {
     "wallet_events": {
         "from_address",
@@ -47,16 +47,12 @@ REQUIRED_EXPORT_COLUMNS = {
         "is_indirect",
         "token_quality",
         "counterparty_account_type",
-        "counterparty_is_safe",
-        "counterparty_is_erc4337_account",
     },
     "token_summary": {
         "indirect_inbound_transfer_count",
         "indirect_outbound_transfer_count",
         "token_quality",
         "counterparty_account_type",
-        "counterparty_is_safe",
-        "counterparty_is_erc4337_account",
     },
 }
 
@@ -153,20 +149,8 @@ def display_label(node: dict[str, Any]) -> str:
     if node["node_type"] == "counterparty" and isinstance(label, str) and len(label) == 42:
         label = f"{label[:6]}...{label[-4:]}"
     if node["node_type"] == "counterparty" and node["account_type"]:
-        type_labels = {
-            "eoa_candidate": "EOA candidate",
-            "eip7702_delegated": "Delegated EOA",
-            "safe": "Safe",
-            "erc4337_account": "ERC-4337",
-            "contract": "Contract",
-            "unknown": "Unknown",
-        }
-        evidence_labels = [type_labels[node["account_type"]]]
-        if node["is_safe"] and "Safe" not in evidence_labels:
-            evidence_labels.append("Safe")
-        if node["is_erc4337_account"] and "ERC-4337" not in evidence_labels:
-            evidence_labels.append("ERC-4337")
-        return f"{label}\n{' + '.join(evidence_labels)}"
+        type_label = {"eoa_candidate": "EOA", "contract": "Contract"}.get(node["account_type"])
+        return f"{label}\n{type_label}" if type_label else label
     return label
 
 
@@ -193,19 +177,6 @@ def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dic
                     "observationBlockNumber": node["observation_block_number"],
                     "observationBlockTimestamp": node["observation_block_timestamp"],
                     "eip7702DelegationTarget": node["eip7702_delegation_target"],
-                    "isSafe": node["is_safe"],
-                    "safeVerificationStatus": node["safe_verification_status"],
-                    "safeVersion": node["safe_version"],
-                    "safeSingletonAddress": node["safe_singleton_address"],
-                    "safeOwnerCount": node["safe_owner_count"],
-                    "safeThreshold": node["safe_threshold"],
-                    "isErc4337Account": node["is_erc4337_account"],
-                    "erc4337EntrypointAddress": node["erc4337_entrypoint_address"],
-                    "erc4337EntrypointVersion": node["erc4337_entrypoint_version"],
-                    "erc4337EntrypointSource": node["erc4337_entrypoint_source"],
-                    "erc4337EntrypointDeploymentBlock": node["erc4337_entrypoint_deployment_block"],
-                    "erc4337EffectiveCoverage": node["erc4337_effective_coverage"],
-                    "erc4337FailedRanges": node["erc4337_failed_ranges"],
                     "evidenceFetchStatus": node["evidence_fetch_status"],
                     "evidenceReasonCodes": node["evidence_reason_codes"],
                     "evidenceCoverageStartBlock": node["evidence_coverage_start_block"],
@@ -228,6 +199,9 @@ def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dic
                     "tokenAddress": edge["token_address"],
                     "tokenSymbol": edge["token_symbol"],
                     "tokenStatus": edge["token_status"],
+                    "recognitionStatus": edge["recognition_status"],
+                    "recognitionSource": edge["recognition_source"],
+                    "recognitionOverrideStatus": None,
                     "metadataAvailability": edge["metadata_availability"],
                     "tokenQuality": edge["token_quality"],
                     "tokenQualitySources": edge["token_quality_sources"],
@@ -245,8 +219,6 @@ def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dic
                     "interactionLegitimacyScore": edge["interaction_legitimacy_score"],
                     "interactionLegitimacyReasons": edge["interaction_legitimacy_reasons"],
                     "counterpartyAccountType": edge["counterparty_account_type"],
-                    "counterpartyIsSafe": edge["counterparty_is_safe"],
-                    "counterpartyIsErc4337Account": edge["counterparty_is_erc4337_account"],
                     "transferCount": edge["transfer_count"],
                     "counterpartyTransferCount": edge["counterparty_transfer_count"],
                     "amountDecimalSum": edge["amount_decimal_sum"],
@@ -269,9 +241,7 @@ def graph_rows(connection: Any) -> tuple[list[dict[str, Any]], list[dict[str, An
             partition by
               max(token_status),
               max(token_quality),
-              max(counterparty_account_type),
-              max(counterparty_is_safe),
-              max(counterparty_is_erc4337_account)
+              max(counterparty_account_type)
             order by max(transfer_count) desc, max(last_seen_at) desc, interaction_id
           ) as status_rank
         from graph_edges
@@ -328,12 +298,7 @@ def token_summary_rows(
         for index, value in enumerate(qualities)
     ) + " else 0 end"
     account_bits = " + ".join(
-        (
-            f"case when counterparty_account_type = '{value}'"
-            + (" or coalesce(counterparty_is_safe, false)" if value == "safe" else "")
-            + (" or coalesce(counterparty_is_erc4337_account, false)" if value == "erc4337_account" else "")
-            + f" then {1 << index} else 0 end"
-        )
+        f"case when counterparty_account_type = '{value}' then {1 << index} else 0 end"
         for index, value in enumerate(account_filters)
     )
     candidates = query_rows(
@@ -364,7 +329,10 @@ def token_summary_rows(
             inner join classified
               on (classified.status_bit & selections.status_mask) != 0
               and (classified.quality_bit & selections.quality_mask) != 0
-              and (classified.account_bits & selections.account_mask) != 0
+              and (
+                (classified.account_bits & selections.account_mask) != 0
+                or selections.account_mask = {(1 << len(account_filters)) - 1}
+              )
             group by
               selections.status_mask,
               selections.quality_mask,
@@ -391,8 +359,7 @@ def token_summary_rows(
           select *
           from token_summary
           where token_address in ({placeholders})
-          order by transfer_count desc, token_symbol, token_address,
-            counterparty_account_type, counterparty_is_safe, counterparty_is_erc4337_account
+          order by transfer_count desc, token_symbol, token_address, counterparty_account_type
         """,
         ordered_addresses,
     )
@@ -409,7 +376,7 @@ def counterparty_rows(
 
     Each summary row is encoded as status, quality, and inclusive account-membership
     bitsets. DuckDB ranks all selection masks in one proof-equivalent query, avoiding
-    6,615 Python/SQL round trips without weakening the top-N guarantee.
+    315 Python/SQL round trips without weakening the top-N guarantee.
     """
 
     status_case = "case " + " ".join(
@@ -421,12 +388,7 @@ def counterparty_rows(
         for index, value in enumerate(qualities)
     ) + " else 0 end"
     account_bits = " + ".join(
-        (
-            f"case when account_type = '{value}'"
-            + (" or coalesce(is_safe, false)" if value == "safe" else "")
-            + (" or coalesce(is_erc4337_account, false)" if value == "erc4337_account" else "")
-            + f" then {1 << index} else 0 end"
-        )
+        f"case when account_type = '{value}' then {1 << index} else 0 end"
         for index, value in enumerate(account_filters)
     )
     candidates = query_rows(
@@ -458,7 +420,10 @@ def counterparty_rows(
             inner join classified
               on (classified.status_bit & selections.status_mask) != 0
               and (classified.quality_bit & selections.quality_mask) != 0
-              and (classified.account_bits & selections.account_mask) != 0
+              and (
+                (classified.account_bits & selections.account_mask) != 0
+                or selections.account_mask = {(1 << len(account_filters)) - 1}
+              )
             group by
               selections.status_mask,
               selections.quality_mask,
@@ -500,7 +465,7 @@ def values_for_mask(values: tuple[str, ...], mask: int) -> tuple[str, ...]:
 
 
 def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
-    """Return complete metrics for all 6,615 non-empty composed filter selections."""
+    """Return complete metrics for all 315 non-empty composed filter selections."""
 
     rows_by_selection = query_rows(
         connection,
@@ -524,11 +489,7 @@ def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
                 else 0
               end as quality_bit,
               case when counterparty_account_type = 'eoa_candidate' then 1 else 0 end
-                + case when counterparty_account_type = 'eip7702_delegated' then 2 else 0 end
-                + case when counterparty_account_type = 'safe' or counterparty_is_safe then 4 else 0 end
-                + case when counterparty_account_type = 'erc4337_account' or counterparty_is_erc4337_account then 8 else 0 end
-                + case when counterparty_account_type = 'contract' then 16 else 0 end
-                + case when counterparty_account_type = 'unknown' then 32 else 0 end
+                + case when counterparty_account_type = 'contract' then 2 else 0 end
                 as account_bits
             from wallet_events
           ),
@@ -549,7 +510,10 @@ def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
           left join classified
             on (classified.status_bit & selections.status_mask) != 0
             and (classified.quality_bit & selections.quality_mask) != 0
-            and (classified.account_bits & selections.account_mask) != 0
+            and (
+              (classified.account_bits & selections.account_mask) != 0
+              or selections.account_mask = {(1 << len(ACCOUNT_FILTERS)) - 1}
+            )
           group by selections.status_mask, selections.quality_mask, selections.account_mask
         """,
     )
@@ -583,8 +547,7 @@ def main() -> None:
               select * exclude (status_rank)
               from (
                 select *, row_number() over (
-                  partition by token_status, token_quality, counterparty_account_type,
-                    counterparty_is_safe, counterparty_is_erc4337_account
+                  partition by token_status, token_quality, counterparty_account_type
                   order by block_timestamp desc, transaction_hash, log_index
                 ) as status_rank
                 from wallet_events
@@ -601,8 +564,7 @@ def main() -> None:
               select * exclude (status_quality_rank)
               from (
                 select *, row_number() over (
-                  partition by token_status, token_quality, counterparty_account_type,
-                    counterparty_is_safe, counterparty_is_erc4337_account
+                  partition by token_status, token_quality, counterparty_account_type
                   order by block_date desc, token_symbol, direction, token_address
                 ) as status_quality_rank
                 from timeline_daily
@@ -624,8 +586,7 @@ def main() -> None:
                 (select count(*) from counterparty_summary) as counterparty_summary_row_count,
                 (
                   select count(*) from (
-                    select distinct token_status, token_quality, counterparty_account_type,
-                      counterparty_is_safe, counterparty_is_erc4337_account
+                    select distinct token_status, token_quality, counterparty_account_type
                     from wallet_events
                   )
                 ) as status_quality_account_evidence_cell_count

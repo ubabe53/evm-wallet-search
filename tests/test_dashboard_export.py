@@ -29,8 +29,6 @@ class DashboardExportTest(unittest.TestCase):
                 "is_indirect boolean",
                 "token_quality varchar",
                 "counterparty_account_type varchar",
-                "counterparty_is_safe boolean",
-                "counterparty_is_erc4337_account boolean",
             ):
                 connection.execute(f"alter table wallet_events add column {column}")
             connection.execute(
@@ -42,8 +40,6 @@ class DashboardExportTest(unittest.TestCase):
             for column in (
                 "token_quality varchar",
                 "counterparty_account_type varchar",
-                "counterparty_is_safe boolean",
-                "counterparty_is_erc4337_account boolean",
             ):
                 connection.execute(f"alter table token_summary add column {column}")
 
@@ -62,20 +58,18 @@ class DashboardExportTest(unittest.TestCase):
                     token_status varchar,
                     token_quality varchar,
                     account_type varchar,
-                    is_safe boolean,
-                    is_erc4337_account boolean,
                     transfer_count integer,
                     last_seen_at timestamp
                 )
                 """
             )
             connection.executemany(
-                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?, ?, ?)",
+                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?)",
                 [
-                    ("0xaaa", "trusted", "high_confidence", "contract", False, False, 90, "2024-01-01"),
-                    ("0xaaa", "unverified", "listed", "contract", False, False, 90, "2024-01-01"),
-                    ("0xbbb", "trusted", "high_confidence", "contract", False, False, 100, "2024-01-02"),
-                    ("0xccc", "unverified", "listed", "contract", False, False, 100, "2024-01-02"),
+                    ("0xaaa", "trusted", "high_confidence", "contract", 90, "2024-01-01"),
+                    ("0xaaa", "unverified", "listed", "contract", 90, "2024-01-01"),
+                    ("0xbbb", "trusted", "high_confidence", "contract", 100, "2024-01-02"),
+                    ("0xccc", "unverified", "listed", "contract", 100, "2024-01-02"),
                 ],
             )
 
@@ -97,7 +91,7 @@ class DashboardExportTest(unittest.TestCase):
             )
         self.assertEqual(max(combined_counts, key=combined_counts.get), "0xaaa")
 
-    def test_counterparty_candidates_cover_all_6615_filter_selections_in_one_query(self) -> None:
+    def test_counterparty_candidates_cover_all_315_filter_selections_in_one_query(self) -> None:
         with patch.object(dashboard_export, "query_rows", return_value=[]) as query:
             self.assertEqual(dashboard_export.counterparty_rows(object()), [])
 
@@ -106,11 +100,11 @@ class DashboardExportTest(unittest.TestCase):
         account_combinations = dashboard_export.non_empty_subsets(dashboard_export.ACCOUNT_FILTERS)
         self.assertEqual(len(status_combinations), 15)
         self.assertEqual(len(quality_combinations), 7)
-        self.assertEqual(len(account_combinations), 63)
-        self.assertEqual(len(status_combinations) * len(quality_combinations) * len(account_combinations), 6615)
+        self.assertEqual(len(account_combinations), 3)
+        self.assertEqual(len(status_combinations) * len(quality_combinations) * len(account_combinations), 315)
         self.assertEqual(query.call_count, 1)
 
-    def test_counterparty_account_predicates_include_safe_erc4337_overlap(self) -> None:
+    def test_full_binary_selection_retains_internal_unknown_rows(self) -> None:
         duckdb = dashboard_export.ensure_duckdb()
         connection = duckdb.connect(":memory:")
         try:
@@ -121,32 +115,30 @@ class DashboardExportTest(unittest.TestCase):
                     token_status varchar,
                     token_quality varchar,
                     account_type varchar,
-                    is_safe boolean,
-                    is_erc4337_account boolean,
                     transfer_count integer,
                     last_seen_at timestamp
                 )
                 """
             )
             connection.executemany(
-                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?, ?, ?)",
+                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?)",
                 [
-                    ("0xoverlap", "trusted", "high_confidence", "safe", True, True, 200, "2025-01-03"),
-                    ("0xsafe", "trusted", "high_confidence", "safe", True, False, 150, "2025-01-02"),
-                    ("0xerc4337", "trusted", "high_confidence", "erc4337_account", False, True, 125, "2025-01-01"),
+                    ("0xunknown", "trusted", "high_confidence", "unknown", 200, "2025-01-03"),
+                    ("0xcontract", "trusted", "high_confidence", "contract", 150, "2025-01-02"),
+                    ("0xeoa", "trusted", "high_confidence", "eoa_candidate", 125, "2025-01-01"),
                 ],
             )
             exported = dashboard_export.counterparty_rows(
                 connection,
                 statuses=("trusted",),
                 qualities=("high_confidence",),
-                account_filters=("safe", "erc4337_account"),
+                account_filters=("eoa_candidate", "contract"),
                 ranking_limit=1,
             )
         finally:
             connection.close()
 
-        self.assertEqual({row["counterparty_address"] for row in exported}, {"0xoverlap"})
+        self.assertIn("0xunknown", {row["counterparty_address"] for row in exported})
 
     def test_token_candidates_rank_after_account_cell_aggregation(self) -> None:
         duckdb = dashboard_export.ensure_duckdb()
@@ -159,20 +151,18 @@ class DashboardExportTest(unittest.TestCase):
                     token_status varchar,
                     token_quality varchar,
                     counterparty_account_type varchar,
-                    counterparty_is_safe boolean,
-                    counterparty_is_erc4337_account boolean,
                     transfer_count integer,
                     token_symbol varchar
                 )
                 """
             )
             connection.executemany(
-                "insert into token_summary values (?, ?, ?, ?, ?, ?, ?, ?)",
+                "insert into token_summary values (?, ?, ?, ?, ?, ?)",
                 [
-                    ("0xaaa", "trusted", "high_confidence", "contract", False, False, 60, "A"),
-                    ("0xaaa", "trusted", "high_confidence", "safe", True, False, 60, "A"),
-                    ("0xbbb", "trusted", "high_confidence", "contract", False, False, 100, "B"),
-                    ("0xccc", "trusted", "high_confidence", "safe", True, False, 100, "C"),
+                    ("0xaaa", "trusted", "high_confidence", "contract", 60, "A"),
+                    ("0xaaa", "trusted", "high_confidence", "eoa_candidate", 60, "A"),
+                    ("0xbbb", "trusted", "high_confidence", "contract", 100, "B"),
+                    ("0xccc", "trusted", "high_confidence", "eoa_candidate", 100, "C"),
                 ],
             )
 
@@ -180,7 +170,7 @@ class DashboardExportTest(unittest.TestCase):
                 connection,
                 statuses=("trusted",),
                 qualities=("high_confidence",),
-                account_filters=("contract", "safe"),
+                account_filters=("contract", "eoa_candidate"),
                 ranking_limit=1,
             )
         finally:
@@ -189,21 +179,19 @@ class DashboardExportTest(unittest.TestCase):
         exported_addresses = [row["token_address"] for row in exported]
         self.assertEqual(exported_addresses.count("0xaaa"), 2)
 
-    def test_token_candidates_cover_all_6615_filter_selections_in_one_query(self) -> None:
+    def test_token_candidates_cover_all_filter_selections_in_one_query(self) -> None:
         with patch.object(dashboard_export, "query_rows", return_value=[]) as query:
             self.assertEqual(dashboard_export.token_summary_rows(object()), [])
 
         self.assertEqual(query.call_count, 1)
 
-    def test_graph_label_exposes_independent_safe_and_erc4337_evidence(self) -> None:
+    def test_graph_label_exposes_only_public_binary_types(self) -> None:
         label = dashboard_export.display_label({
             "node_type": "counterparty",
             "label": "0x3333333333333333333333333333333333333333",
-            "account_type": "safe",
-            "is_safe": True,
-            "is_erc4337_account": True,
+            "account_type": "eoa_candidate",
         })
-        self.assertEqual(label, "0x3333...3333\nSafe + ERC-4337")
+        self.assertEqual(label, "0x3333...3333\nEOA")
 
     def test_sampling_covers_every_bounded_export(self) -> None:
         metadata = {

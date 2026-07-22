@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadApiDashboardData, loadNextApiEvents, type DashboardQuery } from "../src/data";
+import {
+  loadApiDashboardData,
+  loadNextApiEvents,
+  resetTokenRecognition,
+  setTokenRecognition,
+  type DashboardQuery,
+} from "../src/data";
 
 const query: DashboardQuery = {
-  includeSpam: false,
-  accountFilters: ["contract", "safe"],
+  recognition: "recognized",
+  accountFilters: ["contract"],
   query: "usdc",
   graphLimit: 25,
   counterpartyLimit: 10,
@@ -40,14 +46,14 @@ describe("live dashboard API adapter", () => {
           items: [{
             wallet_id: "vitalik", ens: "vitalik.eth", wallet_address: "0xwallet",
             counterparty_address: "0x1111111111111111111111111111111111111111",
-            token_address: "0xtoken", token_symbol: "USDC", token_status: "trusted",
-            direction: "in", account_type: "contract", is_safe: false,
-            is_erc4337_account: false, observation_block_number: 22_500_000,
-            eip7702_delegation_target: null, safe_version: null, safe_owner_count: null,
-            safe_threshold: null, erc4337_entrypoint_version: null,
-            erc4337_effective_coverage: null, erc4337_failed_ranges: null,
+            account_type: "contract", code_state: "contract_code",
+            observation_block_timestamp: "2025-05-17T03:11:47+00:00",
+            observation_block_number: 22_500_000,
+            eip7702_delegation_target: null,
+            evidence_fetch_status: "complete", evidence_reason_codes: "code_observed",
             evidence_coverage_start_block: 17_000_000, evidence_coverage_end_block: 22_500_000,
-            transfer_count: 5, counterparty_transfer_count: 20,
+            transfer_count: 20, inbound_transfer_count: 5, outbound_transfer_count: 15,
+            token_count: 3,
           }],
         });
       }
@@ -61,20 +67,22 @@ describe("live dashboard API adapter", () => {
     expect(result.eventCount).toBe(100_001);
     expect(result.tokenCount).toBe(501);
     expect(result.counterpartyCount).toBe(2_000);
-    expect(result.graphInteractionCount).toBe(750);
+    expect(result.graphCounterpartyCount).toBe(750);
     expect(result.data.graph.nodes).toHaveLength(2);
     expect(result.data.graph.edges[0].data).toMatchObject({
-      direction: "in",
-      source: "counterparty:0x1111111111111111111111111111111111111111",
-      target: "wallet:0xwallet",
-      transferCount: 5,
+      direction: "both",
+      source: "wallet:0xwallet",
+      target: "counterparty:0x1111111111111111111111111111111111111111",
+      transferCount: 20,
       counterpartyTransferCount: 20,
+      inboundTransferCount: 5,
+      outboundTransferCount: 15,
+      tokenCount: 3,
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("data/"))).toBe(false);
     const summaryUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/summary?"))?.[0]);
-    expect(summaryUrl).toContain("include_spam=false");
+    expect(summaryUrl).toContain("recognition=recognized");
     expect(summaryUrl).toContain("account=contract");
-    expect(summaryUrl).toContain("account=safe");
     expect(summaryUrl).toContain("q=usdc");
   });
 
@@ -105,5 +113,28 @@ describe("live dashboard API adapter", () => {
     await loadNextApiEvents({ ...query, accountFilters: [] }, "cursor");
 
     expect(String(fetchMock.mock.calls[0][0])).toContain("account=none");
+  });
+
+  it("persists and resets recognition overrides through typed mutation requests", async () => {
+    const fetchMock = vi.fn((_input: string, init?: RequestInit) => response({
+      token_address: "0xtoken",
+      automatic_status: "recognized",
+      override_status: init?.method === "DELETE" ? null : "other",
+      recognition_status: init?.method === "DELETE" ? "recognized" : "other",
+      recognition_source: init?.method === "DELETE" ? "automatic" : "manual",
+      previous_override_status: init?.method === "DELETE" ? "other" : null,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await setTokenRecognition("0xtoken", "other");
+    await resetTokenRecognition("0xtoken");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/tokens/0xtoken/recognition", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ status: "other" }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/tokens/0xtoken/recognition", expect.objectContaining({
+      method: "DELETE",
+    }));
   });
 });

@@ -5,10 +5,12 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from threading import Lock
 from typing import Any, Iterable
 
 import duckdb
@@ -16,15 +18,11 @@ import duckdb
 
 ACCOUNT_FILTERS = (
     "eoa_candidate",
-    "eip7702_delegated",
-    "safe",
-    "erc4337_account",
     "contract",
-    "unknown",
 )
-SPAM_STATUSES = ("suspected_spam", "spam")
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
-API_SCHEMA_VERSION = "dashboard-api-v1"
+ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
+API_SCHEMA_VERSION = "dashboard-api-v5"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -35,11 +33,19 @@ class InvalidCursor(ValueError):
     """Raised when an event cursor is malformed."""
 
 
+class InvalidTokenAddress(ValueError):
+    """Raised when a token override address is not a canonical EVM address."""
+
+
+class TokenNotFound(LookupError):
+    """Raised when an override targets a token absent from the analytics snapshot."""
+
+
 @dataclass(frozen=True)
 class DashboardFilters:
-    include_spam: bool = False
     account_filters: tuple[str, ...] = ACCOUNT_FILTERS
     query: str | None = None
+    recognition: str = "all"
 
 
 def json_value(value: Any) -> Any:
@@ -61,28 +67,24 @@ def rows(connection: Any, sql: str, parameters: Iterable[Any] = ()) -> list[dict
     ]
 
 
-def filter_sql(filters: DashboardFilters) -> tuple[str, list[Any]]:
+def filter_sql(
+    filters: DashboardFilters,
+    *,
+    include_recognition: bool = True,
+) -> tuple[str, list[Any]]:
     clauses: list[str] = []
     parameters: list[Any] = []
-    if not filters.include_spam:
-        clauses.append("events.token_status not in (?, ?)")
-        parameters.extend(SPAM_STATUSES)
+    if include_recognition and filters.recognition != "all":
+        clauses.append("events.recognition_status = ?")
+        parameters.append(filters.recognition)
 
     selected = tuple(dict.fromkeys(filters.account_filters))
     if not selected:
         clauses.append("false")
     elif set(selected) != set(ACCOUNT_FILTERS):
-        account_clauses: list[str] = []
-        primary = [value for value in selected if value not in {"safe", "erc4337_account"}]
-        if primary:
-            placeholders = ", ".join("?" for _ in primary)
-            account_clauses.append(f"events.counterparty_account_type in ({placeholders})")
-            parameters.extend(primary)
-        if "safe" in selected:
-            account_clauses.append("events.counterparty_is_safe")
-        if "erc4337_account" in selected:
-            account_clauses.append("events.counterparty_is_erc4337_account")
-        clauses.append(f"({' or '.join(account_clauses)})")
+        placeholders = ", ".join("?" for _ in selected)
+        clauses.append(f"events.counterparty_account_type in ({placeholders})")
+        parameters.extend(selected)
 
     if filters.query:
         clauses.append(
@@ -92,9 +94,9 @@ def filter_sql(filters: DashboardFilters) -> tuple[str, list[Any]]:
             "events.transaction_sender_relation, events.transaction_target_relation, events.ens, "
             "events.wallet_address, events.from_address, events.to_address, events.counterparty_address, "
             "events.counterparty_account_type, events.counterparty_code_state, "
-            "events.counterparty_safe_version, events.counterparty_erc4337_entrypoint_version, "
             "events.counterparty_evidence_reason_codes, events.token_address, events.token_symbol, "
-            "events.token_name, events.metadata_availability, events.metadata_source)), ?)"
+            "events.token_name, events.recognition_status, events.recognition_source, "
+            "events.metadata_availability, events.metadata_source)), ?)"
         )
         parameters.append(filters.query.strip().lower())
 
@@ -103,7 +105,75 @@ def filter_sql(filters: DashboardFilters) -> tuple[str, list[Any]]:
 
 def filtered_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
     predicate, parameters = filter_sql(filters)
-    return f"with filtered_events as (select * from wallet_events as events where {predicate})", parameters
+    return f"""
+      with effective_events as (
+        select
+          events.* exclude (recognition_status, recognition_reason, recognition_source),
+          coalesce(overrides.status, events.recognition_status) as recognition_status,
+          case
+            when overrides.status is not null then 'manual_override'
+            else events.recognition_reason
+          end as recognition_reason,
+          case
+            when overrides.status is not null then 'manual'
+            else events.recognition_source
+          end as recognition_source,
+          overrides.status as recognition_override_status
+        from wallet_events as events
+        left join app.token_recognition_overrides as overrides
+          on overrides.chain_id = events.chain_id
+          and overrides.token_address = events.token_address
+      ),
+      filtered_events as (select * from effective_events as events where {predicate})
+    """, parameters
+
+
+def counterparty_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
+    """Select a counterparty cohort without discarding its opposite-recognition activity.
+
+    Recognition decides whether an address belongs in the cohort. Once eligible, all
+    events within the remaining account/search scope contribute to its displayed
+    activity, so an address that used both recognized and other tokens remains intact.
+    """
+    predicate, parameters = filter_sql(filters, include_recognition=False)
+    recognition_predicate = "true"
+    if filters.recognition != "all":
+        recognition_predicate = "events.recognition_status = ?"
+        parameters.append(filters.recognition)
+
+    return f"""
+      with effective_events as (
+        select
+          events.* exclude (recognition_status, recognition_reason, recognition_source),
+          coalesce(overrides.status, events.recognition_status) as recognition_status,
+          case
+            when overrides.status is not null then 'manual_override'
+            else events.recognition_reason
+          end as recognition_reason,
+          case
+            when overrides.status is not null then 'manual'
+            else events.recognition_source
+          end as recognition_source,
+          overrides.status as recognition_override_status
+        from wallet_events as events
+        left join app.token_recognition_overrides as overrides
+          on overrides.chain_id = events.chain_id
+          and overrides.token_address = events.token_address
+      ),
+      scoped_events as (
+        select * from effective_events as events where {predicate}
+      ),
+      eligible_counterparties as (
+        select distinct wallet_address, counterparty_address
+        from scoped_events as events
+        where {recognition_predicate}
+      ),
+      counterparty_events as (
+        select events.*
+        from scoped_events as events
+        join eligible_counterparties using (wallet_address, counterparty_address)
+      )
+    """, parameters
 
 
 def encode_cursor(row: dict[str, Any]) -> str:
@@ -131,6 +201,8 @@ class QueryService:
     def __init__(self, database_path: Path, *, require_live: bool = True) -> None:
         self.database_path = database_path
         self.require_live = require_live
+        self._schema_ready = False
+        self._schema_lock = Lock()
 
     def connect(self) -> Any:
         if not self.database_path.is_file():
@@ -139,7 +211,7 @@ class QueryService:
             )
         connection = None
         try:
-            connection = duckdb.connect(str(self.database_path), read_only=True)
+            connection = duckdb.connect(str(self.database_path), read_only=False)
             metadata = rows(connection, "select * from pipeline_metadata order by wallet_id")
         except Exception as error:
             if connection is not None:
@@ -151,6 +223,21 @@ class QueryService:
         if self.require_live and metadata[0]["data_source"] != "hyperindex":
             connection.close()
             raise DatabaseUnavailable("The local API requires a HyperIndex-built live database")
+        with self._schema_lock:
+            if not self._schema_ready:
+                connection.execute("create schema if not exists app")
+                connection.execute(
+                    """
+                    create table if not exists app.token_recognition_overrides (
+                      chain_id integer not null check (chain_id = 1),
+                      token_address varchar not null,
+                      status varchar not null check (status in ('recognized', 'other')),
+                      updated_at timestamptz not null default current_timestamp,
+                      primary key (chain_id, token_address)
+                    )
+                    """
+                )
+                self._schema_ready = True
         return connection
 
     def metadata(self) -> dict[str, Any]:
@@ -202,10 +289,76 @@ class QueryService:
     @staticmethod
     def query_contract(filters: DashboardFilters) -> dict[str, Any]:
         return {
-            "include_spam": filters.include_spam,
+            "recognition": filters.recognition,
             "account_evidence": list(filters.account_filters),
             "query": filters.query,
         }
+
+    @staticmethod
+    def normalized_token_address(token_address: str) -> str:
+        if not ADDRESS_PATTERN.fullmatch(token_address):
+            raise InvalidTokenAddress("Token address must be a 20-byte hexadecimal address")
+        return token_address.lower()
+
+    def token_recognition(self, token_address: str) -> dict[str, Any]:
+        address = self.normalized_token_address(token_address)
+        with self.connect() as connection:
+            result = rows(
+                connection,
+                """
+                select
+                  events.chain_id,
+                  events.token_address,
+                  any_value(events.token_symbol) as token_symbol,
+                  any_value(events.recognition_status) as automatic_status,
+                  any_value(events.recognition_reason) as automatic_reason,
+                  overrides.status as override_status,
+                  overrides.updated_at,
+                  coalesce(overrides.status, any_value(events.recognition_status)) as recognition_status,
+                  case when overrides.status is null then 'automatic' else 'manual' end as recognition_source
+                from wallet_events as events
+                left join app.token_recognition_overrides as overrides
+                  on overrides.chain_id = events.chain_id
+                  and overrides.token_address = events.token_address
+                where events.chain_id = 1 and events.token_address = ?
+                group by events.chain_id, events.token_address, overrides.status, overrides.updated_at
+                """,
+                [address],
+            )
+        if not result:
+            raise TokenNotFound("Token is not present in the current analytics snapshot")
+        return result[0]
+
+    def set_token_recognition(self, token_address: str, status: str) -> dict[str, Any]:
+        if status not in {"recognized", "other"}:
+            raise ValueError("Recognition status must be recognized or other")
+        address = self.normalized_token_address(token_address)
+        previous = self.token_recognition(address)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                insert into app.token_recognition_overrides (chain_id, token_address, status, updated_at)
+                values (1, ?, ?, current_timestamp)
+                on conflict (chain_id, token_address) do update
+                set status = excluded.status, updated_at = excluded.updated_at
+                """,
+                [address, status],
+            )
+        current = self.token_recognition(address)
+        current["previous_override_status"] = previous["override_status"]
+        return current
+
+    def reset_token_recognition(self, token_address: str) -> dict[str, Any]:
+        address = self.normalized_token_address(token_address)
+        previous = self.token_recognition(address)
+        with self.connect() as connection:
+            connection.execute(
+                "delete from app.token_recognition_overrides where chain_id = 1 and token_address = ?",
+                [address],
+            )
+        current = self.token_recognition(address)
+        current["previous_override_status"] = previous["override_status"]
+        return current
 
     def summary(self, filters: DashboardFilters) -> dict[str, Any]:
         cte, parameters = filtered_cte(filters)
@@ -296,6 +449,11 @@ class QueryService:
                   any_value(token_name) as token_name,
                   any_value(token_decimals) as token_decimals,
                   any_value(token_status) as token_status,
+                  any_value(recognition_status) as recognition_status,
+                  any_value(recognition_reason) as recognition_reason,
+                  any_value(recognition_source) as recognition_source,
+                  any_value(recognition_version) as recognition_version,
+                  any_value(recognition_override_status) as recognition_override_status,
                   any_value(metadata_source) as metadata_source,
                   any_value(metadata_source_url) as metadata_source_url,
                   any_value(metadata_availability) as metadata_availability,
@@ -335,9 +493,9 @@ class QueryService:
         }
 
     def counterparties(self, filters: DashboardFilters, *, limit: int) -> dict[str, Any]:
-        cte, parameters = filtered_cte(filters)
+        cte, parameters = counterparty_cte(filters)
         eligible = f"""
-          select events.* from filtered_events as events
+          select events.* from counterparty_events as events
           where events.counterparty_address != '{ZERO_ADDRESS}'
             and events.counterparty_address != events.wallet_address
             and not exists (
@@ -362,22 +520,6 @@ class QueryService:
                   any_value(counterparty_observation_block_number) as observation_block_number,
                   any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
                   any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
-                  bool_or(counterparty_is_safe) as is_safe,
-                  any_value(counterparty_safe_verification_status) as safe_verification_status,
-                  any_value(counterparty_safe_version) as safe_version,
-                  any_value(counterparty_safe_singleton_address) as safe_singleton_address,
-                  any_value(counterparty_safe_owner_count) as safe_owner_count,
-                  any_value(counterparty_safe_threshold) as safe_threshold,
-                  bool_or(counterparty_is_erc4337_account) as is_erc4337_account,
-                  any_value(counterparty_erc4337_user_operation_count) as erc4337_user_operation_count,
-                  any_value(counterparty_erc4337_first_observed_block) as erc4337_first_observed_block,
-                  any_value(counterparty_erc4337_last_observed_block) as erc4337_last_observed_block,
-                  any_value(counterparty_erc4337_entrypoint_address) as erc4337_entrypoint_address,
-                  any_value(counterparty_erc4337_entrypoint_version) as erc4337_entrypoint_version,
-                  any_value(counterparty_erc4337_entrypoint_source) as erc4337_entrypoint_source,
-                  any_value(counterparty_erc4337_entrypoint_deployment_block) as erc4337_entrypoint_deployment_block,
-                  any_value(counterparty_erc4337_effective_coverage) as erc4337_effective_coverage,
-                  any_value(counterparty_erc4337_failed_ranges) as erc4337_failed_ranges,
                   any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
                   any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
                   any_value(counterparty_evidence_coverage_scope) as evidence_coverage_scope,
@@ -410,51 +552,55 @@ class QueryService:
         }
 
     def graph(self, filters: DashboardFilters, *, limit: int) -> dict[str, Any]:
-        cte, parameters = filtered_cte(filters)
-        interaction_sql = f"""
+        cte, parameters = counterparty_cte(filters)
+        eligible = f"""
+          select events.* from counterparty_events as events
+          where events.counterparty_address != '{ZERO_ADDRESS}'
+            and events.counterparty_address != events.wallet_address
+            and not exists (
+              select 1 from wallet_events as token_events
+              where token_events.token_address = events.counterparty_address
+            )
+        """
+        counterparty_sql = f"""
           select
             any_value(wallet_id) as wallet_id,
             any_value(ens) as ens,
             wallet_address,
             counterparty_address,
-            token_address,
-            coalesce(any_value(token_symbol), substr(token_address, 1, 10)) as token_symbol,
-            any_value(token_status) as token_status,
-            direction,
             any_value(counterparty_account_type) as account_type,
-            bool_or(counterparty_is_safe) as is_safe,
-            bool_or(counterparty_is_erc4337_account) as is_erc4337_account,
+            any_value(counterparty_code_state) as code_state,
+            any_value(counterparty_code_size_bytes) as code_size_bytes,
             any_value(counterparty_observation_block_number) as observation_block_number,
+            any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
             any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
-            any_value(counterparty_safe_version) as safe_version,
-            any_value(counterparty_safe_owner_count) as safe_owner_count,
-            any_value(counterparty_safe_threshold) as safe_threshold,
-            any_value(counterparty_erc4337_entrypoint_version) as erc4337_entrypoint_version,
-            any_value(counterparty_erc4337_effective_coverage) as erc4337_effective_coverage,
-            any_value(counterparty_erc4337_failed_ranges) as erc4337_failed_ranges,
+            any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
+            any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
+            any_value(counterparty_evidence_coverage_scope) as evidence_coverage_scope,
             any_value(counterparty_evidence_coverage_start_block) as evidence_coverage_start_block,
             any_value(counterparty_evidence_coverage_end_block) as evidence_coverage_end_block,
+            any_value(counterparty_evidence_schema_version) as evidence_schema_version,
             count(*) as transfer_count,
+            count(*) filter (where direction = 'in') as inbound_transfer_count,
+            count(*) filter (where direction = 'out') as outbound_transfer_count,
+            count(distinct token_address) as token_count,
+            min(block_timestamp) as first_seen_at,
             max(block_timestamp) as last_seen_at
-          from filtered_events
-          where counterparty_address != '{ZERO_ADDRESS}'
-          group by wallet_address, counterparty_address, token_address, direction
+          from ({eligible})
+          group by wallet_address, counterparty_address
         """
         with self.connect() as connection:
-            total = rows(connection, f"{cte} select count(*) as count from ({interaction_sql})", parameters)[0]["count"]
+            total = rows(
+                connection,
+                f"{cte} select count(*) as count from ({counterparty_sql})",
+                parameters,
+            )[0]["count"]
             items = rows(
                 connection,
                 f"""
-                {cte}, counterparty_activity as (
-                  select wallet_address, counterparty_address, count(*) as counterparty_transfer_count
-                  from wallet_events
-                  group by wallet_address, counterparty_address
-                )
-                select interactions.*, activity.counterparty_transfer_count
-                from ({interaction_sql}) as interactions
-                join counterparty_activity as activity using (wallet_address, counterparty_address)
-                order by interactions.transfer_count desc, interactions.last_seen_at desc,
-                  interactions.counterparty_address, interactions.token_address, interactions.direction
+                {cte}
+                select * from ({counterparty_sql}) as counterparties
+                order by transfer_count desc, last_seen_at desc, counterparty_address
                 limit {limit}
                 """,
                 parameters,

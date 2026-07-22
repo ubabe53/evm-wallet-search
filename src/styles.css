@@ -12,6 +12,7 @@
   --graph-label: #111827;
   --graph-edge: #4f756a;
   --graph-counterparty: #4d7c70;
+  --graph-unknown: #98a2b3;
   --graph-wallet: #16a34a;
   --graph-node-border: #d8ebe4;
   --graph-label-outline: #f4f9f7;
@@ -22,8 +23,6 @@
   --live-text: #067647;
   --in: #0f766e;
   --out: #b45309;
-  --spam: #b42318;
-  --spam-bg: #fef3f2;
   --unverified-bg: #f2f4f7;
   color: var(--text);
   background: var(--page-bg);
@@ -47,6 +46,7 @@
   --graph-label: #f8fafc;
   --graph-edge: #5fa38d;
   --graph-counterparty: #4f8f7c;
+  --graph-unknown: #667085;
   --graph-wallet: #4ade80;
   --graph-node-border: #a7f3d0;
   --graph-label-outline: #07110e;
@@ -57,8 +57,6 @@
   --live-text: #6ee7b7;
   --in: #5eead4;
   --out: #fbbf24;
-  --spam: #fda29b;
-  --spam-bg: #3b1717;
   --unverified-bg: #273241;
 }
 
@@ -168,31 +166,138 @@ h2 {
   gap: 8px;
 }
 
-.spamToggle {
+.recognitionControls {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
+}
+
+.recognitionFilter {
+  display: inline-flex;
   height: 40px;
+  margin: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--control-bg);
-  padding: 0 10px;
+  padding: 3px;
   color: var(--text);
   font-size: 13px;
-  cursor: pointer;
   white-space: nowrap;
 }
 
-.spamToggle input {
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  accent-color: var(--spam);
+.recognitionFilter label {
+  cursor: pointer;
 }
 
-.spamToggle small {
+.recognitionFilter input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.recognitionFilter span {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 5px;
+  padding: 0 8px;
+}
+
+.recognitionFilter input:checked + span {
+  background: var(--live-bg);
+  color: var(--live-text);
+  font-weight: 700;
+}
+
+.recognitionFilter input:focus-visible + span {
+  outline: 2px solid var(--graph-wallet);
+  outline-offset: 1px;
+}
+
+.infoTooltip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.infoTooltipTrigger {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--control-bg);
   color: var(--muted);
-  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.infoTooltipTrigger:hover,
+.infoTooltipTrigger:focus-visible {
+  border-color: var(--graph-wallet);
+  color: var(--text);
+  outline: none;
+}
+
+.infoTooltipContent {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  padding: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+.infoTooltipContent > span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.infoTooltip.left .infoTooltipContent {
+  right: auto;
+  left: 0;
+}
+
+.infoTooltip:hover .infoTooltipContent,
+.infoTooltip:focus-within .infoTooltipContent {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.addressTypeControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tableHeaderInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tableHeaderInfo .infoTooltipTrigger {
+  width: 24px;
+  height: 24px;
 }
 
 .statusFilter {
@@ -537,28 +642,10 @@ h2 {
   background: var(--graph-counterparty);
 }
 
-.graphLegend .delegatedSwatch {
-  border-radius: 1px;
-  background: var(--graph-counterparty);
-  transform: rotate(45deg);
-}
-
-.graphLegend .safeSwatch {
-  border-radius: 2px;
-  background: var(--graph-counterparty);
-  box-shadow: 0 0 0 2px var(--live-text);
-}
-
-.graphLegend .erc4337Swatch {
-  border: 2px dotted var(--graph-wallet);
-  border-radius: 2px;
-  background: transparent;
-}
-
 .graphLegend .unknownSwatch {
-  border-style: dashed;
-  background: transparent;
+  background: var(--graph-unknown);
 }
+
 
 table {
   width: 100%;
@@ -707,10 +794,15 @@ th {
   color: var(--out);
 }
 
-.tokenStatus {
+.recognitionCell {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
+  gap: 7px;
+}
+
+.recognitionStatus {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--unverified-bg);
@@ -722,10 +814,25 @@ th {
   text-transform: uppercase;
 }
 
-.tokenStatus.spam {
-  border-color: var(--spam);
-  background: var(--spam-bg);
-  color: var(--spam);
+.recognitionStatus.recognized {
+  border-color: var(--in);
+  background: var(--live-bg);
+  color: var(--in);
+}
+
+.recognitionCell select {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--control-bg);
+  padding: 0 24px 0 7px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.recognitionCell select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .accountType {
@@ -742,8 +849,7 @@ th {
   text-transform: uppercase;
 }
 
-.accountType.contract,
-.accountType.eip7702_delegated {
+.accountType.contract {
   border-color: var(--out);
   color: var(--out);
 }
@@ -751,20 +857,6 @@ th {
 .accountType.eoa_candidate {
   border-color: var(--in);
   color: var(--in);
-}
-
-.accountType.safe {
-  border-color: var(--live-text);
-  color: var(--live-text);
-}
-
-.accountType.erc4337_account {
-  border-color: var(--graph-wallet);
-  color: var(--graph-wallet);
-}
-
-.accountType.unknown {
-  border-style: dashed;
 }
 
 .accountBadges {
@@ -870,6 +962,32 @@ code {
 
 .eventPageButton:hover {
   background: var(--page-bg);
+}
+
+.recognitionToast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  padding: 11px 12px 11px 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+}
+
+.recognitionToast button {
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  color: var(--graph-wallet);
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .empty {

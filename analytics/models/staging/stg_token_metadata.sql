@@ -5,6 +5,7 @@ with registry as (
     name,
     cast(decimals as integer) as decimals,
     token_status,
+    recognition_status,
     metadata_source,
     metadata_source_url
   from {{ ref('token_metadata') }}
@@ -53,6 +54,23 @@ resolved as (
     coalesce(overrides.name, registry.name, rpc_metadata.name) as name,
     coalesce(overrides.decimals, registry.decimals, rpc_metadata.decimals) as decimals,
     coalesce(overrides.token_status, 'unverified') as token_status,
+    case
+      when overrides.token_status = 'spam' then 'other'
+      when overrides.token_status = 'trusted' then 'recognized'
+      when registry.recognition_status = 'recognized' then 'recognized'
+      else 'other'
+    end as recognition_status,
+    case
+      when overrides.token_status = 'spam' then 'reviewed_manual_other'
+      when overrides.token_status = 'trusted' then 'reviewed_manual_recognized'
+      when registry.recognition_status = 'recognized' then 'registry_match'
+      else 'no_registry_match'
+    end as recognition_reason,
+    case
+      when overrides.token_status in ('spam', 'trusted') then 'manual'
+      when registry.recognition_status = 'recognized' then 'registry'
+      else 'automatic'
+    end as recognition_source,
     case
       when overrides.token_address is not null then 'manual'
       when registry.token_address is not null then registry.metadata_source
@@ -109,5 +127,6 @@ select
     when symbol is not null or name is not null or decimals is not null then 'partial'
     else 'unavailable'
   end as metadata_availability,
-  'token-quality-v1' as token_quality_version
+  'token-quality-v1' as token_quality_version,
+  'token-recognition-v1' as recognition_version
 from resolved

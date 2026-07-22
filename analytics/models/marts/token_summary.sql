@@ -6,6 +6,10 @@ select
   token_name,
   token_decimals,
   token_status,
+  recognition_status,
+  recognition_reason,
+  recognition_source,
+  recognition_version,
   metadata_source,
   metadata_source_url,
   token_label_reason,
@@ -21,8 +25,6 @@ select
   token_reputation_reasons,
   token_reputation_version,
   counterparty_account_type,
-  counterparty_is_safe,
-  counterparty_is_erc4337_account,
   count(*) as transfer_count,
   count(*) filter (where direction = 'in') as inbound_transfer_count,
   count(*) filter (where direction = 'out') as outbound_transfer_count,
@@ -49,8 +51,9 @@ select
   sum(cast(value_raw as bignum)) as value_raw_sum
 from {{ ref('wallet_events') }}
 group by wallet_id, wallet_address, token_address, token_symbol, token_name, token_decimals,
-  token_status, metadata_source, metadata_source_url, token_label_reason,
+  token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
+  metadata_source, metadata_source_url, token_label_reason,
   metadata_availability, token_quality, token_quality_sources, token_quality_source_count,
   token_quality_reason, token_quality_provenance, token_quality_version,
   token_reputation, token_reputation_score, token_reputation_reasons, token_reputation_version,
-  counterparty_account_type, counterparty_is_safe, counterparty_is_erc4337_account
+  counterparty_account_type
