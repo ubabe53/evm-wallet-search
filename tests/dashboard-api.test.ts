@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadApiDashboardData, loadNextApiEvents, type DashboardQuery } from "../src/data";
+import {
+  loadApiDashboardData,
+  loadNextApiEvents,
+  resetTokenRecognition,
+  setTokenRecognition,
+  type DashboardQuery,
+} from "../src/data";
 
 const query: DashboardQuery = {
-  includeSpam: false,
+  recognition: "recognized",
   accountFilters: ["contract"],
   query: "usdc",
   graphLimit: 25,
@@ -41,6 +47,8 @@ describe("live dashboard API adapter", () => {
             wallet_id: "vitalik", ens: "vitalik.eth", wallet_address: "0xwallet",
             counterparty_address: "0x1111111111111111111111111111111111111111",
             token_address: "0xtoken", token_symbol: "USDC", token_status: "trusted",
+            recognition_status: "recognized", recognition_source: "registry",
+            recognition_override_status: null,
             direction: "in", account_type: "contract", observation_block_number: 22_500_000,
             eip7702_delegation_target: null,
             evidence_coverage_start_block: 17_000_000, evidence_coverage_end_block: 22_500_000,
@@ -66,10 +74,11 @@ describe("live dashboard API adapter", () => {
       target: "wallet:0xwallet",
       transferCount: 5,
       counterpartyTransferCount: 20,
+      recognitionStatus: "recognized",
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("data/"))).toBe(false);
     const summaryUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/summary?"))?.[0]);
-    expect(summaryUrl).toContain("include_spam=false");
+    expect(summaryUrl).toContain("recognition=recognized");
     expect(summaryUrl).toContain("account=contract");
     expect(summaryUrl).toContain("q=usdc");
   });
@@ -101,5 +110,28 @@ describe("live dashboard API adapter", () => {
     await loadNextApiEvents({ ...query, accountFilters: [] }, "cursor");
 
     expect(String(fetchMock.mock.calls[0][0])).toContain("account=none");
+  });
+
+  it("persists and resets recognition overrides through typed mutation requests", async () => {
+    const fetchMock = vi.fn((_input: string, init?: RequestInit) => response({
+      token_address: "0xtoken",
+      automatic_status: "recognized",
+      override_status: init?.method === "DELETE" ? null : "other",
+      recognition_status: init?.method === "DELETE" ? "recognized" : "other",
+      recognition_source: init?.method === "DELETE" ? "automatic" : "manual",
+      previous_override_status: init?.method === "DELETE" ? "other" : null,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await setTokenRecognition("0xtoken", "other");
+    await resetTokenRecognition("0xtoken");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/tokens/0xtoken/recognition", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ status: "other" }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/tokens/0xtoken/recognition", expect.objectContaining({
+      method: "DELETE",
+    }));
   });
 });

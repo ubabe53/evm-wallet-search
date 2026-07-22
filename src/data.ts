@@ -34,6 +34,9 @@ export type GraphEdge = {
     tokenSymbol: string;
     label?: string;
     tokenStatus: TokenStatus;
+    recognitionStatus: RecognitionStatus;
+    recognitionSource: string;
+    recognitionOverrideStatus: RecognitionStatus | null;
     metadataAvailability?: MetadataAvailability;
     tokenQuality?: TokenQuality;
     tokenQualitySources?: string[];
@@ -58,6 +61,8 @@ export type GraphEdge = {
 };
 
 export type TokenStatus = "trusted" | "unverified" | "suspected_spam" | "spam";
+export type RecognitionStatus = "recognized" | "other";
+export type RecognitionFilter = "all" | RecognitionStatus;
 export type TokenReputation = TokenStatus;
 export type TokenQuality = "high_confidence" | "listed" | "unknown";
 export type MetadataAvailability = "complete" | "partial" | "unavailable";
@@ -85,6 +90,11 @@ export type AccountEvidence = {
 };
 
 export type ClassificationEvidence = {
+  recognition_status: RecognitionStatus;
+  recognition_reason: string;
+  recognition_source: string;
+  recognition_version: "token-recognition-v1";
+  recognition_override_status?: RecognitionStatus | null;
   metadata_availability: MetadataAvailability;
   token_quality: TokenQuality;
   token_quality_sources: string[];
@@ -114,6 +124,11 @@ export type TokenSummary = {
   token_name: string | null;
   token_decimals: number | null;
   token_status: TokenStatus;
+  recognition_status: RecognitionStatus;
+  recognition_reason: string;
+  recognition_source: string;
+  recognition_version: "token-recognition-v1";
+  recognition_override_status?: RecognitionStatus | null;
   metadata_source: string | null;
   metadata_source_url: string | null;
   token_label_reason: string | null;
@@ -147,6 +162,7 @@ export type CounterpartySummary = AccountEvidence & {
   wallet_address: string;
   counterparty_address: string;
   token_status: TokenStatus;
+  recognition_status: RecognitionStatus;
   token_quality: TokenQuality;
   transfer_count: number;
   inbound_transfer_count: number;
@@ -226,6 +242,10 @@ export type PipelineMetadata = {
   generated_at: string;
   transfer_count: number;
   token_count: number;
+  recognized_transfer_count: number;
+  recognized_token_count: number;
+  other_transfer_count: number;
+  other_token_count: number;
   counterparty_count: number;
   non_spam_transfer_count: number;
   non_spam_token_count: number;
@@ -336,7 +356,7 @@ export type DashboardData<Metadata extends DashboardMetadata = PipelineMetadata>
 };
 
 export type DashboardQuery = {
-  includeSpam: boolean;
+  recognition: RecognitionFilter;
   accountFilters: AccountFilter[];
   query: string;
   graphLimit: number;
@@ -375,6 +395,9 @@ type ApiGraphInteraction = {
   token_address: string;
   token_symbol: string;
   token_status: TokenStatus;
+  recognition_status: RecognitionStatus;
+  recognition_source: string;
+  recognition_override_status: RecognitionStatus | null;
   direction: "in" | "out";
   account_type: AccountType;
   observation_block_number: number | null;
@@ -389,7 +412,7 @@ export const dashboardDataMode = import.meta.env.VITE_DATA_MODE === "api" ? "api
 
 function apiQuery(query: DashboardQuery, extra: Record<string, string | number> = {}): string {
   const parameters = new URLSearchParams();
-  parameters.set("include_spam", String(query.includeSpam));
+  parameters.set("recognition", query.recognition);
   if (query.accountFilters.length === 0) {
     parameters.append("account", "none");
   } else if (query.accountFilters.length < 2) {
@@ -444,6 +467,9 @@ function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
         walletAddress: item.wallet_address, counterpartyAddress: item.counterparty_address,
         direction: item.direction, tokenAddress: item.token_address, tokenSymbol: item.token_symbol,
         tokenStatus: item.token_status,
+        recognitionStatus: item.recognition_status,
+        recognitionSource: item.recognition_source,
+        recognitionOverrideStatus: item.recognition_override_status,
         counterpartyAccountType: item.account_type, transferCount: item.transfer_count,
         counterpartyTransferCount: item.counterparty_transfer_count,
       },
@@ -459,8 +485,8 @@ function normalizeEvent(event: WalletEvent): WalletEvent {
   };
 }
 
-async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, { signal });
+async function fetchJson<T>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, { ...init, signal });
   if (!response.ok) {
     const payload = typeof response.json === "function"
       ? await response.json().catch(() => null) as { detail?: string } | null
@@ -537,4 +563,36 @@ export async function loadNextApiEvents(
     signal,
   );
   return { ...response, items: response.items.map(normalizeEvent) };
+}
+
+export type RecognitionOverrideResponse = {
+  chain_id: 1;
+  token_address: string;
+  automatic_status: RecognitionStatus;
+  automatic_reason: string;
+  override_status: RecognitionStatus | null;
+  recognition_status: RecognitionStatus;
+  recognition_source: "automatic" | "manual";
+  previous_override_status: RecognitionStatus | null;
+};
+
+export function setTokenRecognition(
+  tokenAddress: string,
+  status: RecognitionStatus,
+  signal?: AbortSignal,
+): Promise<RecognitionOverrideResponse> {
+  return fetchJson(`/api/v1/tokens/${encodeURIComponent(tokenAddress)}/recognition`, signal, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function resetTokenRecognition(
+  tokenAddress: string,
+  signal?: AbortSignal,
+): Promise<RecognitionOverrideResponse> {
+  return fetchJson(`/api/v1/tokens/${encodeURIComponent(tokenAddress)}/recognition`, signal, {
+    method: "DELETE",
+  });
 }

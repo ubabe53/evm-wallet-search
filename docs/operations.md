@@ -64,7 +64,7 @@ Each reviewed manual `trusted` approval or `spam` entry must include a reason an
 
 Classification runs during every dbt build and makes no network calls. Inspect contract-level evidence in `int_token_reputation`, wallet-token behavior in `int_wallet_token_interactions`, and the effective event status in `wallet_events`. Scores, reason codes, provenance, and classifier versions remain available internally in DuckDB and the typed transitional payload; the dashboard does not expose that evidence.
 
-The dashboard has one `Include spam` toggle, off by default. Off excludes both automated `suspected_spam` and reviewed `spam`; on includes both under one user-facing `Spam` label. It does not show a trusted label or a quality filter. To change a threshold or reason rule, update the corresponding model, its version string, dbt tests, and `docs/architecture.md` in the same change.
+The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only. Internal reputation and quality evidence are not shown. To change a classifier rule, update the corresponding model, its version string, dbt tests, and `docs/architecture.md` in the same change.
 
 ## RPC Metadata Enrichment
 

@@ -87,7 +87,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - Zero-address mint/burn semantics and self-transfer policy remain explicit.
 - Token and account labels are evidence, not canonical identity.
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
-- Suspected and reviewed spam remain distinct internally but project to one user-facing `Spam` state.
+- Suspected and reviewed spam remain distinct internal evidence and are not projected into the dashboard; the public token labels are only `Recognized` and `Other`.
 - Bounded outputs disclose their complete matching count, returned count, limits, provenance, and sampling state where applicable.
 
 Detailed field grains and tests are in `docs/data-model.md`.
@@ -119,10 +119,10 @@ The loopback-only FastAPI service:
 - compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, enrichment coverage, complete matching counts, and returned limits;
 - apply manual token-recognition overrides before every filter, count, ranking, graph page, and event page;
-- expose `include_spam` as the public reputation control while retaining detailed evidence internally;
+- expose only `recognition=all|recognized|other` as the public token-classification control while retaining detailed reputation evidence internally;
 - keep secrets and database paths server-side.
 
-The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves the exact totals, requests bounded graph/token/counterparty results, and follows the opaque event cursor when the user asks for more rows.
+The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves the exact totals, requests bounded graph/token/counterparty results, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override.
 
 ## Known implementation gaps
 

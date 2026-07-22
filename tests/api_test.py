@@ -36,7 +36,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v3")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v4")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 6)
@@ -51,17 +51,15 @@ class DashboardApiTest(unittest.TestCase):
 
     def test_summary_uses_every_matching_row(self) -> None:
         default = self.client.get("/api/v1/summary").json()
-        with_spam = self.client.get("/api/v1/summary", params={"include_spam": "true"}).json()
 
-        self.assertEqual(default["transfer_count"], 5)
-        self.assertEqual(with_spam["transfer_count"], 6)
-        self.assertEqual(with_spam["token_count"], 5)
-        self.assertFalse(with_spam["provenance"]["is_sampled"])
+        self.assertEqual(default["transfer_count"], 6)
+        self.assertEqual(default["token_count"], 5)
+        self.assertFalse(default["provenance"]["is_sampled"])
 
     def test_public_account_filters_are_binary_and_validated(self) -> None:
         response = self.client.get(
             "/api/v1/summary",
-            params=[("include_spam", "true"), ("account", "eoa_candidate"), ("account", "contract")],
+            params=[("account", "eoa_candidate"), ("account", "contract")],
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["transfer_count"], 6)
@@ -84,11 +82,11 @@ class DashboardApiTest(unittest.TestCase):
     def test_recognition_filter_uses_exact_automatic_classification(self) -> None:
         recognized = self.client.get(
             "/api/v1/summary",
-            params={"include_spam": "true", "recognition": "recognized"},
+            params={"recognition": "recognized"},
         )
         other = self.client.get(
             "/api/v1/summary",
-            params={"include_spam": "true", "recognition": "other"},
+            params={"recognition": "other"},
         )
 
         self.assertEqual(recognized.status_code, 200)
@@ -115,7 +113,7 @@ class DashboardApiTest(unittest.TestCase):
 
         filtered = self.client.get(
             "/api/v1/tokens",
-            params={"include_spam": "true", "recognition": "other", "limit": 100},
+            params={"recognition": "other", "limit": 100},
         ).json()
         overridden = next(item for item in filtered["items"] if item["token_address"] == token_address)
         self.assertEqual(overridden["recognition_status"], "other")
@@ -153,22 +151,22 @@ class DashboardApiTest(unittest.TestCase):
 
     def test_search_runs_before_exact_counts(self) -> None:
         event = self.client.get(
-            "/api/v1/events", params={"include_spam": "true", "limit": 1}
+            "/api/v1/events", params={"limit": 1}
         ).json()["items"][0]
         result = self.client.get(
             "/api/v1/summary",
-            params={"include_spam": "true", "q": event["transaction_hash"]},
+            params={"q": event["transaction_hash"]},
         ).json()
         self.assertEqual(result["transfer_count"], 1)
         self.assertEqual(result["token_count"], 1)
 
     def test_event_cursor_pages_complete_results_without_sampling(self) -> None:
         first = self.client.get(
-            "/api/v1/events", params={"include_spam": "true", "limit": 2}
+            "/api/v1/events", params={"limit": 2}
         ).json()
         second = self.client.get(
             "/api/v1/events",
-            params={"include_spam": "true", "limit": 2, "cursor": first["next_cursor"]},
+            params={"limit": 2, "cursor": first["next_cursor"]},
         ).json()
 
         self.assertEqual(first["complete_matching_count"], 6)
@@ -186,7 +184,7 @@ class DashboardApiTest(unittest.TestCase):
             with self.subTest(endpoint=endpoint):
                 response = self.client.get(
                     f"/api/v1/{endpoint}",
-                    params={"include_spam": "true", "limit": 1},
+                    params={"limit": 1},
                 )
                 self.assertEqual(response.status_code, 200, response.text)
                 payload = response.json()

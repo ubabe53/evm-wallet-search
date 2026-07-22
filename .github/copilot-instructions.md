@@ -5,7 +5,8 @@
 This repository is a locally run Ethereum wallet analytics application. Envio
 HyperIndex captures the ERC-20-intended `Transfer(address,address,uint256)`
 signature without currently disambiguating ERC-721, dbt transforms rows into DuckDB marts, and the
-local FastAPI service executes read-only queries over the isolated live artifact.
+local FastAPI service executes bounded queries over the isolated live artifact and
+may mutate only its application-owned token-recognition override table.
 The React/Vite dashboard selects the API adapter in local development and the
 generated-JSON adapter only for the GitHub Pages fixture demo. Fixture tests and
 demo builds must remain offline and reproducible; never enable both adapters together.
@@ -28,12 +29,14 @@ bun run dashboard:build
   Docker, an RPC provider, Envio credentials, or HyperIndex Postgres.
 - Treat Ethereum addresses as case-insensitive exact identifiers. Never infer a
   token identity or trust status from only its name or symbol.
-- Registry membership may supply trusted display metadata, but it is not a
-  security guarantee. RPC metadata is self-declared and must never establish
-  trust. Absence from a registry must remain neutral rather than imply spam.
-- Only a reviewed manual override may assign final `spam`. Automated rules may
-  assign internal `suspected_spam` only when their evidence and reason codes are
-  preserved for audit. The dashboard merges both statuses into one `Spam` state.
+- Exact-address registry membership may supply display metadata and automatic
+  `recognized` classification, but it is not a security guarantee. RPC metadata
+  is self-declared and must never establish recognition. Absence from a registry
+  remains the neutral public `other` state.
+- Only a reviewed reputation override may assign final internal `spam`.
+  Automated rules may assign internal `suspected_spam` only when their evidence
+  and reason codes are preserved for audit. Neither internal status is exposed
+  as a dashboard filter or badge.
 - When classifier thresholds or reason rules change, require matching tests,
   classifier-version updates, and documentation changes.
 - When a dbt mart or seed schema changes, verify the related dbt tests,
@@ -51,7 +54,8 @@ bun run dashboard:build
   Static JSON is a fixture-only demo and must report its provenance and limits in
   `meta.json`; do not expand full-history static precomputation.
 - Dashboard changes must preserve accessibility, loading/error behavior, the
-  default-off `Include spam` semantics, and both light and dark themes.
+  default `All` recognition selection, the public `Recognized`/`Other` contract,
+  and both light and dark themes.
 - Documentation must not claim behavior or architecture contradicted by the
   implementation.
 

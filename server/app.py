@@ -38,7 +38,6 @@ class RecognitionOverrideRequest(BaseModel):
 
 
 def dashboard_filters(
-    include_spam: bool = False,
     recognition: RecognitionFilter = RecognitionFilter.all,
     account: Annotated[list[AccountFilter] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=128)] = None,
@@ -51,7 +50,6 @@ def dashboard_filters(
         selected = tuple(item.value for item in account) if account else ACCOUNT_FILTERS
     normalized_query = q.strip() if q and q.strip() else None
     return DashboardFilters(
-        include_spam=include_spam,
         account_filters=selected,
         query=normalized_query,
         recognition=recognition.value,

@@ -76,7 +76,7 @@ One row per wallet and token. It records transfer and distinct-counterparty coun
 
 Joins both evidence layers back to one-row-per-transfer events. Its effective `token_status` is one of `trusted`, `unverified`, `suspected_spam`, or `spam`. Reviewed manual spam has final precedence, followed by automated suspicion, then `high_confidence` quality; every other case is unverified.
 
-These four values are an internal classification contract, not four user choices. The presentation layer maps `suspected_spam` and `spam` to one `Spam` state and maps `trusted` and `unverified` to no reputation badge. The `Include spam` predicate controls whether the first pair is excluded or included. Token quality, scores, reason codes, provenance, and versions remain stored for audit and future product decisions.
+These four values are an internal classification contract, not user choices. Token quality, scores, reason codes, provenance, and versions remain stored for audit and future product decisions. The dashboard exposes only the independent `recognized`/`other` classification.
 
 ## Marts
 
@@ -134,7 +134,7 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 
 ## Local API contract
 
-The `/api/v1` service currently advertises response schema `dashboard-api-v3`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. It left-joins the application-owned override table before common recognition, internal spam, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. The service exposes:
+The `/api/v1` service currently advertises response schema `dashboard-api-v4`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. The service exposes:
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema are not an indexer checkpoint or a block-continuity claim;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;

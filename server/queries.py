@@ -20,10 +20,9 @@ ACCOUNT_FILTERS = (
     "eoa_candidate",
     "contract",
 )
-SPAM_STATUSES = ("suspected_spam", "spam")
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v3"
+API_SCHEMA_VERSION = "dashboard-api-v4"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -44,7 +43,6 @@ class TokenNotFound(LookupError):
 
 @dataclass(frozen=True)
 class DashboardFilters:
-    include_spam: bool = False
     account_filters: tuple[str, ...] = ACCOUNT_FILTERS
     query: str | None = None
     recognition: str = "all"
@@ -72,10 +70,6 @@ def rows(connection: Any, sql: str, parameters: Iterable[Any] = ()) -> list[dict
 def filter_sql(filters: DashboardFilters) -> tuple[str, list[Any]]:
     clauses: list[str] = []
     parameters: list[Any] = []
-    if not filters.include_spam:
-        clauses.append("events.token_status not in (?, ?)")
-        parameters.extend(SPAM_STATUSES)
-
     if filters.recognition != "all":
         clauses.append("events.recognition_status = ?")
         parameters.append(filters.recognition)
@@ -243,7 +237,6 @@ class QueryService:
     @staticmethod
     def query_contract(filters: DashboardFilters) -> dict[str, Any]:
         return {
-            "include_spam": filters.include_spam,
             "recognition": filters.recognition,
             "account_evidence": list(filters.account_filters),
             "query": filters.query,

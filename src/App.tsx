@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Database,
   ExternalLink,
+  Info,
   Maximize2,
   Minimize2,
   Moon,
@@ -28,13 +29,15 @@ import {
   DashboardMetadata,
   DashboardQuery,
   GraphEdge,
+  RecognitionFilter,
+  RecognitionStatus,
   dashboardDataMode,
   loadApiDashboardData,
   loadDashboardData,
   loadNextApiEvents,
+  resetTokenRecognition,
+  setTokenRecognition,
   TimelineRow,
-  TokenQuality,
-  TokenStatus,
   TokenSummary,
   WalletEvent,
 } from "./data";
@@ -45,13 +48,11 @@ const DEFAULT_GRAPH_INTERACTION_LIMIT = 25;
 const GRAPH_INTERACTION_LIMITS = [10, 25, 50, 100] as const;
 const DEFAULT_COUNTERPARTY_LIMIT = 10;
 const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
-const TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified", "suspected_spam", "spam"];
-const NON_SPAM_TOKEN_STATUSES: TokenStatus[] = ["trusted", "unverified"];
 const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "contract"];
-const TOKEN_QUALITIES: TokenQuality[] = ["high_confidence", "listed", "unknown"];
+const RECOGNITION_FILTERS: RecognitionFilter[] = ["all", "recognized", "other"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
-export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic/spam event emission; the mismatch alone does not prove spam.";
+export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic event emission; the mismatch alone does not prove intent or legitimacy.";
 
 export function etherscanAddressUrl(address: string): string {
   return `${ETHERSCAN_BASE_URL}/address/${address}`;
@@ -105,7 +106,7 @@ function amountLabel(value: number | null | undefined): string {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value);
 }
 
-type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality">;
+type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality" | "recognition_status">;
 type DisplayedTokenSummary = Omit<TokenSummary, "counterparty_account_type">;
 type DisplayedTimelineRow = Omit<TimelineRow, "counterparty_account_type">;
 
@@ -147,7 +148,7 @@ export function aggregateTimelineRows(rows: TimelineRow[]): DisplayedTimelineRow
   const grouped = new Map<string, DisplayedTimelineRow>();
 
   for (const row of rows) {
-    const key = [row.wallet_id, row.block_date, row.token_address, row.token_status, row.token_quality, row.direction].join("|");
+    const key = [row.wallet_id, row.block_date, row.token_address, row.recognition_status, row.direction].join("|");
     const existing = grouped.get(key);
     if (!existing) {
       const {
@@ -179,7 +180,12 @@ export function aggregateCounterparties(rows: CounterpartySummary[]): RankedCoun
   for (const row of rows) {
     const existing = grouped.get(row.counterparty_address);
     if (!existing) {
-      const { token_status: _tokenStatus, token_quality: _tokenQuality, ...summary } = row;
+      const {
+        token_status: _tokenStatus,
+        token_quality: _tokenQuality,
+        recognition_status: _recognitionStatus,
+        ...summary
+      } = row;
       grouped.set(row.counterparty_address, { ...summary });
       continue;
     }
@@ -235,17 +241,6 @@ function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
       </div>
     </div>
   );
-}
-
-export function isSpamStatus(status: TokenStatus): boolean {
-  return status === "suspected_spam" || status === "spam";
-}
-
-function SpamBadge({ status }: { status: TokenStatus }) {
-  if (!isSpamStatus(status)) {
-    return null;
-  }
-  return <span className="tokenStatus spam" title="Flagged by internal token reputation checks">Spam</span>;
 }
 
 const ACCOUNT_LABELS: Record<AccountFilter, string> = {
@@ -574,12 +569,23 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
   );
 }
 
-function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
+export function TokenTable({
+  rows,
+  editable,
+  updatingToken,
+  onRecognitionChange,
+}: {
+  rows: DisplayedTokenSummary[];
+  editable: boolean;
+  updatingToken: string | null;
+  onRecognitionChange: (row: DisplayedTokenSummary, value: RecognitionStatus | "automatic") => void;
+}) {
   return (
     <table>
       <thead>
         <tr>
           <th>Token</th>
+          <th>Recognition</th>
           <th>Transfers</th>
           <th>Indirect In / Out</th>
           <th>Senders | Recipients</th>
@@ -589,7 +595,7 @@ function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
       <tbody>
         {rows.length === 0 && (
           <tr>
-            <td className="tableEmpty" colSpan={5}>No token flows match</td>
+            <td className="tableEmpty" colSpan={6}>No token flows match</td>
           </tr>
         )}
         {rows.map((row) => (
@@ -602,7 +608,27 @@ function TokenTable({ rows }: { rows: DisplayedTokenSummary[] }) {
               >
                 {row.token_symbol}
               </EtherscanLink>
-              <SpamBadge status={row.token_status} />
+            </td>
+            <td>
+              <div className="recognitionCell">
+                <span className={`recognitionStatus ${row.recognition_status}`}>
+                  {row.recognition_status === "recognized" ? "Recognized" : "Other"}
+                </span>
+                <select
+                  aria-label={`Recognition for ${row.token_symbol}`}
+                  value={row.recognition_override_status ?? "automatic"}
+                  disabled={!editable || updatingToken === row.token_address}
+                  title={editable ? "Set a local recognition override" : "Manual overrides are available in live API mode"}
+                  onChange={(event) => onRecognitionChange(
+                    row,
+                    event.target.value as RecognitionStatus | "automatic",
+                  )}
+                >
+                  <option value="automatic">Automatic</option>
+                  <option value="recognized">Recognized</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
             </td>
             <td>{row.transfer_count.toLocaleString("en-US")}</td>
             <td>
@@ -718,7 +744,6 @@ function EventList({
                 {event.token_symbol ?? shortAddress(event.token_address)}
               </EtherscanLink>
             </strong>
-            <SpamBadge status={event.token_status} />
             <span>{new Date(event.block_timestamp).toLocaleString()}</span>
             <EtherscanLink
               className="transactionLink"
@@ -782,7 +807,16 @@ export function App() {
   const [graphInteractionLimit, setGraphInteractionLimit] = useState(DEFAULT_GRAPH_INTERACTION_LIMIT);
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
   const [graphTheaterMode, setGraphTheaterMode] = useState(false);
-  const [includeSpam, setIncludeSpam] = useState(false);
+  const [recognitionFilter, setRecognitionFilter] = useState<RecognitionFilter>("all");
+  const [dataRevision, setDataRevision] = useState(0);
+  const [updatingToken, setUpdatingToken] = useState<string | null>(null);
+  const [undoAction, setUndoAction] = useState<{
+    tokenAddress: string;
+    tokenLabel: string;
+    previousOverride: RecognitionStatus | null;
+  } | null>(null);
+  const [recognitionActionError, setRecognitionActionError] = useState<string | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
   const [selectedAccountFilters, setSelectedAccountFilters] = useState<AccountFilter[]>(ACCOUNT_FILTERS);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("theme");
@@ -812,14 +846,15 @@ export function App() {
   }, [query]);
 
   const dashboardQuery = useMemo((): DashboardQuery => ({
-    includeSpam,
+    recognition: recognitionFilter,
     accountFilters: selectedAccountFilters,
     query: debouncedQuery,
     graphLimit: graphInteractionLimit,
     counterpartyLimit,
-  }), [includeSpam, selectedAccountFilters, debouncedQuery, graphInteractionLimit, counterpartyLimit]);
+  }), [recognitionFilter, selectedAccountFilters, debouncedQuery, graphInteractionLimit, counterpartyLimit]);
   const dashboardQueryKey = JSON.stringify(dashboardQuery);
   const dashboardQueryKeyRef = useRef(dashboardQueryKey);
+  const dashboardLoadGenerationRef = useRef(0);
   useEffect(() => {
     dashboardQueryKeyRef.current = dashboardQueryKey;
   }, [dashboardQueryKey]);
@@ -830,10 +865,14 @@ export function App() {
     }
     const controller = new AbortController();
     const requestedQueryKey = dashboardQueryKey;
+    const requestedGeneration = ++dashboardLoadGenerationRef.current;
     setError(null);
     setLoadingMoreEvents(false);
     loadApiDashboardData(dashboardQuery, controller.signal, apiMetadataRef.current).then((result) => {
-      if (dashboardQueryKeyRef.current !== requestedQueryKey) {
+      if (
+        dashboardQueryKeyRef.current !== requestedQueryKey ||
+        dashboardLoadGenerationRef.current !== requestedGeneration
+      ) {
         return;
       }
       apiMetadataRef.current = result.data.metadata;
@@ -844,18 +883,27 @@ export function App() {
       if (loadError instanceof Error && loadError.name === "AbortError") {
         return;
       }
+      if (dashboardLoadGenerationRef.current !== requestedGeneration) {
+        return;
+      }
       setError(loadError instanceof Error ? loadError.message : "Could not load live dashboard data");
     });
     return () => controller.abort();
-  }, [dashboardQuery, dashboardQueryKey]);
+  }, [dashboardQuery, dashboardQueryKey, dataRevision]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [debouncedQuery, includeSpam, selectedAccountFilters]);
-  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [debouncedQuery, includeSpam, selectedAccountFilters]);
+  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [debouncedQuery, recognitionFilter, selectedAccountFilters]);
+  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [debouncedQuery, recognitionFilter, selectedAccountFilters]);
+
+  useEffect(() => () => {
+    if (undoTimerRef.current != null) {
+      window.clearTimeout(undoTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!graphTheaterMode) {
@@ -884,16 +932,17 @@ export function App() {
       return data;
     }
 
-    const statusVisible = (status: TokenSummary["token_status"]) => includeSpam || !isSpamStatus(status);
+    const recognitionVisible = (status: RecognitionStatus) =>
+      recognitionFilter === "all" || recognitionFilter === status;
     const accountVisible = (accountType: AccountType) => accountMatches(accountType, selectedAccountFilters);
     const visibleEvents = data.events.filter((event) =>
-      statusVisible(event.token_status) &&
+      recognitionVisible(event.recognition_status) &&
       accountVisible(event.counterparty_account_type));
     const visibleTokens = data.summaries.tokens.filter((row) =>
-      statusVisible(row.token_status) &&
+      recognitionVisible(row.recognition_status) &&
       accountVisible(row.counterparty_account_type));
     const visibleCounterparties = data.summaries.counterparties.filter((row) =>
-      statusVisible(row.token_status) &&
+      recognitionVisible(row.recognition_status) &&
       accountVisible(row.account_type));
     const visibleCounterpartyNodeIds = new Set(
       data.graph.nodes
@@ -901,12 +950,12 @@ export function App() {
         .map((node) => node.data.id),
     );
     const visibleGraphEdges = data.graph.edges.filter((edge) =>
-      statusVisible(edge.data.tokenStatus) &&
+      recognitionVisible(edge.data.recognitionStatus) &&
       visibleCounterpartyNodeIds.has(`counterparty:${edge.data.counterpartyAddress}`));
     const visibleNodeIds = new Set(visibleGraphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
     const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
     const visibleTimeline = data.timeline.filter((row) =>
-      statusVisible(row.token_status) &&
+      recognitionVisible(row.recognition_status) &&
       accountVisible(row.counterparty_account_type));
     const visibleData = {
       ...data,
@@ -940,6 +989,8 @@ export function App() {
         event.token_address,
         event.token_symbol,
         event.token_name,
+        event.recognition_status,
+        event.recognition_source,
         event.metadata_availability,
         event.metadata_source,
       ]
@@ -947,7 +998,8 @@ export function App() {
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const tokenMatches = (row: DisplayedTokenSummary) =>
-      [row.token_symbol, row.token_name, row.token_address, row.metadata_source, row.metadata_availability]
+      [row.token_symbol, row.token_name, row.token_address, row.recognition_status,
+        row.recognition_source, row.metadata_source, row.metadata_availability]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
@@ -987,7 +1039,8 @@ export function App() {
       interactionIds.has(edge.data.interactionId) ||
       tokenAddresses.has(edge.data.tokenAddress) ||
       counterpartyAddresses.has(edge.data.counterpartyAddress) ||
-      [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.metadataAvailability,
+      [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.recognitionStatus,
+        edge.data.recognitionSource, edge.data.metadataAvailability,
         edge.data.metadataSource, edge.data.target, edge.data.source]
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
@@ -1008,7 +1061,7 @@ export function App() {
             .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
       ),
     };
-  }, [data, query, includeSpam, selectedAccountFilters]);
+  }, [data, query, recognitionFilter, selectedAccountFilters]);
 
   const rankedCounterparties = useMemo(
     () => filtered ? aggregateCounterparties(filtered.summaries.counterparties) : [],
@@ -1026,29 +1079,11 @@ export function App() {
         counterpartyCount: apiResult.summary.counterparty_count,
       } : null;
     }
-    if (!query.trim()) {
-      if (!("status_quality_account_counts" in data.metadata)) {
-        return null;
-      }
-      const statusKey = (includeSpam ? TOKEN_STATUSES : NON_SPAM_TOKEN_STATUSES).join("+");
-      const qualityKey = TOKEN_QUALITIES.join("+");
-      const accountKey = ACCOUNT_FILTERS.filter((account) => selectedAccountFilters.includes(account)).join("+");
-      const statusMetrics = data.metadata.status_quality_account_counts[`${statusKey}|${qualityKey}|${accountKey}`] ?? {
-        transfer_count: 0,
-        token_count: 0,
-        counterparty_count: 0,
-      };
-      return {
-        transferCount: statusMetrics.transfer_count,
-        tokenCount: statusMetrics.token_count,
-        counterpartyCount: statusMetrics.counterparty_count,
-      };
-    }
     const transferCount = filtered.events.length;
     const tokenCount = new Set(filtered.events.map((event) => event.token_address)).size;
     const counterpartyCount = new Set(filtered.events.map((event) => event.counterparty_address)).size;
     return { transferCount, tokenCount, counterpartyCount };
-  }, [apiResult, data, filtered, query, includeSpam, selectedAccountFilters]);
+  }, [apiResult, data, filtered]);
 
   const displayedGraph = useMemo(() => {
     if (!filtered) {
@@ -1160,6 +1195,73 @@ export function App() {
     }
   }
 
+  function startUndoWindow(action: NonNullable<typeof undoAction>) {
+    if (undoTimerRef.current != null) {
+      window.clearTimeout(undoTimerRef.current);
+    }
+    setUndoAction(action);
+    undoTimerRef.current = window.setTimeout(() => {
+      setUndoAction(null);
+      undoTimerRef.current = null;
+    }, 4000);
+  }
+
+  async function changeTokenRecognition(
+    row: DisplayedTokenSummary,
+    nextStatus: RecognitionStatus | "automatic",
+  ) {
+    if (dashboardDataMode !== "api") {
+      return;
+    }
+    setUpdatingToken(row.token_address);
+    setRecognitionActionError(null);
+    try {
+      const result = nextStatus === "automatic"
+        ? await resetTokenRecognition(row.token_address)
+        : await setTokenRecognition(row.token_address, nextStatus);
+      startUndoWindow({
+        tokenAddress: row.token_address,
+        tokenLabel: row.token_symbol,
+        previousOverride: result.previous_override_status,
+      });
+      setDataRevision((current) => current + 1);
+    } catch (actionError) {
+      setRecognitionActionError(
+        actionError instanceof Error ? actionError.message : "Could not update token recognition",
+      );
+    } finally {
+      setUpdatingToken(null);
+    }
+  }
+
+  async function undoTokenRecognition() {
+    if (!undoAction || updatingToken) {
+      return;
+    }
+    if (undoTimerRef.current != null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    const action = undoAction;
+    setUndoAction(null);
+    setUpdatingToken(action.tokenAddress);
+    setRecognitionActionError(null);
+    try {
+      if (action.previousOverride == null) {
+        await resetTokenRecognition(action.tokenAddress);
+      } else {
+        await setTokenRecognition(action.tokenAddress, action.previousOverride);
+      }
+      setDataRevision((current) => current + 1);
+    } catch (actionError) {
+      setRecognitionActionError(
+        actionError instanceof Error ? actionError.message : "Could not undo token recognition",
+      );
+    } finally {
+      setUpdatingToken(null);
+    }
+  }
+
   function trapTheaterFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (!graphTheaterMode || event.key !== "Tab") {
       return;
@@ -1230,15 +1332,37 @@ export function App() {
           </div>
         </div>
         <div className="toolbar">
-          <label className="spamToggle">
-            <input
-              type="checkbox"
-              checked={includeSpam}
-              onChange={(event) => setIncludeSpam(event.target.checked)}
-            />
-            <span>Include spam</span>
-            {!includeSpam && <small>{data.metadata.spam_transfer_count.toLocaleString("en-US")} hidden</small>}
-          </label>
+          <div className="recognitionControls">
+            <fieldset className="recognitionFilter">
+              <legend className="srOnly">Token recognition</legend>
+              {RECOGNITION_FILTERS.map((value) => (
+                <label key={value}>
+                  <input
+                    type="radio"
+                    name="recognition-filter"
+                    value={value}
+                    checked={recognitionFilter === value}
+                    onChange={() => setRecognitionFilter(value)}
+                  />
+                  <span>{value === "all" ? "All" : value === "recognized" ? "Recognized" : "Other"}</span>
+                </label>
+              ))}
+            </fieldset>
+            <details className="recognitionInfo">
+              <summary aria-label="What recognized means" title="What recognized means">
+                <Info size={15} aria-hidden="true" />
+              </summary>
+              <div role="note">
+                <strong>Recognized tokens</strong>
+                <p>
+                  The token&apos;s exact Ethereum contract address appears in Uniswap, CoinGecko,
+                  Trust Wallet, or qualifying Coinbase Exchange data, or was manually marked as recognized.
+                  Registry inclusion changes over time and does not prove safety, legitimacy, value,
+                  or standards compliance.
+                </p>
+              </div>
+            </details>
+          </div>
           <details className="statusFilter accountFilter">
             <summary title="Filters the graph, counterparty ranking, and recent events by pinned-block account evidence">
               Account evidence ({selectedAccountFilters.length})
@@ -1391,9 +1515,24 @@ export function App() {
           </span>
         </div>
         <div className="tokenTableScroll compact">
-          <TokenTable rows={filtered.summaries.tokens} />
+          <TokenTable
+            rows={filtered.summaries.tokens}
+            editable={dashboardDataMode === "api"}
+            updatingToken={updatingToken}
+            onRecognitionChange={changeTokenRecognition}
+          />
         </div>
       </section>
+      {(undoAction || recognitionActionError) && (
+        <div className="recognitionToast" role="status" aria-live="polite">
+          <span>
+            {recognitionActionError ?? `Updated recognition for ${undoAction?.tokenLabel}.`}
+          </span>
+          {undoAction && !recognitionActionError && (
+            <button type="button" onClick={undoTokenRecognition} disabled={updatingToken != null}>Undo</button>
+          )}
+        </div>
+      )}
     </main>
   );
 }

@@ -15,7 +15,6 @@ import {
   graphStyles,
   interactionEdgeLabel,
   INDIRECT_TRANSFER_EXPLANATION,
-  isSpamStatus,
 } from "../src/App";
 import type { CounterpartySummary, TimelineRow, TokenSummary } from "../src/data";
 
@@ -66,6 +65,9 @@ const eoaEventEvidence = {
 } as const;
 
 const highQualityGraph = {
+  recognitionStatus: "recognized",
+  recognitionSource: "registry",
+  recognitionOverrideStatus: null,
   metadataAvailability: "complete",
   tokenQuality: "high_confidence",
   tokenQualitySources: ["trustwallet", "uniswap", "coingecko"],
@@ -78,6 +80,9 @@ const highQualityGraph = {
 } as const;
 
 const unknownQualityGraph = {
+  recognitionStatus: "other",
+  recognitionSource: "automatic",
+  recognitionOverrideStatus: null,
   metadataAvailability: "complete",
   tokenQuality: "unknown",
   tokenQualitySources: [],
@@ -90,6 +95,11 @@ const unknownQualityGraph = {
 } as const;
 
 const highQuality = {
+  recognition_status: "recognized",
+  recognition_reason: "registry_match",
+  recognition_source: "registry",
+  recognition_version: "token-recognition-v1",
+  recognition_override_status: null,
   metadata_availability: "complete",
   token_quality: "high_confidence",
   token_quality_sources: ["trustwallet", "uniswap", "coingecko"],
@@ -102,6 +112,11 @@ const highQuality = {
 } as const;
 
 const unknownQuality = {
+  recognition_status: "other",
+  recognition_reason: "no_registry_match",
+  recognition_source: "automatic",
+  recognition_version: "token-recognition-v1",
+  recognition_override_status: null,
   metadata_availability: "complete",
   token_quality: "unknown",
   token_quality_sources: [],
@@ -174,7 +189,7 @@ const summaries = {
       ...contractAccountEvidence,
       wallet_id: "vitalik", wallet_address: "0x1",
       counterparty_address: "0x1111111111111111111111111111111111111111",
-      token_status: "trusted", token_quality: "high_confidence", transfer_count: 3,
+      token_status: "trusted", recognition_status: "recognized", token_quality: "high_confidence", transfer_count: 3,
       inbound_transfer_count: 2, outbound_transfer_count: 1, token_count: 2,
       first_seen_at: "2023-11-01T00:00:00+00:00", last_seen_at: "2023-11-14T22:15:00+00:00",
     },
@@ -182,7 +197,7 @@ const summaries = {
       ...eoaAccountEvidence,
       wallet_id: "vitalik", wallet_address: "0x1",
       counterparty_address: "0x2222222222222222222222222222222222222222",
-      token_status: "spam", token_quality: "unknown", transfer_count: 1,
+      token_status: "spam", recognition_status: "other", token_quality: "unknown", transfer_count: 1,
       inbound_transfer_count: 1, outbound_transfer_count: 0, token_count: 1,
       first_seen_at: "2023-11-14T22:16:00+00:00", last_seen_at: "2023-11-14T22:16:00+00:00",
     },
@@ -263,6 +278,10 @@ const metadata = {
   generated_at: "2023-11-14T22:15:00+00:00",
   transfer_count: 2,
   token_count: 2,
+  recognized_transfer_count: 1,
+  recognized_token_count: 1,
+  other_transfer_count: 1,
+  other_token_count: 1,
   counterparty_count: 2,
   non_spam_transfer_count: 1,
   non_spam_token_count: 1,
@@ -376,20 +395,14 @@ describe("App", () => {
     expect(interactionEdgeLabel("DAI", 12_500)).toBe("DAI x12,500");
   });
 
-  it("merges automated and reviewed spam into one presentation state", () => {
-    expect(isSpamStatus("suspected_spam")).toBe(true);
-    expect(isSpamStatus("spam")).toBe(true);
-    expect(isSpamStatus("trusted")).toBe(false);
-    expect(isSpamStatus("unverified")).toBe(false);
-  });
-
-  it("aggregates token-status rows into one transfer-ranked counterparty", () => {
+  it("aggregates token classification rows into one transfer-ranked counterparty", () => {
     const base = summaries.counterparties[0] as unknown as CounterpartySummary;
     const rows = aggregateCounterparties([
       base,
       {
         ...base,
         token_status: "unverified" as const,
+        recognition_status: "other" as const,
         token_quality: "listed" as const,
         transfer_count: 2,
         inbound_transfer_count: 0,
@@ -510,28 +523,32 @@ describe("App", () => {
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
     expect(screen.getByLabelText("Maximum graph interactions")).toHaveValue("25");
-    expect(screen.getByText("10 of 11 events")).toBeInTheDocument();
-    const includeSpam = screen.getByRole("checkbox", { name: /Include spam/ });
-    expect(includeSpam).not.toBeChecked();
-    expect(screen.getByText("1 hidden")).toBeInTheDocument();
+    expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Recognized" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Other" })).not.toBeChecked();
     expect(screen.queryByText("Status (2)")).not.toBeInTheDocument();
     expect(screen.queryByText("Quality (1)")).not.toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "Status" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Recognition" })).toBeInTheDocument();
     expect(screen.queryByText(/^trusted$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^high confidence$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show less" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
-    expect(screen.getByText("11 of 11 events")).toBeInTheDocument();
+    expect(screen.getByText("12 of 12 events")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show less" }));
-    expect(screen.getByText("10 of 11 events")).toBeInTheDocument();
-    expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
-    fireEvent.click(includeSpam);
-    expect(includeSpam).toBeChecked();
+    expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
     expect(screen.getAllByText("SPAM").length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle("Flagged by internal token reputation checks").length).toBeGreaterThan(0);
-    fireEvent.click(includeSpam);
-    expect(includeSpam).not.toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Recognized" }));
     expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Other" }));
+    expect(screen.getAllByText("SPAM").length).toBeGreaterThan(0);
+    expect(screen.queryByText("USDC")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "All" }));
+    expect(screen.getAllByText("USDC").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByLabelText("What recognized means"));
+    expect(screen.getByText(/exact Ethereum contract address appears in Uniswap/)).toBeInTheDocument();
+    expect(screen.getAllByRole("combobox", { name: /Recognition for/ }).every((control) => control.hasAttribute("disabled"))).toBe(true);
 
     fireEvent.click(screen.getByText("Account evidence (2)"));
     const contractAccount = screen.getByRole("checkbox", { name: "Contract" });

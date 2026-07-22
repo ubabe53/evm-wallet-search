@@ -22,8 +22,6 @@
   --live-text: #067647;
   --in: #0f766e;
   --out: #b45309;
-  --spam: #b42318;
-  --spam-bg: #fef3f2;
   --unverified-bg: #f2f4f7;
   color: var(--text);
   background: var(--page-bg);
@@ -57,8 +55,6 @@
   --live-text: #6ee7b7;
   --in: #5eead4;
   --out: #fbbf24;
-  --spam: #fda29b;
-  --spam-bg: #3b1717;
   --unverified-bg: #273241;
 }
 
@@ -168,31 +164,100 @@ h2 {
   gap: 8px;
 }
 
-.spamToggle {
+.recognitionControls {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
+}
+
+.recognitionFilter {
+  display: inline-flex;
   height: 40px;
+  margin: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--control-bg);
-  padding: 0 10px;
+  padding: 3px;
   color: var(--text);
   font-size: 13px;
-  cursor: pointer;
   white-space: nowrap;
 }
 
-.spamToggle input {
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  accent-color: var(--spam);
+.recognitionFilter label {
+  cursor: pointer;
 }
 
-.spamToggle small {
+.recognitionFilter input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.recognitionFilter span {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 5px;
+  padding: 0 8px;
+}
+
+.recognitionFilter input:checked + span {
+  background: var(--live-bg);
+  color: var(--live-text);
+  font-weight: 700;
+}
+
+.recognitionFilter input:focus-visible + span {
+  outline: 2px solid var(--graph-wallet);
+  outline-offset: 1px;
+}
+
+.recognitionInfo {
+  position: relative;
+}
+
+.recognitionInfo summary {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--control-bg);
   color: var(--muted);
-  font-size: 11px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.recognitionInfo summary::-webkit-details-marker {
+  display: none;
+}
+
+.recognitionInfo summary:hover,
+.recognitionInfo summary:focus-visible {
+  border-color: var(--graph-wallet);
+  color: var(--text);
+}
+
+.recognitionInfo > div {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  padding: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.recognitionInfo p {
+  margin-top: 5px;
+  color: var(--muted);
 }
 
 .statusFilter {
@@ -685,10 +750,15 @@ th {
   color: var(--out);
 }
 
-.tokenStatus {
+.recognitionCell {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
+  gap: 7px;
+}
+
+.recognitionStatus {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--unverified-bg);
@@ -700,10 +770,25 @@ th {
   text-transform: uppercase;
 }
 
-.tokenStatus.spam {
-  border-color: var(--spam);
-  background: var(--spam-bg);
-  color: var(--spam);
+.recognitionStatus.recognized {
+  border-color: var(--in);
+  background: var(--live-bg);
+  color: var(--in);
+}
+
+.recognitionCell select {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--control-bg);
+  padding: 0 24px 0 7px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.recognitionCell select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .accountType {
@@ -833,6 +918,32 @@ code {
 
 .eventPageButton:hover {
   background: var(--page-bg);
+}
+
+.recognitionToast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  padding: 11px 12px 11px 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+}
+
+.recognitionToast button {
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  color: var(--graph-wallet);
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .empty {
