@@ -36,7 +36,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v4")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v5")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 6)
@@ -195,6 +195,55 @@ class DashboardApiTest(unittest.TestCase):
                     payload["complete_matching_count"] > payload["returned_count"],
                 )
                 self.assertFalse(payload["is_sampled"])
+
+    def test_counterparty_and_graph_rank_the_same_inclusive_recognition_cohort(self) -> None:
+        mixed_address = "0x1111111111111111111111111111111111111111"
+        inserted_transfer_id = "fixture-mixed-recognition"
+        with self.service.connect() as connection:
+            connection.execute(
+                """
+                insert into wallet_events
+                select * replace (
+                  ? as transfer_id,
+                  17000010 as block_number,
+                  ? as transaction_hash,
+                  10 as transaction_index,
+                  10 as log_index,
+                  ? as from_address,
+                  ? as counterparty_address,
+                  'other' as recognition_status,
+                  'no_registry_match' as recognition_reason,
+                  'automatic' as recognition_source
+                )
+                from wallet_events
+                where recognition_status = 'other'
+                limit 1
+                """,
+                [inserted_transfer_id, "0x" + "f" * 64, mixed_address, mixed_address],
+            )
+
+        try:
+            for recognition in ("recognized", "other"):
+                with self.subTest(recognition=recognition):
+                    parameters = {"recognition": recognition, "limit": 10}
+                    counterparties = self.client.get(
+                        "/api/v1/counterparties", params=parameters
+                    ).json()
+                    graph = self.client.get("/api/v1/graph", params=parameters).json()
+
+                    self.assertEqual(counterparties["items"][0]["counterparty_address"], mixed_address)
+                    self.assertEqual(counterparties["items"][0]["transfer_count"], 2)
+                    self.assertEqual(graph["items"][0]["counterparty_address"], mixed_address)
+                    self.assertEqual(graph["items"][0]["transfer_count"], 2)
+                    self.assertEqual(
+                        [item["counterparty_address"] for item in graph["items"]],
+                        [item["counterparty_address"] for item in counterparties["items"]],
+                    )
+                    self.assertNotIn("token_address", graph["items"][0])
+                    self.assertNotIn("direction", graph["items"][0])
+        finally:
+            with self.service.connect() as connection:
+                connection.execute("delete from wallet_events where transfer_id = ?", [inserted_transfer_id])
 
     def test_live_api_rejects_a_fixture_database(self) -> None:
         client = TestClient(create_app(QueryService(FIXTURE_DB_PATH)))

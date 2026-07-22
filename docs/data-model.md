@@ -88,7 +88,7 @@ Application-serving event table. This preserves the immutable one-transfer grain
 
 Nodes for tracked addresses, counterparties, and tokens. Counterparty nodes carry primary account type, code observation, fetch status, reasons, and coverage bounds. Tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
 
-The presentation layer shortens counterparty labels for readability while retaining full addresses in the API or demo payload. It exposes only EOA and Contract labels; internal EIP-7702 evidence appears only in the EOA tooltip, and unresolved rows receive no type badge.
+The presentation layer shortens counterparty labels for readability while retaining full addresses in the API or demo payload. It exposes EOA and Contract labels; internal EIP-7702 evidence appears only in the EOA tooltip. Unresolved rows receive no type badge and use the graph's solid neutral `Unclassified` marker rather than suggesting another account type through an unexplained dashed shape.
 
 ### `graph_edges`
 
@@ -134,7 +134,7 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 
 ## Local API contract
 
-The `/api/v1` service currently advertises response schema `dashboard-api-v4`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. The service exposes:
+The `/api/v1` service currently advertises response schema `dashboard-api-v5`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. The service exposes:
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema are not an indexer checkpoint or a block-continuity claim;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
@@ -142,12 +142,12 @@ The `/api/v1` service currently advertises response schema `dashboard-api-v4`. I
 - `tokens`: one exact aggregate per emitting token contract, ranked after filtering and limited only after aggregation;
 - `PUT /tokens/{token_address}/recognition`: persist `recognized` or `other`, returning the previous override so a client can undo exactly;
 - `DELETE /tokens/{token_address}/recognition`: remove the override and return to the automatic result;
-- `counterparties`: one exact aggregate per eligible address, with the same zero/self/emitting-token exclusions as the mart ranking, ranked after filtering;
-- `graph`: one exact wallet-counterparty-token-direction interaction per row, ranked after filtering while retaining the counterparty's complete cross-token activity count for stable node sizing.
+- `counterparties`: one exact aggregate per eligible address, with the same zero/self/emitting-token exclusions as the mart ranking, ranked by captured Transfer-signature event count after inclusive cohort selection;
+- `graph`: the same one-row-per-eligible-counterparty grain and ordering as `counterparties`, including total, inbound, outbound, and distinct-emitting-contract counts for a direct aggregate edge.
 
 Event responses distinguish `complete_matching_count` from `returned_count`, `limit`, `next_cursor`, and `is_paginated`. Ranked responses distinguish the complete matching item count from the returned top-N and `is_truncated`. `is_sampled` is always false because no matching source rows are randomly or permanently discarded. A top-N graph or ranking is a bounded presentation over a complete calculation, not a sample.
 
-The React live adapter sends the same predicate set to every endpoint, displays summary counts from the complete matching set, and distinguishes those totals from bounded graph, token, counterparty, and event rows. Event expansion follows `next_cursor`; it never infers completeness from the current browser array. The static adapter remains separate and reads only generated fixture JSON.
+The React live adapter sends the same predicate set to every endpoint, displays summary counts from the complete matching set, and distinguishes those totals from bounded graph, token, counterparty, and event rows. The graph renders one undirected aggregate edge per returned counterparty and labels it with the exact captured-transfer count; it does not select an arbitrary token as an edge label. Event expansion follows `next_cursor`; it never infers completeness from the current browser array. The static adapter remains separate and reads only generated fixture JSON.
 
 The current transitional exporter also records exact transfer/token/counterparty statistics for all 315 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 3 non-empty EOA/Contract selections. The full account selection includes unresolved internal rows. This candidate-union contract is legacy behavior and is not the target serving model.
 

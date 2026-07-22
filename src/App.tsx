@@ -66,6 +66,17 @@ export function etherscanTransactionUrl(hash: string): string {
   return `${ETHERSCAN_BASE_URL}/tx/${hash}`;
 }
 
+export function etherscanInteractionUrl(walletAddress: string, counterpartyAddress: string): string {
+  const parameters = new URLSearchParams();
+  parameters.set("txntype", "2");
+  parameters.append("fadd", walletAddress);
+  parameters.append("fadd", counterpartyAddress);
+  parameters.append("tadd", walletAddress);
+  parameters.append("tadd", counterpartyAddress);
+  parameters.set("qt", "1");
+  return `${ETHERSCAN_BASE_URL}/advanced-filter?${parameters.toString()}`;
+}
+
 function openEtherscan(url: string) {
   const opened = window.open(url, "_blank", "noopener,noreferrer");
   if (opened) {
@@ -210,8 +221,76 @@ export function counterpartyNodeSize(transferCount: number): number {
   return Math.round(26 + Math.max(0, Math.min(1, ratio)) * 42);
 }
 
-export function interactionEdgeLabel(tokenSymbol: string, transferCount: number): string {
-  return `${tokenSymbol} x${transferCount.toLocaleString("en-US")}`;
+export function interactionEdgeLabel(transferCount: number): string {
+  return `${transferCount.toLocaleString("en-US")} ${transferCount === 1 ? "transfer" : "transfers"}`;
+}
+
+export function buildCounterpartyGraph(
+  data: {
+    graph: DashboardGraph;
+    summaries: { counterparties: CounterpartySummary[] };
+  },
+  limit: number,
+): DashboardGraph {
+  const rankedSummaries = aggregateCounterparties(data.summaries.counterparties);
+  const counterpartyCounts = new Map(
+    rankedSummaries.map((row) => [row.counterparty_address, row.transfer_count]),
+  );
+  const representatives = new Map<string, GraphEdge>();
+
+  for (const edge of data.graph.edges) {
+    if (
+      edge.data.counterpartyAddress !== ZERO_ADDRESS &&
+      counterpartyCounts.has(edge.data.counterpartyAddress) &&
+      !representatives.has(edge.data.counterpartyAddress)
+    ) {
+      representatives.set(edge.data.counterpartyAddress, edge);
+    }
+  }
+
+  const rankedCounterparties = rankedSummaries
+    .map((row) => [row.counterparty_address, representatives.get(row.counterparty_address)] as const)
+    .filter((entry): entry is readonly [string, GraphEdge] => entry[1] != null)
+    .slice(0, limit);
+
+  const edges = rankedCounterparties.map(([counterpartyAddress, edge]): GraphEdge => {
+    const transferCount = counterpartyCounts.get(counterpartyAddress) ?? 0;
+    const walletNodeId = `wallet:${edge.data.walletAddress}`;
+    const counterpartyNodeId = `counterparty:${counterpartyAddress}`;
+    return {
+      data: {
+        ...edge.data,
+        id: `counterparty:${edge.data.walletAddress}:${counterpartyAddress}:edge`,
+        interactionId: `counterparty:${edge.data.walletAddress}:${counterpartyAddress}`,
+        label: interactionEdgeLabel(transferCount),
+        edgeRole: "wallet_counterparty",
+        source: walletNodeId,
+        target: counterpartyNodeId,
+        direction: "both",
+        tokenAddress: null,
+        tokenSymbol: null,
+        transferCount,
+        counterpartyTransferCount: transferCount,
+      },
+    };
+  });
+  const nodeIds = new Set(edges.flatMap((edge) => [edge.data.source, edge.data.target]));
+  const nodes = data.graph.nodes
+    .filter((node) => node.data.type !== "token" && nodeIds.has(node.data.id))
+    .map((node) => {
+      if (node.data.type === "wallet") {
+        return { data: { ...node.data, size: 44 } };
+      }
+      const transferCount = counterpartyCounts.get(node.data.address ?? "") ?? 1;
+      return {
+        data: {
+          ...node.data,
+          size: counterpartyNodeSize(transferCount),
+          transferCount,
+        },
+      };
+    });
+  return { nodes, edges };
 }
 
 export function accountEvidenceObservationBlockLabel(minimum: number | null, maximum: number | null): string {
@@ -305,6 +384,7 @@ export function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
   const nodeText = styles.getPropertyValue("--graph-label").trim();
   const edgeColor = styles.getPropertyValue("--graph-edge").trim();
   const counterpartyColor = styles.getPropertyValue("--graph-counterparty").trim();
+  const unknownColor = styles.getPropertyValue("--graph-unknown").trim();
   const walletColor = styles.getPropertyValue("--graph-wallet").trim();
   const nodeBorder = styles.getPropertyValue("--graph-node-border").trim();
   const nodeOutline = styles.getPropertyValue("--graph-label-outline").trim();
@@ -341,23 +421,17 @@ export function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
       style: { shape: "round-rectangle" },
     },
     {
-      selector: 'node[accountType = "eip7702_delegated"]',
-      style: { shape: "diamond" },
-    },
-    {
       selector: 'node[accountType = "unknown"]',
-      style: { "border-style": "dashed" },
+      style: { "background-color": unknownColor, "border-style": "solid" },
     },
     {
       selector: "edge",
       style: {
-        width: "mapData(transferCount, 1, 100, 0.65, 2.2)",
+        width: "mapData(transferCount, 1, 10000, 0.8, 3.2)",
         "line-color": edgeColor,
-        "target-arrow-color": edgeColor,
-        "target-arrow-shape": "triangle",
-        "arrow-scale": 0.65,
+        "target-arrow-shape": "none",
         opacity: 0.58,
-        "curve-style": "bezier",
+        "curve-style": "straight",
         color: nodeText,
         label: "data(label)",
         "font-family": "SFMono-Regular, Consolas, Liberation Mono, monospace",
@@ -474,7 +548,16 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
       maxZoom: 5,
       wheelSensitivity: 0.18,
       style: graphStyles(containerRef.current),
-      layout: { name: "cose", animate: false, fit: true, padding: 30 },
+      layout: {
+        name: "concentric",
+        animate: false,
+        fit: true,
+        padding: 42,
+        avoidOverlap: true,
+        minNodeSpacing: 28,
+        concentric: (node) => node.data("type") === "wallet" ? 2 : 1,
+        levelWidth: () => 1,
+      },
     });
     cyRef.current = cy;
     const fitFrame = window.requestAnimationFrame(fitGraph);
@@ -511,9 +594,10 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
       }
     });
     cy.on("tap", "edge", (event) => {
-      const tokenAddress = event.target.data("tokenAddress");
-      if (tokenAddress) {
-        openEtherscan(etherscanTokenUrl(tokenAddress));
+      const walletAddress = event.target.data("walletAddress");
+      const counterpartyAddress = event.target.data("counterpartyAddress");
+      if (walletAddress && counterpartyAddress) {
+        openEtherscan(etherscanInteractionUrl(walletAddress, counterpartyAddress));
       }
     });
 
@@ -557,13 +641,14 @@ function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Them
         className="graph"
         ref={containerRef}
         role="img"
-        aria-label={`Wallet interaction graph with ${data.nodes.length} nodes and ${data.edges.length} edges`}
+        aria-label={`Wallet counterparty graph with ${data.nodes.length} nodes and ${data.edges.length} edges`}
       />
       {data.nodes.length === 0 && <div className="graphEmpty">No graph matches</div>}
       <div className="graphLegend" aria-label="Graph legend">
         <span><i className="walletSwatch" />Tracked address</span>
         <span><i className="counterpartySwatch" />EOA</span>
         <span><i className="contractSwatch" />Contract</span>
+        <span><i className="unknownSwatch" />Unclassified</span>
       </div>
     </div>
   );
@@ -950,7 +1035,7 @@ export function App() {
         .map((node) => node.data.id),
     );
     const visibleGraphEdges = data.graph.edges.filter((edge) =>
-      recognitionVisible(edge.data.recognitionStatus) &&
+      edge.data.recognitionStatus != null && recognitionVisible(edge.data.recognitionStatus) &&
       visibleCounterpartyNodeIds.has(`counterparty:${edge.data.counterpartyAddress}`));
     const visibleNodeIds = new Set(visibleGraphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
     const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
@@ -1037,7 +1122,7 @@ export function App() {
     const graphEdges = visibleData.graph.edges.filter((edge) =>
       walletMatches ||
       interactionIds.has(edge.data.interactionId) ||
-      tokenAddresses.has(edge.data.tokenAddress) ||
+      (edge.data.tokenAddress != null && tokenAddresses.has(edge.data.tokenAddress)) ||
       counterpartyAddresses.has(edge.data.counterpartyAddress) ||
       [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.recognitionStatus,
         edge.data.recognitionSource, edge.data.metadataAvailability,
@@ -1089,66 +1174,7 @@ export function App() {
     if (!filtered) {
       return null;
     }
-
-    const interactionIds = new Set<string>();
-    for (const edge of filtered.graph.edges) {
-      if (edge.data.counterpartyAddress === ZERO_ADDRESS) {
-        continue;
-      }
-      if (interactionIds.has(edge.data.interactionId)) {
-        continue;
-      }
-      if (interactionIds.size === graphInteractionLimit) {
-        break;
-      }
-      interactionIds.add(edge.data.interactionId);
-    }
-
-    const representativeEdges = new Map<string, GraphEdge>();
-    for (const edge of filtered.graph.edges) {
-      if (interactionIds.has(edge.data.interactionId) && !representativeEdges.has(edge.data.interactionId)) {
-        representativeEdges.set(edge.data.interactionId, edge);
-      }
-    }
-
-    const edges = [...representativeEdges.values()].map((edge): GraphEdge => {
-      const walletNodeId = `wallet:${edge.data.walletAddress}`;
-      const counterpartyNodeId = `counterparty:${edge.data.counterpartyAddress}`;
-      return {
-        data: {
-          ...edge.data,
-          id: `${edge.data.interactionId}:wallet-counterparty`,
-          label: interactionEdgeLabel(edge.data.tokenSymbol, edge.data.transferCount),
-          edgeRole: "wallet_counterparty",
-          source: edge.data.direction === "out" ? walletNodeId : counterpartyNodeId,
-          target: edge.data.direction === "out" ? counterpartyNodeId : walletNodeId,
-        },
-      };
-    });
-    const nodeIds = new Set(edges.flatMap((edge) => [edge.data.source, edge.data.target]));
-    const counterpartyCounts = new Map<string, number>();
-    for (const edge of edges) {
-      counterpartyCounts.set(
-        `counterparty:${edge.data.counterpartyAddress}`,
-        edge.data.counterpartyTransferCount,
-      );
-    }
-    const nodes = filtered.graph.nodes
-      .filter((node) => node.data.type !== "token" && nodeIds.has(node.data.id))
-      .map((node) => {
-        if (node.data.type === "wallet") {
-          return { data: { ...node.data, size: 44 } };
-        }
-        const transferCount = counterpartyCounts.get(node.data.id) ?? 1;
-        return {
-          data: {
-            ...node.data,
-            size: counterpartyNodeSize(transferCount),
-            transferCount,
-          },
-        };
-      });
-    return { nodes, edges };
+    return buildCounterpartyGraph(filtered, graphInteractionLimit);
   }, [filtered, graphInteractionLimit]);
 
   const eventCount = dashboardDataMode === "api"
@@ -1419,20 +1445,23 @@ export function App() {
           className={`panel graphPanel${graphTheaterMode ? " theater" : ""}`}
           role={graphTheaterMode ? "dialog" : undefined}
           aria-modal={graphTheaterMode ? "true" : undefined}
-          aria-label={graphTheaterMode ? "Interaction Graph theater mode" : undefined}
+          aria-label={graphTheaterMode ? "Counterparty Graph theater mode" : undefined}
           onKeyDown={trapTheaterFocus}
         >
           <div className="panelHeader">
-            <h2>Interaction Graph</h2>
+            <div className="panelTitle">
+              <h2>Counterparty Graph</h2>
+              <p>One edge per address, ranked by captured transfers with the tracked wallet.</p>
+            </div>
             <div className="graphHeaderControls">
               <span>{displayedGraph.nodes.length} nodes / {displayedGraph.edges.length} edges</span>
               {dashboardDataMode === "api" && apiResult && (
-                <span>{displayedGraph.edges.length} of {apiResult.graphInteractionCount.toLocaleString("en-US")} interactions</span>
+                <span>{displayedGraph.edges.length} of {apiResult.graphCounterpartyCount.toLocaleString("en-US")} counterparties</span>
               )}
               <label className="graphLimit">
-                <span>Interactions</span>
+                <span>Counterparties</span>
                 <select
-                  aria-label="Maximum graph interactions"
+                  aria-label="Maximum graph counterparties"
                   value={graphInteractionLimit}
                   onChange={(event) => setGraphInteractionLimit(Number(event.target.value))}
                 >
@@ -1479,7 +1508,7 @@ export function App() {
           </div>
           {dashboardDataMode === "api" && apiResult && (
             <p className="boundedNote">
-              Showing {rankedCounterparties.length.toLocaleString("en-US")} of {apiResult.counterpartyCount.toLocaleString("en-US")} matching counterparties.
+              Showing {Math.min(counterpartyLimit, rankedCounterparties.length).toLocaleString("en-US")} of {apiResult.counterpartyCount.toLocaleString("en-US")} matching counterparties.
             </p>
           )}
         </div>

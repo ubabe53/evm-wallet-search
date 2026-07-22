@@ -46,13 +46,14 @@ describe("live dashboard API adapter", () => {
           items: [{
             wallet_id: "vitalik", ens: "vitalik.eth", wallet_address: "0xwallet",
             counterparty_address: "0x1111111111111111111111111111111111111111",
-            token_address: "0xtoken", token_symbol: "USDC", token_status: "trusted",
-            recognition_status: "recognized", recognition_source: "registry",
-            recognition_override_status: null,
-            direction: "in", account_type: "contract", observation_block_number: 22_500_000,
+            account_type: "contract", code_state: "contract_code",
+            observation_block_timestamp: "2025-05-17T03:11:47+00:00",
+            observation_block_number: 22_500_000,
             eip7702_delegation_target: null,
+            evidence_fetch_status: "complete", evidence_reason_codes: "code_observed",
             evidence_coverage_start_block: 17_000_000, evidence_coverage_end_block: 22_500_000,
-            transfer_count: 5, counterparty_transfer_count: 20,
+            transfer_count: 20, inbound_transfer_count: 5, outbound_transfer_count: 15,
+            token_count: 3,
           }],
         });
       }
@@ -66,15 +67,17 @@ describe("live dashboard API adapter", () => {
     expect(result.eventCount).toBe(100_001);
     expect(result.tokenCount).toBe(501);
     expect(result.counterpartyCount).toBe(2_000);
-    expect(result.graphInteractionCount).toBe(750);
+    expect(result.graphCounterpartyCount).toBe(750);
     expect(result.data.graph.nodes).toHaveLength(2);
     expect(result.data.graph.edges[0].data).toMatchObject({
-      direction: "in",
-      source: "counterparty:0x1111111111111111111111111111111111111111",
-      target: "wallet:0xwallet",
-      transferCount: 5,
+      direction: "both",
+      source: "wallet:0xwallet",
+      target: "counterparty:0x1111111111111111111111111111111111111111",
+      transferCount: 20,
       counterpartyTransferCount: 20,
-      recognitionStatus: "recognized",
+      inboundTransferCount: 5,
+      outboundTransferCount: 15,
+      tokenCount: 3,
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("data/"))).toBe(false);
     const summaryUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/summary?"))?.[0]);

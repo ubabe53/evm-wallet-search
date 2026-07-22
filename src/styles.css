@@ -12,6 +12,7 @@
   --graph-label: #111827;
   --graph-edge: #4f756a;
   --graph-counterparty: #4d7c70;
+  --graph-unknown: #98a2b3;
   --graph-wallet: #16a34a;
   --graph-node-border: #d8ebe4;
   --graph-label-outline: #f4f9f7;
@@ -45,6 +46,7 @@
   --graph-label: #f8fafc;
   --graph-edge: #5fa38d;
   --graph-counterparty: #4f8f7c;
+  --graph-unknown: #667085;
   --graph-wallet: #4ade80;
   --graph-node-border: #a7f3d0;
   --graph-label-outline: #07110e;
@@ -600,6 +602,10 @@ h2 {
 .graphLegend .contractSwatch {
   border-radius: 2px;
   background: var(--graph-counterparty);
+}
+
+.graphLegend .unknownSwatch {
+  background: var(--graph-unknown);
 }
 
 

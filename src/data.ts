@@ -29,14 +29,14 @@ export type GraphEdge = {
     target: string;
     walletAddress: string;
     counterpartyAddress: string;
-    direction: "in" | "out";
-    tokenAddress: string;
-    tokenSymbol: string;
+    direction: "in" | "out" | "both";
+    tokenAddress: string | null;
+    tokenSymbol: string | null;
     label?: string;
-    tokenStatus: TokenStatus;
-    recognitionStatus: RecognitionStatus;
-    recognitionSource: string;
-    recognitionOverrideStatus: RecognitionStatus | null;
+    tokenStatus?: TokenStatus;
+    recognitionStatus?: RecognitionStatus;
+    recognitionSource?: string;
+    recognitionOverrideStatus?: RecognitionStatus | null;
     metadataAvailability?: MetadataAvailability;
     tokenQuality?: TokenQuality;
     tokenQualitySources?: string[];
@@ -56,6 +56,9 @@ export type GraphEdge = {
     counterpartyAccountType: AccountType;
     transferCount: number;
     counterpartyTransferCount: number;
+    inboundTransferCount?: number;
+    outboundTransferCount?: number;
+    tokenCount?: number;
     amountDecimalSum?: number | null;
   };
 };
@@ -384,28 +387,27 @@ export type ApiDashboardData = {
   eventNextCursor: string | null;
   tokenCount: number;
   counterpartyCount: number;
-  graphInteractionCount: number;
+  graphCounterpartyCount: number;
 };
 
-type ApiGraphInteraction = {
+type ApiGraphCounterparty = {
   wallet_id: string;
   ens: string;
   wallet_address: string;
   counterparty_address: string;
-  token_address: string;
-  token_symbol: string;
-  token_status: TokenStatus;
-  recognition_status: RecognitionStatus;
-  recognition_source: string;
-  recognition_override_status: RecognitionStatus | null;
-  direction: "in" | "out";
   account_type: AccountType;
+  code_state: CodeState;
+  observation_block_timestamp: string | null;
   observation_block_number: number | null;
   eip7702_delegation_target: string | null;
+  evidence_fetch_status: EvidenceFetchStatus;
+  evidence_reason_codes: string;
   evidence_coverage_start_block: number | null;
   evidence_coverage_end_block: number | null;
   transfer_count: number;
-  counterparty_transfer_count: number;
+  inbound_transfer_count: number;
+  outbound_transfer_count: number;
+  token_count: number;
 };
 
 export const dashboardDataMode = import.meta.env.VITE_DATA_MODE === "api" ? "api" : "static";
@@ -429,14 +431,14 @@ function apiQuery(query: DashboardQuery, extra: Record<string, string | number> 
   return parameters.toString();
 }
 
-function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
+function apiGraph(items: ApiGraphCounterparty[]): DashboardGraph {
   const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
 
   for (const item of items) {
     const walletNodeId = `wallet:${item.wallet_address}`;
     const counterpartyNodeId = `counterparty:${item.counterparty_address}`;
-    const interactionId = `interaction:${item.wallet_address}:${item.counterparty_address}:${item.token_address}:${item.direction}`;
+    const interactionId = `counterparty:${item.wallet_address}:${item.counterparty_address}`;
     nodes.set(walletNodeId, {
       data: {
         id: walletNodeId, label: item.ens, type: "wallet", address: item.wallet_address,
@@ -452,26 +454,28 @@ function apiGraph(items: ApiGraphInteraction[]): DashboardGraph {
         label: `${item.counterparty_address.slice(0, 6)}...${item.counterparty_address.slice(-4)}`,
         type: "counterparty",
         address: item.counterparty_address, tokenAddress: null, symbol: null,
-        accountType: item.account_type, codeState: null,
-        observationBlockNumber: item.observation_block_number, observationBlockTimestamp: null,
-        eip7702DelegationTarget: item.eip7702_delegation_target, evidenceFetchStatus: null,
-        evidenceReasonCodes: null, evidenceCoverageStartBlock: item.evidence_coverage_start_block,
+        accountType: item.account_type, codeState: item.code_state,
+        observationBlockNumber: item.observation_block_number,
+        observationBlockTimestamp: item.observation_block_timestamp,
+        eip7702DelegationTarget: item.eip7702_delegation_target,
+        evidenceFetchStatus: item.evidence_fetch_status,
+        evidenceReasonCodes: item.evidence_reason_codes,
+        evidenceCoverageStartBlock: item.evidence_coverage_start_block,
         evidenceCoverageEndBlock: item.evidence_coverage_end_block,
       },
     });
     edges.push({
       data: {
         id: `${interactionId}:wallet-counterparty`, interactionId, edgeRole: "wallet_counterparty",
-        source: item.direction === "out" ? walletNodeId : counterpartyNodeId,
-        target: item.direction === "out" ? counterpartyNodeId : walletNodeId,
+        source: walletNodeId,
+        target: counterpartyNodeId,
         walletAddress: item.wallet_address, counterpartyAddress: item.counterparty_address,
-        direction: item.direction, tokenAddress: item.token_address, tokenSymbol: item.token_symbol,
-        tokenStatus: item.token_status,
-        recognitionStatus: item.recognition_status,
-        recognitionSource: item.recognition_source,
-        recognitionOverrideStatus: item.recognition_override_status,
+        direction: "both", tokenAddress: null, tokenSymbol: null,
         counterpartyAccountType: item.account_type, transferCount: item.transfer_count,
-        counterpartyTransferCount: item.counterparty_transfer_count,
+        counterpartyTransferCount: item.transfer_count,
+        inboundTransferCount: item.inbound_transfer_count,
+        outboundTransferCount: item.outbound_transfer_count,
+        tokenCount: item.token_count,
       },
     });
   }
@@ -523,7 +527,7 @@ export async function loadApiDashboardData(
   ]);
   const [events, graph] = await Promise.all([
     fetchJson<ApiCollection<WalletEvent>>(`/api/v1/events?${apiQuery(query, { limit: 10 })}`, signal),
-    fetchJson<ApiCollection<ApiGraphInteraction>>(
+    fetchJson<ApiCollection<ApiGraphCounterparty>>(
       `/api/v1/graph?${apiQuery(query, { limit: query.graphLimit })}`,
       signal,
     ),
@@ -531,7 +535,7 @@ export async function loadApiDashboardData(
   const [tokens, counterparties] = await Promise.all([
     fetchJson<ApiCollection<TokenSummary>>(`/api/v1/tokens?${apiQuery(query, { limit: 500 })}`, signal),
     fetchJson<ApiCollection<CounterpartySummary>>(
-      `/api/v1/counterparties?${apiQuery(query, { limit: query.counterpartyLimit })}`,
+      `/api/v1/counterparties?${apiQuery(query, { limit: Math.max(query.graphLimit, query.counterpartyLimit) })}`,
       signal,
     ),
   ]);
@@ -549,7 +553,7 @@ export async function loadApiDashboardData(
     eventNextCursor: events.next_cursor ?? null,
     tokenCount: tokens.complete_matching_count,
     counterpartyCount: counterparties.complete_matching_count,
-    graphInteractionCount: graph.complete_matching_count,
+    graphCounterpartyCount: graph.complete_matching_count,
   };
 }
 

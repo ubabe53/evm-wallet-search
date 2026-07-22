@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v4"
+API_SCHEMA_VERSION = "dashboard-api-v5"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -67,10 +67,14 @@ def rows(connection: Any, sql: str, parameters: Iterable[Any] = ()) -> list[dict
     ]
 
 
-def filter_sql(filters: DashboardFilters) -> tuple[str, list[Any]]:
+def filter_sql(
+    filters: DashboardFilters,
+    *,
+    include_recognition: bool = True,
+) -> tuple[str, list[Any]]:
     clauses: list[str] = []
     parameters: list[Any] = []
-    if filters.recognition != "all":
+    if include_recognition and filters.recognition != "all":
         clauses.append("events.recognition_status = ?")
         parameters.append(filters.recognition)
 
@@ -121,6 +125,54 @@ def filtered_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
           and overrides.token_address = events.token_address
       ),
       filtered_events as (select * from effective_events as events where {predicate})
+    """, parameters
+
+
+def counterparty_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
+    """Select a counterparty cohort without discarding its opposite-recognition activity.
+
+    Recognition decides whether an address belongs in the cohort. Once eligible, all
+    events within the remaining account/search scope contribute to its displayed
+    activity, so an address that used both recognized and other tokens remains intact.
+    """
+    predicate, parameters = filter_sql(filters, include_recognition=False)
+    recognition_predicate = "true"
+    if filters.recognition != "all":
+        recognition_predicate = "events.recognition_status = ?"
+        parameters.append(filters.recognition)
+
+    return f"""
+      with effective_events as (
+        select
+          events.* exclude (recognition_status, recognition_reason, recognition_source),
+          coalesce(overrides.status, events.recognition_status) as recognition_status,
+          case
+            when overrides.status is not null then 'manual_override'
+            else events.recognition_reason
+          end as recognition_reason,
+          case
+            when overrides.status is not null then 'manual'
+            else events.recognition_source
+          end as recognition_source,
+          overrides.status as recognition_override_status
+        from wallet_events as events
+        left join app.token_recognition_overrides as overrides
+          on overrides.chain_id = events.chain_id
+          and overrides.token_address = events.token_address
+      ),
+      scoped_events as (
+        select * from effective_events as events where {predicate}
+      ),
+      eligible_counterparties as (
+        select distinct wallet_address, counterparty_address
+        from scoped_events as events
+        where {recognition_predicate}
+      ),
+      counterparty_events as (
+        select events.*
+        from scoped_events as events
+        join eligible_counterparties using (wallet_address, counterparty_address)
+      )
     """, parameters
 
 
@@ -441,9 +493,9 @@ class QueryService:
         }
 
     def counterparties(self, filters: DashboardFilters, *, limit: int) -> dict[str, Any]:
-        cte, parameters = filtered_cte(filters)
+        cte, parameters = counterparty_cte(filters)
         eligible = f"""
-          select events.* from filtered_events as events
+          select events.* from counterparty_events as events
           where events.counterparty_address != '{ZERO_ADDRESS}'
             and events.counterparty_address != events.wallet_address
             and not exists (
@@ -500,48 +552,55 @@ class QueryService:
         }
 
     def graph(self, filters: DashboardFilters, *, limit: int) -> dict[str, Any]:
-        cte, parameters = filtered_cte(filters)
-        interaction_sql = f"""
+        cte, parameters = counterparty_cte(filters)
+        eligible = f"""
+          select events.* from counterparty_events as events
+          where events.counterparty_address != '{ZERO_ADDRESS}'
+            and events.counterparty_address != events.wallet_address
+            and not exists (
+              select 1 from wallet_events as token_events
+              where token_events.token_address = events.counterparty_address
+            )
+        """
+        counterparty_sql = f"""
           select
             any_value(wallet_id) as wallet_id,
             any_value(ens) as ens,
             wallet_address,
             counterparty_address,
-            token_address,
-            coalesce(any_value(token_symbol), substr(token_address, 1, 10)) as token_symbol,
-            any_value(token_status) as token_status,
-            any_value(recognition_status) as recognition_status,
-            any_value(recognition_reason) as recognition_reason,
-            any_value(recognition_source) as recognition_source,
-            any_value(recognition_version) as recognition_version,
-            any_value(recognition_override_status) as recognition_override_status,
-            direction,
             any_value(counterparty_account_type) as account_type,
+            any_value(counterparty_code_state) as code_state,
+            any_value(counterparty_code_size_bytes) as code_size_bytes,
             any_value(counterparty_observation_block_number) as observation_block_number,
+            any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
             any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
+            any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
+            any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
+            any_value(counterparty_evidence_coverage_scope) as evidence_coverage_scope,
             any_value(counterparty_evidence_coverage_start_block) as evidence_coverage_start_block,
             any_value(counterparty_evidence_coverage_end_block) as evidence_coverage_end_block,
+            any_value(counterparty_evidence_schema_version) as evidence_schema_version,
             count(*) as transfer_count,
+            count(*) filter (where direction = 'in') as inbound_transfer_count,
+            count(*) filter (where direction = 'out') as outbound_transfer_count,
+            count(distinct token_address) as token_count,
+            min(block_timestamp) as first_seen_at,
             max(block_timestamp) as last_seen_at
-          from filtered_events
-          where counterparty_address != '{ZERO_ADDRESS}'
-          group by wallet_address, counterparty_address, token_address, direction
+          from ({eligible})
+          group by wallet_address, counterparty_address
         """
         with self.connect() as connection:
-            total = rows(connection, f"{cte} select count(*) as count from ({interaction_sql})", parameters)[0]["count"]
+            total = rows(
+                connection,
+                f"{cte} select count(*) as count from ({counterparty_sql})",
+                parameters,
+            )[0]["count"]
             items = rows(
                 connection,
                 f"""
-                {cte}, counterparty_activity as (
-                  select wallet_address, counterparty_address, count(*) as counterparty_transfer_count
-                  from wallet_events
-                  group by wallet_address, counterparty_address
-                )
-                select interactions.*, activity.counterparty_transfer_count
-                from ({interaction_sql}) as interactions
-                join counterparty_activity as activity using (wallet_address, counterparty_address)
-                order by interactions.transfer_count desc, interactions.last_seen_at desc,
-                  interactions.counterparty_address, interactions.token_address, interactions.direction
+                {cte}
+                select * from ({counterparty_sql}) as counterparties
+                order by transfer_count desc, last_seen_at desc, counterparty_address
                 limit {limit}
                 """,
                 parameters,

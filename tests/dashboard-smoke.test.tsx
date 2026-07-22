@@ -8,15 +8,17 @@ import {
   aggregateCounterparties,
   aggregateTimelineRows,
   aggregateTokenSummaries,
+  buildCounterpartyGraph,
   counterpartyNodeSize,
   etherscanAddressUrl,
+  etherscanInteractionUrl,
   etherscanTokenUrl,
   etherscanTransactionUrl,
   graphStyles,
   interactionEdgeLabel,
   INDIRECT_TRANSFER_EXPLANATION,
 } from "../src/App";
-import type { CounterpartySummary, TimelineRow, TokenSummary } from "../src/data";
+import type { CounterpartySummary, DashboardGraph, TimelineRow, TokenSummary } from "../src/data";
 
 const contractAccountEvidence = {
   account_type: "contract",
@@ -381,18 +383,83 @@ describe("App", () => {
   });
 
   it("does not expose removed Safe or ERC-4337 graph channels", () => {
-    const selectors = graphStyles(document.createElement("div")).map((rule) => rule.selector);
+    const styles = graphStyles(document.createElement("div"));
+    const selectors = styles.map((rule) => rule.selector);
     expect(selectors).not.toContain("node[?isSafe]");
     expect(selectors).not.toContain("node[?isErc4337Account]");
+    expect(selectors).not.toContain('node[accountType = "eip7702_delegated"]');
+    const unknownStyle = styles.find((rule) => rule.selector === 'node[accountType = "unknown"]') as { style?: object };
+    const edgeStyle = styles.find((rule) => rule.selector === "edge") as { style?: object };
+    expect(unknownStyle.style)
+      .toMatchObject({ "border-style": "solid" });
+    expect(edgeStyle.style)
+      .toMatchObject({ "curve-style": "straight", "target-arrow-shape": "none" });
   });
 
   it("scales counterparty nodes gradually on a stable logarithmic range", () => {
     expect([1, 10, 100, 1_000, 10_000, 100_000].map(counterpartyNodeSize)).toEqual([26, 37, 47, 58, 68, 68]);
   });
 
-  it("labels graph interactions with token and transfer count", () => {
-    expect(interactionEdgeLabel("USDC", 5)).toBe("USDC x5");
-    expect(interactionEdgeLabel("DAI", 12_500)).toBe("DAI x12,500");
+  it("labels graph edges with captured transfer counts", () => {
+    expect(interactionEdgeLabel(1)).toBe("1 transfer");
+    expect(interactionEdgeLabel(12_500)).toBe("12,500 transfers");
+  });
+
+  it("uses the same mixed-recognition aggregate for graph and counterparty ranking", () => {
+    const base = summaries.counterparties[0] as unknown as CounterpartySummary;
+    const counterpartyRows = [
+      base,
+      {
+        ...base,
+        token_status: "unverified" as const,
+        recognition_status: "other" as const,
+        token_quality: "listed" as const,
+        transfer_count: 2,
+        inbound_transfer_count: 0,
+        outbound_transfer_count: 2,
+        token_count: 1,
+      },
+    ];
+    const projected = buildCounterpartyGraph({
+      graph: {
+        ...graph,
+        edges: graph.edges.map((edge) => ({
+          data: { ...edge.data, counterpartyTransferCount: 99 },
+        })) as unknown as DashboardGraph["edges"],
+      } as unknown as DashboardGraph,
+      summaries: { counterparties: counterpartyRows },
+    }, 25);
+
+    expect(aggregateCounterparties(counterpartyRows)[0].transfer_count).toBe(5);
+    expect(projected.edges).toHaveLength(1);
+    expect(projected.edges[0].data).toMatchObject({
+      counterpartyAddress: base.counterparty_address,
+      transferCount: 5,
+      counterpartyTransferCount: 5,
+      label: "5 transfers",
+    });
+  });
+
+  it("preserves counterparty recency as the graph tie-breaker", () => {
+    const older = {
+      ...(summaries.counterparties[0] as unknown as CounterpartySummary),
+      transfer_count: 5,
+      last_seen_at: "2024-01-01T00:00:00+00:00",
+    };
+    const newer = {
+      ...(summaries.counterparties[1] as unknown as CounterpartySummary),
+      transfer_count: 5,
+      last_seen_at: "2024-02-01T00:00:00+00:00",
+    };
+    const projected = buildCounterpartyGraph({
+      graph: graph as unknown as DashboardGraph,
+      summaries: { counterparties: [older, newer] },
+    }, 2);
+
+    expect(projected.edges.map((edge) => edge.data.counterpartyAddress)).toEqual([
+      newer.counterparty_address,
+      older.counterparty_address,
+    ]);
   });
 
   it("aggregates token classification rows into one transfer-ranked counterparty", () => {
@@ -467,6 +534,12 @@ describe("App", () => {
     expect(etherscanAddressUrl("0xabc")).toBe("https://etherscan.io/address/0xabc");
     expect(etherscanTokenUrl("0xdef")).toBe("https://etherscan.io/token/0xdef");
     expect(etherscanTransactionUrl("0x123")).toBe("https://etherscan.io/tx/0x123");
+    const interaction = new URL(etherscanInteractionUrl("0xwallet", "0xcounterparty"));
+    expect(interaction.pathname).toBe("/advanced-filter");
+    expect(interaction.searchParams.get("txntype")).toBe("2");
+    expect(interaction.searchParams.getAll("fadd")).toEqual(["0xwallet", "0xcounterparty"]);
+    expect(interaction.searchParams.getAll("tadd")).toEqual(["0xwallet", "0xcounterparty"]);
+    expect(interaction.searchParams.get("qt")).toBe("1");
   });
 
   it("renders exported dashboard data", async () => {
@@ -522,7 +595,7 @@ describe("App", () => {
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
-    expect(screen.getByLabelText("Maximum graph interactions")).toHaveValue("25");
+    expect(screen.getByLabelText("Maximum graph counterparties")).toHaveValue("25");
     expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Recognized" })).not.toBeChecked();
@@ -568,26 +641,26 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0xaaa" } });
     expect(screen.getByText("2 nodes / 1 edges")).toBeInTheDocument();
 
-    const graphElement = screen.getByRole("img", { name: /wallet interaction graph/i });
+    const graphElement = screen.getByRole("img", { name: /wallet counterparty graph/i });
     const graphShell = graphElement.parentElement;
     expect(graphShell).toHaveAttribute("data-graph-theme", "light");
 
     fireEvent.click(screen.getByLabelText("Open graph theater mode"));
-    expect(screen.getByRole("dialog", { name: "Interaction Graph theater mode" })).toHaveClass("theater");
+    expect(screen.getByRole("dialog", { name: "Counterparty Graph theater mode" })).toHaveClass("theater");
     expect(document.body.style.overflow).toBe("hidden");
     expect(screen.getByLabelText("Exit graph theater mode")).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Interaction Graph theater mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Counterparty Graph theater mode" })).not.toBeInTheDocument();
     expect(document.body.style.overflow).toBe("");
 
     fireEvent.click(screen.getByLabelText("Switch to dark theme"));
     expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(graphElement).toBe(screen.getByRole("img", { name: /wallet interaction graph/i }));
+    expect(graphElement).toBe(screen.getByRole("img", { name: /wallet counterparty graph/i }));
     expect(graphShell).toHaveAttribute("data-graph-theme", "dark");
 
     fireEvent.click(screen.getByLabelText("Switch to light theme"));
     expect(document.documentElement.dataset.theme).toBe("light");
-    expect(graphElement).toBe(screen.getByRole("img", { name: /wallet interaction graph/i }));
+    expect(graphElement).toBe(screen.getByRole("img", { name: /wallet counterparty graph/i }));
     expect(graphShell).toHaveAttribute("data-graph-theme", "light");
   });
 
