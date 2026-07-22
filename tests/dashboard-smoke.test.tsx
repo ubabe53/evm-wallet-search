@@ -373,7 +373,7 @@ describe("App", () => {
     expect(accountMatches("unknown", ["eoa_candidate", "contract"])).toBe(true);
   });
 
-  it("renders single and mixed account-evidence observation ranges", () => {
+  it("renders single and mixed address-type observation ranges", () => {
     expect(accountEvidenceObservationBlockLabel(22_500_000, 22_500_000)).toBe("block 22,500,000");
     expect(accountEvidenceObservationBlockLabel(22_500_000, 22_600_000)).toBe("blocks 22,500,000–22,600,000");
     expect(accountEvidenceObservationTimeLabel("2025-05-17T03:11:47+00:00", "2025-05-17T03:11:47+00:00"))
@@ -619,11 +619,15 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("radio", { name: "All" }));
     expect(screen.getAllByText("USDC").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByLabelText("What recognized means"));
+    fireEvent.mouseEnter(screen.getByLabelText("What recognized means"));
     expect(screen.getByText(/exact Ethereum contract address appears in Uniswap/)).toBeInTheDocument();
+    expect(screen.getByRole("tooltip", { name: /Recognized tokens/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("How token recognition works")).toBeInTheDocument();
     expect(screen.getAllByRole("combobox", { name: /Recognition for/ }).every((control) => control.hasAttribute("disabled"))).toBe(true);
 
-    fireEvent.click(screen.getByText("Account evidence (2)"));
+    fireEvent.mouseEnter(screen.getByLabelText("How address type works"));
+    expect(screen.getByRole("tooltip", { name: /Address type/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Address type (2)"));
     const contractAccount = screen.getByRole("checkbox", { name: "Contract" });
     const eoaCandidate = screen.getByRole("checkbox", { name: "EOA" });
     expect(contractAccount).toBeChecked();

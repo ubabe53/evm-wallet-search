@@ -215,11 +215,13 @@ h2 {
   outline-offset: 1px;
 }
 
-.recognitionInfo {
+.infoTooltip {
   position: relative;
+  display: inline-grid;
+  place-items: center;
 }
 
-.recognitionInfo summary {
+.infoTooltipTrigger {
   display: grid;
   place-items: center;
   width: 30px;
@@ -229,20 +231,17 @@ h2 {
   background: var(--control-bg);
   color: var(--muted);
   cursor: pointer;
-  list-style: none;
+  padding: 0;
 }
 
-.recognitionInfo summary::-webkit-details-marker {
-  display: none;
-}
-
-.recognitionInfo summary:hover,
-.recognitionInfo summary:focus-visible {
+.infoTooltipTrigger:hover,
+.infoTooltipTrigger:focus-visible {
   border-color: var(--graph-wallet);
   color: var(--text);
+  outline: none;
 }
 
-.recognitionInfo > div {
+.infoTooltipContent {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -253,13 +252,52 @@ h2 {
   background: var(--panel-bg);
   padding: 12px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  color: var(--text);
   font-size: 12px;
+  font-weight: 400;
   line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
 }
 
-.recognitionInfo p {
+.infoTooltipContent > span {
+  display: block;
   margin-top: 5px;
   color: var(--muted);
+}
+
+.infoTooltip.left .infoTooltipContent {
+  right: auto;
+  left: 0;
+}
+
+.infoTooltip:hover .infoTooltipContent,
+.infoTooltip:focus-within .infoTooltipContent {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.addressTypeControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tableHeaderInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tableHeaderInfo .infoTooltipTrigger {
+  width: 24px;
+  height: 24px;
 }
 
 .statusFilter {

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import cytoscape from "cytoscape";
 import {
   Activity,
@@ -99,6 +99,36 @@ function EtherscanLink({
     <a className={className} href={href} target="_blank" rel="noreferrer" title={title}>
       {children}
     </a>
+  );
+}
+
+function InfoTooltip({
+  label,
+  title,
+  children,
+  align = "right",
+}: {
+  label: string;
+  title: string;
+  children: ReactNode;
+  align?: "left" | "right";
+}) {
+  const tooltipId = useId();
+  return (
+    <span className={`infoTooltip ${align}`}>
+      <button
+        className="infoTooltipTrigger"
+        type="button"
+        aria-label={label}
+        aria-describedby={tooltipId}
+      >
+        <Info size={15} aria-hidden="true" />
+      </button>
+      <span className="infoTooltipContent" id={tooltipId} role="tooltip">
+        <strong>{title}</strong>
+        <span>{children}</span>
+      </span>
+    </span>
   );
 }
 
@@ -670,7 +700,15 @@ export function TokenTable({
       <thead>
         <tr>
           <th>Token</th>
-          <th>Recognition</th>
+          <th aria-label="Recognition">
+            <span className="tableHeaderInfo">
+              Recognition
+              <InfoTooltip label="How token recognition works" title="Recognition controls" align="left">
+                Automatic uses the stored exact-address registry or reviewed seed result. Recognized
+                and Other save a local override in this dashboard; choosing Automatic removes it.
+              </InfoTooltip>
+            </span>
+          </th>
           <th>Transfers</th>
           <th>Indirect In / Out</th>
           <th>Senders | Recipients</th>
@@ -1349,8 +1387,8 @@ export function App() {
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
             <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
-            <span title={`Account evidence observed at ${accountEvidenceObservationTimeLabel(data.metadata.account_evidence_observation_block_timestamp_min, data.metadata.account_evidence_observation_block_timestamp_max)}; coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
-              account evidence at {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
+            <span title={`Address type observed at ${accountEvidenceObservationTimeLabel(data.metadata.account_evidence_observation_block_timestamp_min, data.metadata.account_evidence_observation_block_timestamp_max)}; coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
+              address type snapshot at {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
             </span>
             {data.metadata.is_sampled && (
               <span>{data.metadata.exported_event_count.toLocaleString()} recent events shown</span>
@@ -1374,42 +1412,41 @@ export function App() {
                 </label>
               ))}
             </fieldset>
-            <details className="recognitionInfo">
-              <summary aria-label="What recognized means" title="What recognized means">
-                <Info size={15} aria-hidden="true" />
+            <InfoTooltip label="What recognized means" title="Recognized tokens">
+              The token&apos;s exact Ethereum contract address appears in Uniswap, CoinGecko,
+              Trust Wallet, or qualifying Coinbase Exchange data, or was manually marked as recognized.
+              Registry inclusion changes over time and does not prove safety, legitimacy, value,
+              or standards compliance.
+            </InfoTooltip>
+          </div>
+          <div className="addressTypeControls">
+            <details className="statusFilter accountFilter">
+              <summary title="Filter every view by the address type observed at the pinned block">
+                Address type ({selectedAccountFilters.length})
+                <ChevronDown size={14} aria-hidden="true" />
               </summary>
-              <div role="note">
-                <strong>Recognized tokens</strong>
-                <p>
-                  The token&apos;s exact Ethereum contract address appears in Uniswap, CoinGecko,
-                  Trust Wallet, or qualifying Coinbase Exchange data, or was manually marked as recognized.
-                  Registry inclusion changes over time and does not prove safety, legitimacy, value,
-                  or standards compliance.
-                </p>
+              <div className="statusMenu accountMenu" role="group" aria-label="Address type filter">
+                {ACCOUNT_FILTERS.map((accountType) => (
+                  <label key={accountType}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAccountFilters.includes(accountType)}
+                      onChange={(event) => setSelectedAccountFilters((current) => event.target.checked
+                        ? [...current.filter((value) => value !== accountType), accountType]
+                        : current.filter((value) => value !== accountType))}
+                    />
+                    <span className={`accountType ${accountType}`}>{ACCOUNT_LABELS[accountType]}</span>
+                  </label>
+                ))}
+                <small>Applies to every view. Unclassified addresses remain included only when both options are selected.</small>
               </div>
             </details>
+            <InfoTooltip label="How address type works" title="Address type">
+              EOA means no contract bytecode was observed at the pinned block; Contract means bytecode
+              was observed. This is a point-in-time classification, not proof of ownership, personhood,
+              or permanent account type. Unclassified addresses appear when both options are selected.
+            </InfoTooltip>
           </div>
-          <details className="statusFilter accountFilter">
-            <summary title="Filters the graph, counterparty ranking, and recent events by pinned-block account evidence">
-              Account evidence ({selectedAccountFilters.length})
-              <ChevronDown size={14} aria-hidden="true" />
-            </summary>
-            <div className="statusMenu accountMenu" role="group" aria-label="Account evidence filter">
-              {ACCOUNT_FILTERS.map((accountType) => (
-                <label key={accountType}>
-                  <input
-                    type="checkbox"
-                    checked={selectedAccountFilters.includes(accountType)}
-                    onChange={(event) => setSelectedAccountFilters((current) => event.target.checked
-                      ? [...current.filter((value) => value !== accountType), accountType]
-                      : current.filter((value) => value !== accountType))}
-                  />
-                  <span className={`accountType ${accountType}`}>{ACCOUNT_LABELS[accountType]}</span>
-                </label>
-              ))}
-              <small>Applies to every view. Unresolved RPC failures remain included only when both options are selected.</small>
-            </div>
-          </details>
           <label className="searchbox">
             <Search size={16} aria-hidden="true" />
             <input
