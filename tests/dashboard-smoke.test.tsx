@@ -16,6 +16,7 @@ import {
   etherscanTransactionUrl,
   graphStyles,
   interactionEdgeLabel,
+  snapshotCoverageLabel,
   INDIRECT_TRANSFER_EXPLANATION,
 } from "../src/App";
 import type { CounterpartySummary, DashboardGraph, TimelineRow, TokenSummary } from "../src/data";
@@ -389,6 +390,19 @@ describe("App", () => {
       .toBe("2025-05-17T03:11:47+00:00–2025-05-18T03:11:47+00:00");
   });
 
+  it("labels only verified finalized snapshot coverage", () => {
+    expect(snapshotCoverageLabel({
+      snapshot_start_block: 3,
+      snapshot_end_block: 25_523_374,
+      snapshot_finality_policy: "ethereum_finalized",
+    })).toBe("Blocks 3–25,523,374 · Finalized");
+    expect(snapshotCoverageLabel({
+      snapshot_start_block: null,
+      snapshot_end_block: null,
+      snapshot_finality_policy: null,
+    })).toBe("Coverage not recorded");
+  });
+
   it("does not expose removed Safe or ERC-4337 graph channels", () => {
     const styles = graphStyles(document.createElement("div"));
     const selectors = styles.map((rule) => rule.selector);
@@ -602,6 +616,9 @@ describe("App", () => {
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
+    expect(screen.getByText("Data snapshot").parentElement).toHaveTextContent(
+      "Data snapshotCoverage not recorded",
+    );
     expect(screen.getByLabelText("Maximum graph counterparties")).toHaveValue("25");
     expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();

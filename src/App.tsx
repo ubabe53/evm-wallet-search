@@ -77,6 +77,22 @@ export function etherscanInteractionUrl(walletAddress: string, counterpartyAddre
   return `${ETHERSCAN_BASE_URL}/advanced-filter?${parameters.toString()}`;
 }
 
+export function snapshotCoverageLabel(
+  metadata: Pick<
+    DashboardMetadata,
+    "snapshot_start_block" | "snapshot_end_block" | "snapshot_finality_policy"
+  >,
+): string {
+  if (
+    metadata.snapshot_start_block == null ||
+    metadata.snapshot_end_block == null ||
+    metadata.snapshot_finality_policy !== "ethereum_finalized"
+  ) {
+    return "Coverage not recorded";
+  }
+  return `Blocks ${metadata.snapshot_start_block.toLocaleString("en-US")}–${metadata.snapshot_end_block.toLocaleString("en-US")} · Finalized`;
+}
+
 function openEtherscan(url: string) {
   const opened = window.open(url, "_blank", "noopener,noreferrer");
   if (opened) {
@@ -1384,6 +1400,10 @@ export function App() {
         <div>
           <h1>EVM Wallet Search</h1>
           <p>ERC20 token flow analytics for {data.metadata.ens}</p>
+          <div className="snapshotSummary">
+            <span>Data snapshot</span>
+            <strong>{snapshotCoverageLabel(data.metadata)}</strong>
+          </div>
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
             <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
