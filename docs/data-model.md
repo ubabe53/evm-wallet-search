@@ -122,11 +122,17 @@ Daily transfer counts and token-flow aggregates by wallet, token, status, qualit
 
 ### `pipeline_metadata`
 
-One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Evidence metadata includes enriched/complete address counts, minimum and maximum observation blocks/timestamps across enrichment batches, scan scope/range, and schema version. Fixture bounds are null because fixture mode contains no account evidence. Equal live bounds represent one snapshot; unequal bounds are an observation range and must not be collapsed to the newest batch.
+One row per configured wallet containing chain, fixture-versus-HyperIndex source, generation time, complete transfer/token/counterparty/interaction/timeline counts, visible non-spam counts, hidden suspected/reviewed-spam counts, first/last event timestamps, and account-evidence coverage metadata. Live rows also carry the completed snapshot run ID, cumulative start block, latest incremental start block, finalized end block and hash, `ethereum_finalized` policy, and scope version. These fields describe verified scan coverage; first/last event blocks do not. Fixture snapshot fields are null because deterministic fixture rows do not prove indexer coverage. Account-evidence metadata remains a separate observed-at contract with enriched/complete address counts, observation block/time ranges, scan scope/range, and schema version.
 
 The fixture-demo exporter enriches this row in `meta.json` with returned counts, limits, and sampling state. The demo metadata must identify fixture provenance and must not imply that its counts describe complete HyperIndex history.
 
-## Application-owned local state
+## Operational and application-owned local state
+
+### `ops.pipeline_runs`
+
+The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. The row records the pinned configured label, inclusive interval, finalized end-block hash, number of matching events found in that interval, `running|completed|failed` status, completion time, and semantic scope version.
+
+The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance the next start to the previous `to_block + 1`; failed rows remain auditable and retryable. A run cannot complete unless HyperIndex `_meta.progressBlock` has reached the chosen Ethereum `finalized` block and the dbt build succeeds. Rebuilding transformations while already current reuses the latest completed run rather than creating a false scan interval.
 
 ### `app.token_recognition_overrides`
 
@@ -134,9 +140,9 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 
 ## Local API contract
 
-The `/api/v1` service currently advertises response schema `dashboard-api-v5`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses any database whose `pipeline_metadata.data_source` is not `hyperindex`. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. The service exposes:
+The `/api/v1` service currently advertises response schema `dashboard-api-v6`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, or a metadata run ID that does not match one completed `ops.pipeline_runs` row. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. The service exposes:
 
-- `metadata`: one provenance object for the configured wallet, including DuckDB generation time, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema are not an indexer checkpoint or a block-continuity claim;
+- `metadata`: one provenance object for the configured wallet, including DuckDB generation time, contiguous finalized snapshot bounds, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema remain separate from the indexer checkpoint;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
 - `events`: one row per immutable `wallet_events` row, ordered newest-first by block/transaction/log position and traversed with an opaque keyset cursor;
 - `tokens`: one exact aggregate per emitting token contract, ranked after filtering and limited only after aggregation;
@@ -165,6 +171,7 @@ dbt tests enforce:
 - Valid non-null token statuses throughout event, graph, token-summary, and timeline models.
 - Valid metadata-availability and token-quality values, source-count reconciliation, non-empty provenance, `token-quality-v1`, and quality-aware `token-reputation-v2`.
 - Valid automatic `recognized`/`other` values and `token-recognition-v1` provenance, plus persistent API override precedence and reset behavior.
+- Null fixture snapshot claims and complete, internally ordered finalized snapshot fields for live builds.
 - Explicit CoinGecko-only OSCAR and PUPPIES coverage proving `listed`/`unverified`, not trusted.
 - Manual override precedence and unverified fallback behavior.
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.

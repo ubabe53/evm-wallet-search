@@ -4,11 +4,12 @@ from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import duckdb
 from fastapi.testclient import TestClient
 
 from scripts.artifact_paths import FIXTURE_DB_PATH
 from server.app import create_app
-from server.queries import QueryService, json_value
+from server.queries import DatabaseUnavailable, QueryService, json_value
 
 
 class DashboardApiTest(unittest.TestCase):
@@ -36,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v5")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v6")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 6)
@@ -44,6 +45,59 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(metadata["completeness_scope"], "duckdb_snapshot")
         self.assertFalse(metadata["indexer_checkpoint_recorded"])
         self.assertEqual(metadata["finality_status"], "not_recorded")
+        self.assertIsNone(metadata["snapshot_start_block"])
+        self.assertIsNone(metadata["snapshot_end_block"])
+
+    def test_completed_snapshot_run_exposes_finalized_contiguous_coverage(self) -> None:
+        with TemporaryDirectory() as directory:
+            database_path = Path(directory) / "live-test.duckdb"
+            shutil.copy2(FIXTURE_DB_PATH, database_path)
+            with duckdb.connect(str(database_path)) as connection:
+                connection.execute("create schema ops")
+                connection.execute(
+                    """
+                    create table ops.pipeline_runs (
+                      run_id varchar, chain_id integer, wallet_address varchar, wallet_label varchar,
+                      from_block bigint, to_block bigint, to_block_hash varchar, events_found bigint,
+                      status varchar, completed_at timestamptz, scope_version varchar
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    insert into ops.pipeline_runs values (
+                      'run-1', 1, '0xd8da6bf26964af9d7eed9e03e53415d37aa96045',
+                      'vitalik.eth', 0, 17000010, ?, 6, 'completed', current_timestamp,
+                      'wallet-transfer-signature-v1'
+                    )
+                    """,
+                    ["0x" + "a" * 64],
+                )
+                connection.execute(
+                    """
+                    update pipeline_metadata set
+                      data_source = 'hyperindex', snapshot_run_id = 'run-1',
+                      snapshot_start_block = 0, snapshot_increment_start_block = 0,
+                      snapshot_end_block = 17000010, snapshot_end_block_hash = ?,
+                      snapshot_finality_policy = 'ethereum_finalized',
+                      snapshot_scope_version = 'wallet-transfer-signature-v1'
+                    """,
+                    ["0x" + "a" * 64],
+                )
+
+            metadata = QueryService(database_path).metadata()
+            self.assertTrue(metadata["indexer_checkpoint_recorded"])
+            self.assertEqual(metadata["completeness_scope"], "finalized_block_range")
+            self.assertEqual(metadata["finality_status"], "finalized")
+            self.assertEqual(metadata["snapshot_start_block"], 0)
+            self.assertEqual(metadata["snapshot_end_block"], 17000010)
+
+            with duckdb.connect(str(database_path)) as connection:
+                connection.execute(
+                    "update ops.pipeline_runs set from_block = 1 where run_id = 'run-1'"
+                )
+            with self.assertRaisesRegex(DatabaseUnavailable, "non-contiguous"):
+                QueryService(database_path).metadata()
 
     def test_decimal_serialization_preserves_values_beyond_ieee_754_precision(self) -> None:
         value = Decimal("12345678901234567890.123456789012345678")

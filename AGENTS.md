@@ -24,7 +24,7 @@ Treat documentation as part of the implementation. If code and documentation dis
 - Ethereum mainnet only (`chain_id = 1`).
 - One configured wallet, currently the pinned address for `vitalik.eth`.
 - One `Transfer(address,address,uint256)` event signature, intended for ERC-20 analytics. ERC-721 uses the same signature, and the current wildcard indexer does not disambiguate standards; never claim every captured row is proven ERC-20.
-- HyperIndex Postgres is ingestion persistence; `analytics/artifacts/live.duckdb` is the complete local analytics artifact. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
+- HyperIndex Postgres is ingestion persistence; `analytics/artifacts/live.duckdb` is the complete local analytics artifact and stores one `ops.pipeline_runs` row per attempted finalized snapshot interval. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
 - The local read-only FastAPI service in `server/` queries only `analytics/artifacts/live.duckdb`; it must reject fixture provenance.
 - The React app has two explicit build-time modes: local development queries the live API, while the fixture-demo build reads generated JSON. Do not add a runtime switch that can mix them.
 - Static JSON is only the bounded fixture-backed GitHub Pages demo path. Account-type evidence has no checked-in fixture; fixture builds expose an empty typed relation.
@@ -43,6 +43,7 @@ Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, 
 - `eoa_candidate` means no bytecode was observed at a pinned block. It does not prove personhood, control, permanence, or EOA history.
 - Live account evidence is an ignored local DuckDB cache. Successful bytecode observations are not automatically refreshed; failures remain retryable. Do not reintroduce Safe/ERC-4337 RPC collection or a generated account-evidence CSV without a new architecture decision.
 - Distinguish complete DuckDB/API results from bounded demo exports. Always carry source, block/time boundaries, generation time, limits, and sampling state.
+- Live completeness advances only through contiguous completed runs ending at an Ethereum `finalized` block whose hash is recorded. Event extrema are never a substitute for scan coverage.
 
 ## Working method
 

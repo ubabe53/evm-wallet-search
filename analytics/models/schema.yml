@@ -471,7 +471,7 @@ models:
               arguments:
                 values: ["eoa_candidate", "contract", "unknown"]
   - name: pipeline_metadata
-    description: Export provenance and complete mart counts for each configured wallet, including nullable account-evidence observation bounds. Fixture builds intentionally have no account evidence.
+    description: Export provenance and complete mart counts for each configured wallet, including finalized contiguous snapshot coverage in live mode and nullable account-evidence observation bounds. Fixture builds intentionally have no indexer checkpoint or account evidence.
     columns:
       - name: wallet_address
         tests:
@@ -482,6 +482,13 @@ models:
           - accepted_values:
               arguments:
                 values: ["fixture", "hyperindex"]
+      - name: snapshot_run_id
+      - name: snapshot_start_block
+      - name: snapshot_increment_start_block
+      - name: snapshot_end_block
+      - name: snapshot_end_block_hash
+      - name: snapshot_finality_policy
+      - name: snapshot_scope_version
       - name: account_evidence_observation_block_number_min
       - name: account_evidence_observation_block_number_max
       - name: account_evidence_observation_block_timestamp_min

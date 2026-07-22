@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v5"
+API_SCHEMA_VERSION = "dashboard-api-v6"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -223,6 +223,61 @@ class QueryService:
         if self.require_live and metadata[0]["data_source"] != "hyperindex":
             connection.close()
             raise DatabaseUnavailable("The local API requires a HyperIndex-built live database")
+        snapshot_run_id = metadata[0].get("snapshot_run_id")
+        if metadata[0]["data_source"] == "hyperindex" and not snapshot_run_id:
+            connection.close()
+            raise DatabaseUnavailable(
+                "The live analytics database has no verified finalized snapshot run"
+            )
+        if metadata[0]["data_source"] == "hyperindex":
+            if metadata[0].get("snapshot_finality_policy") != "ethereum_finalized":
+                connection.close()
+                raise DatabaseUnavailable("The live analytics snapshot is not finalized")
+            try:
+                completed_runs = rows(
+                    connection,
+                    """
+                    select run_id, from_block, to_block, to_block_hash
+                    from ops.pipeline_runs
+                    where chain_id = ?
+                      and wallet_address = ?
+                      and scope_version = ?
+                      and status = 'completed'
+                      and events_found is not null
+                      and completed_at is not null
+                    order by from_block, to_block
+                    """,
+                    [
+                        metadata[0]["chain_id"],
+                        metadata[0]["wallet_address"],
+                        metadata[0]["snapshot_scope_version"],
+                    ],
+                )
+            except Exception as error:
+                connection.close()
+                raise DatabaseUnavailable("The finalized snapshot run could not be verified") from error
+            expected_start = metadata[0].get("snapshot_start_block")
+            contiguous = isinstance(expected_start, int) and bool(completed_runs)
+            for run in completed_runs:
+                contiguous = contiguous and run["from_block"] == expected_start
+                expected_start = run["to_block"] + 1
+            latest_run = completed_runs[-1] if completed_runs else {}
+            snapshot_end = metadata[0].get("snapshot_end_block")
+            latest_matches = (
+                isinstance(snapshot_end, int)
+                and latest_run.get("run_id") == snapshot_run_id
+                and latest_run.get("from_block")
+                == metadata[0].get("snapshot_increment_start_block")
+                and latest_run.get("to_block") == snapshot_end
+                and latest_run.get("to_block_hash")
+                == metadata[0].get("snapshot_end_block_hash")
+                and expected_start == snapshot_end + 1
+            )
+            if not contiguous or not latest_matches:
+                connection.close()
+                raise DatabaseUnavailable(
+                    "The finalized snapshot runs are incomplete or non-contiguous"
+                )
         with self._schema_lock:
             if not self._schema_ready:
                 connection.execute("create schema if not exists app")
@@ -247,14 +302,15 @@ class QueryService:
                 connection,
                 "select min(block_number) as event_block_number_min, max(block_number) as event_block_number_max from wallet_events",
             )[0]
+        checkpoint_recorded = metadata.get("snapshot_run_id") is not None
         return {
             **metadata,
             **block_bounds,
             "api_schema_version": API_SCHEMA_VERSION,
             "database_mode": "live" if metadata["data_source"] == "hyperindex" else "fixture_test",
-            "completeness_scope": "duckdb_snapshot",
-            "indexer_checkpoint_recorded": False,
-            "finality_status": "not_recorded",
+            "completeness_scope": "finalized_block_range" if checkpoint_recorded else "duckdb_snapshot",
+            "indexer_checkpoint_recorded": checkpoint_recorded,
+            "finality_status": "finalized" if checkpoint_recorded else "not_recorded",
             "is_sampled": False,
         }
 
@@ -264,6 +320,10 @@ class QueryService:
             """
             select metadata.wallet_id, metadata.ens, metadata.wallet_address, metadata.chain_id,
               metadata.data_source, metadata.generated_at,
+              metadata.snapshot_run_id, metadata.snapshot_start_block,
+              metadata.snapshot_increment_start_block, metadata.snapshot_end_block,
+              metadata.snapshot_end_block_hash, metadata.snapshot_finality_policy,
+              metadata.snapshot_scope_version,
               first_event_at, last_event_at, account_evidence_observation_block_number_min,
               account_evidence_observation_block_number_max,
               account_evidence_observation_block_timestamp_min,
@@ -277,12 +337,13 @@ class QueryService:
             group by all
             """,
         )[0]
+        checkpoint_recorded = metadata.get("snapshot_run_id") is not None
         return {
             **metadata,
             "api_schema_version": API_SCHEMA_VERSION,
-            "completeness_scope": "duckdb_snapshot",
-            "indexer_checkpoint_recorded": False,
-            "finality_status": "not_recorded",
+            "completeness_scope": "finalized_block_range" if checkpoint_recorded else "duckdb_snapshot",
+            "indexer_checkpoint_recorded": checkpoint_recorded,
+            "finality_status": "finalized" if checkpoint_recorded else "not_recorded",
             "is_sampled": False,
         }
 

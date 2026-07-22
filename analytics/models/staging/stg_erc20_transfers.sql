@@ -20,7 +20,7 @@ with raw_transfers as (
       value_raw
     from postgres_query(
       'hyperindex',
-      'select id, chain_id, block_number, block_timestamp, transaction_hash, transaction_index, transaction_from_address, transaction_to_address, log_index, token_address, from_address, to_address, value_raw::text as value_raw from public."Erc20Transfer"'
+      'select id, chain_id, block_number, block_timestamp, transaction_hash, transaction_index, transaction_from_address, transaction_to_address, log_index, token_address, from_address, to_address, value_raw::text as value_raw from public."Erc20Transfer" where block_number between {{ env_var("EVM_WALLET_SNAPSHOT_START_BLOCK") }} and {{ env_var("EVM_WALLET_SNAPSHOT_END_BLOCK") }}'
     )
   {% endif %}
 ),

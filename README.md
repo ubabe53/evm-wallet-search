@@ -28,7 +28,7 @@ bun run addresses:enrich
 bun run test
 ```
 
-`analytics:build:hyperindex` is the local-product analytics path. It reads the case-sensitive `public."Erc20Transfer"` entity table after attaching Envio Postgres read-only through `DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN` and materializes complete marts in `analytics/artifacts/live.duckdb`; see `docs/operations.md`.
+`analytics:build:hyperindex` is the local-product analytics path. It requires HyperIndex's transactional progress to reach Ethereum's current `finalized` block, records the attempted contiguous interval in `ops.pipeline_runs`, reads the case-sensitive `public."Erc20Transfer"` entity table through that finalized bound, and materializes complete marts in `analytics/artifacts/live.duckdb`; see `docs/operations.md`.
 
 `bun run api:dev` starts a loopback-only FastAPI service on `http://127.0.0.1:8000`. In a second terminal, `bun run dashboard:dev` starts the API-backed React app and proxies `/api` to that loopback service. The API opens `analytics/artifacts/live.duckdb`, requires HyperIndex provenance, validates filters, performs exact calculations across every matching row, and returns bounded rankings or cursor-paginated event pages with complete matching counts. Analytics relations remain read-only to the application; manual token-recognition choices are stored in the isolated `app.token_recognition_overrides` table in the same DuckDB file. FastAPI supplies query validation and OpenAPI at `/docs`; no additional persistence service is introduced.
 
@@ -88,7 +88,7 @@ The target local runtime is:
 Envio HyperIndex Postgres → dbt → DuckDB → local API → React
 ```
 
-DuckDB is the application query source. The API applies filters, rankings, counts, and pagination on demand against the complete marts and returns provenance with every response. React calls the API rather than connecting directly to Postgres or receiving database/RPC credentials. Search, recognition, and inclusive account-evidence filters therefore operate on all matching DuckDB rows before the API returns bounded panel data.
+DuckDB is the application query source. The API verifies the completed finalized run behind the artifact, applies filters, rankings, counts, and pagination on demand against the complete marts, and returns provenance with every response. React calls the API rather than connecting directly to Postgres or receiving database/RPC credentials. Search, recognition, and inclusive account-evidence filters therefore operate on all matching DuckDB rows before the API returns bounded panel data.
 
 The planned Docker distribution will package the local services and persistent data needed by a user who clones the project and runs their own indexer and analytics. Its service and volume contract is not implemented yet.
 

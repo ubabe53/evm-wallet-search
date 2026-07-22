@@ -24,6 +24,17 @@ try:
     )
     from .enrich_counterparty_types import ensure_evidence_store
     from .project_config import resolved_runtime
+    from .enrich_token_metadata import JsonRpcClient
+    from .snapshot_runs import (
+        SnapshotAlreadyCurrent,
+        dbt_snapshot_environment,
+        fetch_hyperindex_metadata,
+        finish_snapshot_run,
+        latest_completed_snapshot_run,
+        read_configured_wallet,
+        resolve_finalized_block,
+        start_snapshot_run,
+    )
 except ImportError:
     from artifact_paths import (
         ACCOUNT_EVIDENCE_DB_PATH,
@@ -34,6 +45,17 @@ except ImportError:
     )
     from enrich_counterparty_types import ensure_evidence_store
     from project_config import resolved_runtime
+    from enrich_token_metadata import JsonRpcClient
+    from snapshot_runs import (
+        SnapshotAlreadyCurrent,
+        dbt_snapshot_environment,
+        fetch_hyperindex_metadata,
+        finish_snapshot_run,
+        latest_completed_snapshot_run,
+        read_configured_wallet,
+        resolve_finalized_block,
+        start_snapshot_run,
+    )
 
 
 REQUIREMENTS = ANALYTICS_DIR / "requirements.txt"
@@ -58,6 +80,7 @@ def run_dbt(
     *,
     use_hyperindex: bool,
     hyperindex_dsn: str | None,
+    extra_env: dict[str, str] | None = None,
 ) -> None:
     """Execute dbt against the database dedicated to the selected source mode."""
 
@@ -67,6 +90,7 @@ def run_dbt(
     db_path.parent.mkdir(parents=True, exist_ok=True)
     env[DBT_DUCKDB_PATH_ENV] = str(db_path)
     env[ACCOUNT_EVIDENCE_DUCKDB_PATH_ENV] = str(ACCOUNT_EVIDENCE_DB_PATH)
+    env.update(extra_env or {})
     ensure_evidence_store(ACCOUNT_EVIDENCE_DB_PATH)
     if use_hyperindex:
         if not hyperindex_dsn:
@@ -126,6 +150,60 @@ def main() -> None:
     runtime = resolved_runtime()
     use_hyperindex = requests_hyperindex(sys.argv[2:])
     hyperindex_dsn = os.environ.get(HYPERINDEX_DSN_ENV) or runtime["hyperindex_postgres_dsn"]
+    if use_hyperindex and command == "build":
+        if not hyperindex_dsn:
+            raise SystemExit(
+                f"Live HyperIndex mode requires {HYPERINDEX_DSN_ENV}. "
+                "Set it to the Envio Postgres connection URI before running dbt."
+            )
+        graphql_url = runtime["hyperindex_graphql_url"]
+        rpc_url = runtime["ethereum_rpc_url"]
+        if not graphql_url or not rpc_url:
+            raise SystemExit("Live snapshot builds require HyperIndex GraphQL and Ethereum RPC URLs")
+        metadata = fetch_hyperindex_metadata(str(graphql_url))
+        finalized_block = resolve_finalized_block(JsonRpcClient(str(rpc_url)))
+        wallet = read_configured_wallet()
+        try:
+            snapshot_run = start_snapshot_run(
+                wallet=wallet,
+                metadata=metadata,
+                finalized_block=finalized_block,
+            )
+        except SnapshotAlreadyCurrent as current:
+            print(current)
+            snapshot_run = latest_completed_snapshot_run(
+                wallet=wallet,
+                metadata=metadata,
+                finalized_block=finalized_block,
+            )
+            run_dbt(
+                command,
+                sys.argv[2:],
+                use_hyperindex=True,
+                hyperindex_dsn=str(hyperindex_dsn),
+                extra_env=dbt_snapshot_environment(
+                    snapshot_run,
+                    coverage_start_block=metadata.start_block,
+                ),
+            )
+            return
+        try:
+            run_dbt(
+                command,
+                sys.argv[2:],
+                use_hyperindex=True,
+                hyperindex_dsn=str(hyperindex_dsn) if hyperindex_dsn else None,
+                extra_env=dbt_snapshot_environment(
+                    snapshot_run,
+                    coverage_start_block=metadata.start_block,
+                ),
+            )
+        except BaseException:
+            finish_snapshot_run(snapshot_run, succeeded=False)
+            raise
+        finish_snapshot_run(snapshot_run, succeeded=True)
+        return
+
     run_dbt(
         command,
         sys.argv[2:],

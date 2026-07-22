@@ -243,6 +243,13 @@ export type PipelineMetadata = {
   chain_id: number;
   data_source: "fixture" | "hyperindex";
   generated_at: string;
+  snapshot_run_id: string | null;
+  snapshot_start_block: number | null;
+  snapshot_increment_start_block: number | null;
+  snapshot_end_block: number | null;
+  snapshot_end_block_hash: string | null;
+  snapshot_finality_policy: "ethereum_finalized" | null;
+  snapshot_scope_version: string | null;
   transfer_count: number;
   token_count: number;
   recognized_transfer_count: number;
@@ -323,6 +330,13 @@ export type ApiMetadata = {
   chain_id: number;
   data_source: "fixture" | "hyperindex";
   generated_at: string;
+  snapshot_run_id: string | null;
+  snapshot_start_block: number | null;
+  snapshot_increment_start_block: number | null;
+  snapshot_end_block: number | null;
+  snapshot_end_block_hash: string | null;
+  snapshot_finality_policy: "ethereum_finalized" | null;
+  snapshot_scope_version: string | null;
   transfer_count: number;
   spam_transfer_count: number;
   first_event_at: string | null;
@@ -339,9 +353,9 @@ export type ApiMetadata = {
   event_block_number_max: number | null;
   api_schema_version: string;
   database_mode: "live" | "fixture_test";
-  completeness_scope: "duckdb_snapshot";
-  indexer_checkpoint_recorded: false;
-  finality_status: "not_recorded";
+  completeness_scope: "duckdb_snapshot" | "finalized_block_range";
+  indexer_checkpoint_recorded: boolean;
+  finality_status: "not_recorded" | "finalized";
   is_sampled: false;
 };
 

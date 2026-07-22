@@ -58,6 +58,23 @@ select
   1 as chain_id,
   {% if var('use_fixture', true) %}'fixture'{% else %}'hyperindex'{% endif %} as data_source,
   current_timestamp as generated_at,
+  {% if var('use_fixture', true) %}
+  cast(null as varchar) as snapshot_run_id,
+  cast(null as bigint) as snapshot_start_block,
+  cast(null as bigint) as snapshot_increment_start_block,
+  cast(null as bigint) as snapshot_end_block,
+  cast(null as varchar) as snapshot_end_block_hash,
+  cast(null as varchar) as snapshot_finality_policy,
+  cast(null as varchar) as snapshot_scope_version,
+  {% else %}
+  '{{ env_var("EVM_WALLET_SNAPSHOT_RUN_ID") }}' as snapshot_run_id,
+  cast({{ env_var("EVM_WALLET_SNAPSHOT_START_BLOCK") }} as bigint) as snapshot_start_block,
+  cast({{ env_var("EVM_WALLET_SNAPSHOT_INCREMENT_START_BLOCK") }} as bigint) as snapshot_increment_start_block,
+  cast({{ env_var("EVM_WALLET_SNAPSHOT_END_BLOCK") }} as bigint) as snapshot_end_block,
+  '{{ env_var("EVM_WALLET_SNAPSHOT_END_BLOCK_HASH") }}' as snapshot_end_block_hash,
+  '{{ env_var("EVM_WALLET_SNAPSHOT_FINALITY_POLICY") }}' as snapshot_finality_policy,
+  '{{ env_var("EVM_WALLET_SNAPSHOT_SCOPE_VERSION") }}' as snapshot_scope_version,
+  {% endif %}
   coalesce(events.transfer_count, 0) as transfer_count,
   coalesce(events.token_count, 0) as token_count,
   coalesce(events.counterparty_count, 0) as counterparty_count,
