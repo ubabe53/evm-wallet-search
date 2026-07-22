@@ -129,6 +129,31 @@ def resolve_finalized_block(client: JsonRpcClient) -> FinalizedBlock:
     return FinalizedBlock(number=number, block_hash=block_hash)
 
 
+def resolve_snapshot_target(
+    client: JsonRpcClient,
+    metadata: HyperIndexMetadata,
+) -> FinalizedBlock:
+    """Pin the newest block that is both fully indexed and finalized."""
+
+    finalized_head = resolve_finalized_block(client)
+    target_number = min(metadata.progress_block, finalized_head.number)
+    if metadata.end_block is not None:
+        target_number = min(target_number, metadata.end_block)
+    if target_number < metadata.start_block:
+        raise RuntimeError("HyperIndex has not processed its configured start block")
+    if target_number == finalized_head.number:
+        return finalized_head
+
+    block = client.call("eth_getBlockByNumber", [hex(target_number), False])
+    if not isinstance(block, dict) or not block.get("number") or not block.get("hash"):
+        raise RuntimeError("Ethereum RPC did not return the indexed snapshot target")
+    number = int(block["number"], 16)
+    block_hash = str(block["hash"]).lower()
+    if number != target_number or not HASH_PATTERN.fullmatch(block_hash):
+        raise RuntimeError("Ethereum RPC returned an invalid indexed snapshot target")
+    return FinalizedBlock(number=number, block_hash=block_hash)
+
+
 def ensure_run_table(connection: Any) -> None:
     connection.execute("create schema if not exists ops")
     connection.execute(

@@ -15,6 +15,7 @@ from scripts.snapshot_runs import (
     latest_completed_snapshot_run,
     next_run_start,
     resolve_finalized_block,
+    resolve_snapshot_target,
     start_snapshot_run,
 )
 
@@ -30,6 +31,17 @@ class FakeRpcClient:
         if method != "eth_getBlockByNumber" or params != ["finalized", False]:
             raise AssertionError((method, params))
         return {"number": "0x64", "hash": "0x" + "a" * 64}
+
+
+class LaggingRpcClient:
+    def call(self, method, params):
+        if method != "eth_getBlockByNumber":
+            raise AssertionError((method, params))
+        if params == ["finalized", False]:
+            return {"number": "0x64", "hash": "0x" + "a" * 64}
+        if params == ["0x4b", False]:
+            return {"number": "0x4b", "hash": "0x" + "b" * 64}
+        raise AssertionError(params)
 
 
 class SnapshotRunsTest(unittest.TestCase):
@@ -60,6 +72,22 @@ class SnapshotRunsTest(unittest.TestCase):
 
         self.assertEqual(metadata, HyperIndexMetadata(3, 120, None, True))
         self.assertEqual(finalized, FinalizedBlock(100, "0x" + "a" * 64))
+
+    def test_caps_snapshot_at_indexed_progress_when_indexer_lags_finality(self) -> None:
+        target = resolve_snapshot_target(
+            LaggingRpcClient(),
+            HyperIndexMetadata(3, 75, None, False),
+        )
+
+        self.assertEqual(target, FinalizedBlock(75, "0x" + "b" * 64))
+
+    def test_caps_snapshot_at_configured_indexer_end(self) -> None:
+        target = resolve_snapshot_target(
+            LaggingRpcClient(),
+            HyperIndexMetadata(3, 90, 75, True),
+        )
+
+        self.assertEqual(target, FinalizedBlock(75, "0x" + "b" * 64))
 
     def test_records_one_run_per_contiguous_finalized_interval(self) -> None:
         first = start_snapshot_run(

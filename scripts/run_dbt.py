@@ -32,7 +32,7 @@ try:
         finish_snapshot_run,
         latest_completed_snapshot_run,
         read_configured_wallet,
-        resolve_finalized_block,
+        resolve_snapshot_target,
         start_snapshot_run,
     )
 except ImportError:
@@ -53,7 +53,7 @@ except ImportError:
         finish_snapshot_run,
         latest_completed_snapshot_run,
         read_configured_wallet,
-        resolve_finalized_block,
+        resolve_snapshot_target,
         start_snapshot_run,
     )
 
@@ -161,7 +161,7 @@ def main() -> None:
         if not graphql_url or not rpc_url:
             raise SystemExit("Live snapshot builds require HyperIndex GraphQL and Ethereum RPC URLs")
         metadata = fetch_hyperindex_metadata(str(graphql_url))
-        finalized_block = resolve_finalized_block(JsonRpcClient(str(rpc_url)))
+        finalized_block = resolve_snapshot_target(JsonRpcClient(str(rpc_url)), metadata)
         wallet = read_configured_wallet()
         try:
             snapshot_run = start_snapshot_run(

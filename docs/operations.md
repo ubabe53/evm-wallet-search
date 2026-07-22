@@ -8,7 +8,7 @@ bun run indexer:dev
 bun run analytics:build:hyperindex
 ```
 
-This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads HyperIndex `_meta` through its local GraphQL endpoint, resolves one Ethereum `finalized` block through RPC, and refuses to build until transactional indexer progress has reached that target. It then reads the already indexed entity table only through the finalized target and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
+This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads HyperIndex `_meta` through its local GraphQL endpoint, and resolves Ethereum's `finalized` head through RPC. Its target is the newest block covered by both transactional indexer progress and finality, capped by a configured HyperIndex end when present. It pins that target's canonical hash, reads the entity table only through the target, and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
 
 Start the local API after the live build:
 

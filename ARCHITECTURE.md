@@ -101,7 +101,7 @@ Detailed field grains and tests are in `docs/data-model.md`.
 HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
 ```
 
-The indexer and live analytics are explicit operations. A live build reads HyperIndex's transactional progress and one Ethereum `finalized` block, records one attempted interval in `ops.pipeline_runs`, and advances coverage only after dbt succeeds. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
+The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, records one attempted interval in `ops.pipeline_runs`, and advances coverage only after dbt succeeds. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
 
 ### Fixture demo path
 

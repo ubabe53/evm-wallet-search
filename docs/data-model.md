@@ -132,7 +132,7 @@ The fixture-demo exporter enriches this row in `meta.json` with returned counts,
 
 The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. The row records the pinned configured label, inclusive interval, finalized end-block hash, number of matching events found in that interval, `running|completed|failed` status, completion time, and semantic scope version.
 
-The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance the next start to the previous `to_block + 1`; failed rows remain auditable and retryable. A run cannot complete unless HyperIndex `_meta.progressBlock` has reached the chosen Ethereum `finalized` block and the dbt build succeeds. Rebuilding transformations while already current reuses the latest completed run rather than creating a false scan interval.
+The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance the next start to the previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. Rebuilding transformations while already current reuses the latest completed run rather than creating a false scan interval.
 
 ### `app.token_recognition_overrides`
 
