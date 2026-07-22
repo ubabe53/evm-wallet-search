@@ -4,7 +4,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from scripts.project_config import PUBLIC_RPC_FALLBACK, configured_value, load_config, resolved_runtime
-from scripts.sync_token_registry import merge_registries, normalize_tokens
+from scripts.sync_token_registry import (
+    merge_registries,
+    normalize_coinbase_currencies,
+    normalize_tokens,
+)
 
 
 class TokenRegistryTest(unittest.TestCase):
@@ -81,6 +85,44 @@ class TokenRegistryTest(unittest.TestCase):
         self.assertEqual(rows[0]["token_address"], address)
         self.assertEqual(rows[0]["metadata_source"], "coingecko")
         self.assertEqual(rows[0]["token_status"], "trusted")
+        self.assertEqual(rows[0]["recognition_status"], "recognized")
+
+    def test_adds_online_coinbase_ethereum_contract_without_inventing_decimals(self) -> None:
+        address = "0x" + "d" * 40
+        currencies = [{
+            "id": "ASSET",
+            "name": "Coinbase Asset",
+            "status": "online",
+            "details": {"type": "crypto"},
+            "max_precision": "0.0001",
+            "supported_networks": [{
+                "name": "Ethereum",
+                "status": "online",
+                "contract_address": address,
+            }],
+        }]
+
+        coinbase = normalize_coinbase_currencies(currencies)
+        rows = merge_registries({}, {}, {}, coinbase)
+
+        self.assertIsNone(rows[0]["decimals"])
+        self.assertEqual(rows[0]["metadata_source"], "coinbase")
+
+    def test_ignores_offline_or_non_ethereum_coinbase_networks(self) -> None:
+        address = "0x" + "d" * 40
+        currencies = [{
+            "id": "ASSET",
+            "name": "Coinbase Asset",
+            "status": "online",
+            "details": {"type": "crypto"},
+            "supported_networks": [
+                {"name": "Ethereum", "status": "offline", "contract_address": address},
+                {"name": "Base", "status": "online", "contract_address": address},
+                {"name": "Ethereum", "status": "online", "contract_address": "None"},
+            ],
+        }]
+
+        self.assertEqual(normalize_coinbase_currencies(currencies), {})
 
     def test_rejects_decimal_conflicts(self) -> None:
         address = "0x" + "a" * 40

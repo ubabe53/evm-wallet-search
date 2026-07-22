@@ -6,6 +6,10 @@ with interaction_counts as (
     token_address,
     coalesce(token_symbol, substr(token_address, 1, 10)) as token_symbol,
     token_status,
+    recognition_status,
+    recognition_reason,
+    recognition_source,
+    recognition_version,
     metadata_availability,
     token_quality,
     token_quality_sources,
@@ -33,7 +37,8 @@ with interaction_counts as (
     max(block_timestamp) as last_seen_at
   from {{ ref('wallet_events') }}
   group by wallet_address, counterparty_address, token_address, token_symbol,
-    token_status, metadata_availability, token_quality, token_quality_sources,
+    token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
+    metadata_availability, token_quality, token_quality_sources,
     token_quality_source_count, token_quality_reason, token_quality_provenance,
     token_quality_version, metadata_source, metadata_source_url, token_reputation,
     token_reputation_score, token_reputation_reasons, token_reputation_version, interaction_legitimacy,

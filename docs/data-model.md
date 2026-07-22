@@ -19,14 +19,16 @@ Configured wallets. The MVP contains one pinned wallet:
 
 ### `stg_token_metadata`
 
-Combines the generated Trust Wallet/Uniswap/CoinGecko registry with reviewed manual overrides. Overrides take precedence for symbol, name, decimals, base status, reason, and source URL, while exact-address registry membership remains separately available to quality classification.
+Combines the generated Trust Wallet/Uniswap/CoinGecko/Coinbase Exchange registry with reviewed manual overrides. Overrides take precedence for symbol, name, decimals, base status, reason, and source URL, while exact-address registry membership remains separately available to recognition and quality classification. Coinbase-only rows intentionally leave decimals null because exchange trading precision is not ERC-20 decimal metadata.
 
 The final metadata precedence is manual override, curated registry, then pinned-block Ethereum RPC metadata. RPC-derived fields may supply labels and decimals, but their status remains `unverified` because contracts self-declare these values.
 
 The normalized fields are:
 
 - `token_status`: reviewed manual base status; the generated registry's legacy status does not establish effective trust.
-- `metadata_source`: `trustwallet`, `uniswap`, `coingecko`, their combined value, `manual`, or `ethereum_rpc`.
+- `recognition_status`: `recognized` for at least one exact-address registry match or reviewed approval, otherwise `other`; a reviewed manual rejection takes precedence.
+- `recognition_reason`, `recognition_source`, and `recognition_version`: the automatic decision evidence, with version `token-recognition-v1`.
+- `metadata_source`: `trustwallet`, `uniswap`, `coingecko`, `coinbase`, their combined value, `manual`, or `ethereum_rpc`.
 - `metadata_source_url`: upstream provenance for the label.
 - `metadata_availability`: `complete`, `partial`, or `unavailable` based only on name, symbol, and decimals availability.
 - `token_quality`: `high_confidence`, `listed`, or `unknown`.
@@ -35,7 +37,7 @@ The normalized fields are:
 - `token_label_reason`: required human context for manual classifications.
 - `rpc_block_number`, `rpc_fetch_status`, and `rpc_error_code`: audit fields for RPC enrichment attempts.
 
-Unknown tokens remain in event marts as `unverified`, with `amount_decimal = null` when decimals are unavailable. Missing registry membership never implies spam.
+Unknown tokens remain in event marts as internally `unverified` and publicly `other`, with `amount_decimal = null` when decimals are unavailable.
 
 ### `stg_counterparty_metadata`
 
@@ -57,6 +59,7 @@ Filters staged transfers to configured wallets and adds:
 - `counterparty_address`: the other side of the transfer.
 - `counterparty_account_type` plus the complete pinned observation, Safe evidence, ERC-4337 evidence, fetch status, reason codes, and coverage fields; unenriched counterparties remain `unknown` / `not_fetched`.
 - `amount_decimal`: `value_raw / 10 ^ decimals` when metadata exists.
+- automatic token recognition status, reason, source, and classifier version copied from token enrichment without changing the event grain.
 - `transaction_sender_relation`: `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `from` and the emitted Transfer participants.
 - `transaction_target_relation`: `token_contract`, `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `to`, the emitting token, and Transfer participants.
 - `is_indirect`: true for an observed `transaction_from_address != from_address`, false for an observed match, and null when transaction-sender evidence is unavailable.
@@ -79,7 +82,7 @@ These four values are an internal classification contract, not four user choices
 
 ### `wallet_events`
 
-Application-serving event table. This preserves the immutable one-transfer grain and event-time block fields while carrying emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, metadata availability, token quality evidence, effective status, both classification scores, reason codes, and classifier versions. Enrichment observation time never replaces event block number or timestamp. The local API queries this mart with explicit filters, ordering, and pagination; the fixture demo exports a bounded subset.
+Application-serving event table. This preserves the immutable one-transfer grain and event-time block fields while carrying emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, automatic recognition evidence, metadata availability, token quality evidence, effective internal status, both classification scores, reason codes, and classifier versions. Enrichment observation time never replaces event block number or timestamp. The local API queries this mart with explicit filters, ordering, and pagination; the fixture demo exports a bounded subset.
 
 ### `graph_nodes`
 

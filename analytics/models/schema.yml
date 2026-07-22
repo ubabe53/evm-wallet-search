@@ -22,7 +22,7 @@ models:
       - name: transaction_to_address
         description: Nullable top-level transaction target; null for legacy rows without envelope evidence or an unavailable target.
   - name: stg_token_metadata
-    description: Token display metadata, metadata availability, independent registry evidence, and reviewed manual overrides.
+    description: Token display metadata, exact-address recognition evidence, metadata availability, and reviewed manual overrides.
     columns:
       - name: token_address
         tests:
@@ -39,13 +39,42 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["manual", "trustwallet", "uniswap", "coingecko", "trustwallet+uniswap", "trustwallet+coingecko", "uniswap+coingecko", "trustwallet+uniswap+coingecko", "ethereum_rpc"]
+                values:
+                  - manual
+                  - trustwallet
+                  - uniswap
+                  - coingecko
+                  - coinbase
+                  - trustwallet+uniswap
+                  - trustwallet+coingecko
+                  - trustwallet+coinbase
+                  - uniswap+coingecko
+                  - uniswap+coinbase
+                  - coingecko+coinbase
+                  - trustwallet+uniswap+coingecko
+                  - trustwallet+uniswap+coinbase
+                  - trustwallet+coingecko+coinbase
+                  - uniswap+coingecko+coinbase
+                  - trustwallet+uniswap+coingecko+coinbase
+                  - ethereum_rpc
       - name: metadata_availability
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["complete", "partial", "unavailable"]
+      - name: recognition_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["recognized", "other"]
+      - name: recognition_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-recognition-v1"]
       - name: token_quality
         tests:
           - not_null
@@ -197,6 +226,18 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: recognition_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["recognized", "other"]
+      - name: recognition_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["token-recognition-v1"]
       - name: metadata_availability
         tests:
           - not_null
@@ -270,6 +311,12 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: recognition_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["recognized", "other"]
       - name: token_quality
         tests:
           - not_null
@@ -292,7 +339,7 @@ models:
         tests:
           - not_null
   - name: token_summary
-    description: One row per wallet, emitting contract, effective status, quality, and exact counterparty account-evidence signature; models are ERC20-oriented, but the source signature does not prove token standard.
+    description: One row per wallet, emitting contract, effective recognition, internal status, quality, and exact counterparty account-evidence signature; models are ERC20-oriented, but the source signature does not prove token standard.
     columns:
       - name: wallet_address
         tests:
@@ -306,6 +353,12 @@ models:
           - accepted_values:
               arguments:
                 values: ["trusted", "unverified", "suspected_spam", "spam"]
+      - name: recognition_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["recognized", "other"]
       - name: token_quality
         tests:
           - not_null
