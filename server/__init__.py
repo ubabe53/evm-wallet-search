@@ -1,1 +1,1 @@
-"""Local read-only application API."""
+"""Local analytics API with bounded queries and token-recognition overrides."""

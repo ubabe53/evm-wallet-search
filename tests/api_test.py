@@ -1,5 +1,8 @@
+import shutil
 import unittest
 from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
@@ -13,7 +16,19 @@ class DashboardApiTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         if not FIXTURE_DB_PATH.exists():
             raise RuntimeError("Run bun run analytics:build:fixture before API tests")
-        cls.client = TestClient(create_app(QueryService(FIXTURE_DB_PATH, require_live=False)))
+        cls.temporary_directory = TemporaryDirectory()
+        cls.database_path = Path(cls.temporary_directory.name) / "api-test.duckdb"
+        shutil.copy2(FIXTURE_DB_PATH, cls.database_path)
+        cls.service = QueryService(cls.database_path, require_live=False)
+        cls.client = TestClient(create_app(cls.service))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.temporary_directory.cleanup()
+
+    def setUp(self) -> None:
+        with self.service.connect() as connection:
+            connection.execute("delete from app.token_recognition_overrides")
 
     def test_health_and_metadata_disclose_fixture_test_source(self) -> None:
         health = self.client.get("/api/v1/health")
@@ -21,7 +36,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v2")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v3")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 6)
@@ -65,6 +80,76 @@ class DashboardApiTest(unittest.TestCase):
             params=[("account", "none"), ("account", "contract")],
         )
         self.assertEqual(mixed_none.status_code, 422)
+
+    def test_recognition_filter_uses_exact_automatic_classification(self) -> None:
+        recognized = self.client.get(
+            "/api/v1/summary",
+            params={"include_spam": "true", "recognition": "recognized"},
+        )
+        other = self.client.get(
+            "/api/v1/summary",
+            params={"include_spam": "true", "recognition": "other"},
+        )
+
+        self.assertEqual(recognized.status_code, 200)
+        self.assertEqual(recognized.json()["transfer_count"], 5)
+        self.assertEqual(other.json()["transfer_count"], 1)
+        self.assertEqual(other.json()["query"]["recognition"], "other")
+        self.assertEqual(
+            self.client.get("/api/v1/summary", params={"recognition": "trusted"}).status_code,
+            422,
+        )
+
+    def test_token_recognition_override_is_persistent_and_resettable(self) -> None:
+        token_address = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        changed = self.client.put(
+            f"/api/v1/tokens/{token_address}/recognition",
+            json={"status": "other"},
+        )
+
+        self.assertEqual(changed.status_code, 200, changed.text)
+        self.assertEqual(changed.json()["automatic_status"], "recognized")
+        self.assertEqual(changed.json()["recognition_status"], "other")
+        self.assertEqual(changed.json()["recognition_source"], "manual")
+        self.assertIsNone(changed.json()["previous_override_status"])
+
+        filtered = self.client.get(
+            "/api/v1/tokens",
+            params={"include_spam": "true", "recognition": "other", "limit": 100},
+        ).json()
+        overridden = next(item for item in filtered["items"] if item["token_address"] == token_address)
+        self.assertEqual(overridden["recognition_status"], "other")
+        self.assertEqual(overridden["recognition_source"], "manual")
+        self.assertEqual(overridden["recognition_override_status"], "other")
+
+        reopened = QueryService(self.database_path, require_live=False)
+        self.assertEqual(reopened.token_recognition(token_address)["override_status"], "other")
+
+        reset = self.client.delete(f"/api/v1/tokens/{token_address}/recognition")
+        self.assertEqual(reset.status_code, 200)
+        self.assertEqual(reset.json()["recognition_status"], "recognized")
+        self.assertEqual(reset.json()["recognition_source"], "automatic")
+        self.assertEqual(reset.json()["previous_override_status"], "other")
+
+    def test_token_recognition_override_validates_address_token_and_status(self) -> None:
+        self.assertEqual(
+            self.client.put("/api/v1/tokens/not-an-address/recognition", json={"status": "other"}).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.put(
+                "/api/v1/tokens/0x1111111111111111111111111111111111111111/recognition",
+                json={"status": "other"},
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.put(
+                "/api/v1/tokens/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48/recognition",
+                json={"status": "trusted"},
+            ).status_code,
+            422,
+        )
 
     def test_search_runs_before_exact_counts(self) -> None:
         event = self.client.get(

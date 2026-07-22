@@ -21,7 +21,7 @@ dbt + offline token inputs + local account evidence cache
 DuckDB (complete local analytics artifact)
       ├─────────────── local product ───────────────────────┐
       │                                                ▼
-      │                                      local read-only FastAPI
+      │                                      local FastAPI + recognition overrides
       │                                                │
       │                                                ▼
       │                                         React dashboard
@@ -38,10 +38,10 @@ The frontend selects exactly one path at build time: local development uses boun
 | Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
-| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics for the local API | A checked-in artifact or a browser-delivered database |
+| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics plus the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
 | Local account evidence store | `analytics/artifacts/account_evidence.duckdb` | Checkpoint one successful pinned bytecode observation per event counterparty, with retryable failures | A checked-in seed, an implicit build-time RPC job, or proof of permanent identity |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
-| Local API | `server/` | Validate filters and execute exact, bounded, read-only queries against the live artifact | A writer, ingestion service, or fixture-data server |
+| Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
 | Fixture demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON only to the explicit fixture/static build | The complete-history local serving architecture |
 | Dashboard | `src/` | Present graph, summary, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
 | Tests | `tests/`, `analytics/tests/`, `analytics/models/unit_tests.yml` | Enforce UI, export, enrichment, grain, and semantic contracts | A substitute for documenting system intent and boundaries |
@@ -59,7 +59,7 @@ Rules:
 
 - The browser never receives Postgres/RPC credentials or direct database access.
 - HyperIndex Postgres is the ingestion source, not the application query interface.
-- DuckDB is derived and reproducible; event identity and exact raw values originate upstream and remain preserved.
+- DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. The isolated `app.token_recognition_overrides` table is mutable local product state and is never rewritten by dbt models.
 - Enrichment joins onto event facts. It may add sourced interpretation but must not rewrite immutable event evidence.
 - User-facing aggregations operate on eligible mart rows and keep token-contract identity in the grain where amounts are involved.
 - Generated demo files are downstream artifacts and are never hand-edited.
@@ -114,14 +114,15 @@ This path is deterministic and suitable for CI and GitHub Pages. It is not proof
 
 The loopback-only FastAPI service:
 
-- own read-only DuckDB connections;
+- own DuckDB connections and limit writes to `app.token_recognition_overrides`;
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, enrichment coverage, complete matching counts, and returned limits;
+- apply manual token-recognition overrides before every filter, count, ranking, graph page, and event page;
 - expose `include_spam` as the public reputation control while retaining detailed evidence internally;
 - keep secrets and database paths server-side.
 
-The API opens one read-only DuckDB connection per request rather than sharing a thread-unsafe global connection. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves the exact totals, requests bounded graph/token/counterparty results, and follows the opaque event cursor when the user asks for more rows.
+The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves the exact totals, requests bounded graph/token/counterparty results, and follows the opaque event cursor when the user asks for more rows.
 
 ## Known implementation gaps
 

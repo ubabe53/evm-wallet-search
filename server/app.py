@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from scripts.artifact_paths import LIVE_DB_PATH
 from server.queries import (
@@ -14,7 +15,9 @@ from server.queries import (
     DashboardFilters,
     DatabaseUnavailable,
     InvalidCursor,
+    InvalidTokenAddress,
     QueryService,
+    TokenNotFound,
 )
 
 
@@ -24,8 +27,19 @@ class AccountFilter(str, Enum):
     contract = "contract"
 
 
+class RecognitionFilter(str, Enum):
+    all = "all"
+    recognized = "recognized"
+    other = "other"
+
+
+class RecognitionOverrideRequest(BaseModel):
+    status: Literal["recognized", "other"]
+
+
 def dashboard_filters(
     include_spam: bool = False,
+    recognition: RecognitionFilter = RecognitionFilter.all,
     account: Annotated[list[AccountFilter] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=128)] = None,
 ) -> DashboardFilters:
@@ -36,7 +50,12 @@ def dashboard_filters(
     else:
         selected = tuple(item.value for item in account) if account else ACCOUNT_FILTERS
     normalized_query = q.strip() if q and q.strip() else None
-    return DashboardFilters(include_spam, selected, normalized_query)
+    return DashboardFilters(
+        include_spam=include_spam,
+        account_filters=selected,
+        query=normalized_query,
+        recognition=recognition.value,
+    )
 
 
 def create_app(service: QueryService | None = None) -> FastAPI:
@@ -44,12 +63,20 @@ def create_app(service: QueryService | None = None) -> FastAPI:
     application = FastAPI(
         title="EVM Wallet Search API",
         version="1.0.0",
-        description="Read-only, complete calculations over the live DuckDB analytics artifact.",
+        description="Complete calculations and local token-recognition overrides over the live DuckDB artifact.",
     )
 
     @application.exception_handler(DatabaseUnavailable)
     async def database_unavailable(_request, error: DatabaseUnavailable) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(error)})
+
+    @application.exception_handler(InvalidTokenAddress)
+    async def invalid_token_address(_request, error: InvalidTokenAddress) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(error)})
+
+    @application.exception_handler(TokenNotFound)
+    async def token_not_found(_request, error: TokenNotFound) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(error)})
 
     @application.get("/api/v1/health")
     def health() -> dict:
@@ -86,6 +113,14 @@ def create_app(service: QueryService | None = None) -> FastAPI:
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
     ) -> dict:
         return query_service.tokens(filters, limit=limit)
+
+    @application.put("/api/v1/tokens/{token_address}/recognition")
+    def set_token_recognition(token_address: str, request: RecognitionOverrideRequest) -> dict:
+        return query_service.set_token_recognition(token_address, request.status)
+
+    @application.delete("/api/v1/tokens/{token_address}/recognition")
+    def reset_token_recognition(token_address: str) -> dict:
+        return query_service.reset_token_recognition(token_address)
 
     @application.get("/api/v1/counterparties")
     def counterparties(
