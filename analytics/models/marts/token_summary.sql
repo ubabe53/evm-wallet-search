@@ -44,10 +44,6 @@ select
       and counterparty_address != '0x0000000000000000000000000000000000000000'
       and counterparty_address != wallet_address
   ) as recipient_account_count,
-  case
-    when token_decimals is null then null
-    else sum(amount_decimal)
-  end as amount_decimal_sum,
   sum(cast(value_raw as bignum)) as value_raw_sum
 from {{ ref('wallet_events') }}
 group by wallet_id, wallet_address, token_address, token_symbol, token_name, token_decimals,

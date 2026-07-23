@@ -17,6 +17,10 @@ models:
       - name: to_address
         tests:
           - not_null
+      - name: value_raw
+        description: Exact base-10 string representation of the emitted uint256 third value; never converted to floating point.
+        tests:
+          - not_null
       - name: transaction_from_address
         description: Nullable top-level transaction sender; null for legacy rows without envelope evidence.
       - name: transaction_to_address
@@ -201,6 +205,10 @@ models:
         tests:
           - not_null
       - name: token_address
+        tests:
+          - not_null
+      - name: value_raw
+        description: Exact emitted third value preserved from staging without decimal normalization.
         tests:
           - not_null
       - name: direction

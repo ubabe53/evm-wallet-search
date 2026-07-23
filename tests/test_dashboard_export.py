@@ -12,8 +12,12 @@ class DashboardExportTest(unittest.TestCase):
         duckdb = dashboard_export.ensure_duckdb()
         connection = duckdb.connect(":memory:")
         try:
-            connection.execute("create table wallet_events (from_address varchar, to_address varchar)")
-            connection.execute("create table token_summary (transfer_count integer)")
+            connection.execute(
+                "create table wallet_events (from_address varchar, to_address varchar, value_raw varchar)"
+            )
+            connection.execute(
+                "create table token_summary (transfer_count integer, value_raw_sum varchar)"
+            )
 
             with self.assertRaisesRegex(
                 RuntimeError,

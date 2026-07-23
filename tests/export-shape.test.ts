@@ -65,6 +65,15 @@ describe("dashboard export shape", () => {
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_count);
     expect(graph.edges.length).toBe(metadata.exported_interaction_count * 2);
     expect(typeof summaries.tokens[0].value_raw_sum).toBe("string");
+    expect(events.find((event: { transfer_id: string }) => event.transfer_id === "1-0xeee-0")?.value_raw).toBe(
+      "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    );
+    expect(summaries.tokens.find(
+      (token: { token_address: string }) =>
+        token.token_address === "0x9999999999999999999999999999999999999999",
+    )?.value_raw_sum).toBe(
+      "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    );
     expect(["trusted", "unverified", "suspected_spam", "spam"]).toContain(summaries.tokens[0].token_status);
     expect(["high_confidence", "listed", "unknown"]).toContain(summaries.tokens[0].token_quality);
     expect(summaries.tokens[0].token_quality_version).toBe("token-quality-v1");
@@ -123,7 +132,6 @@ describe("dashboard export shape", () => {
 
     const endpoints = new Set(graph.edges.flatMap((edge: { data: { source: string; target: string } }) => [edge.data.source, edge.data.target]));
     expect(graph.nodes.every((node: { data: { id: string } }) => endpoints.has(node.data.id))).toBe(true);
-    expect(graph.edges.every((edge: { data: { amountDecimalSum: number | null } }) => edge.data.amountDecimalSum == null || typeof edge.data.amountDecimalSum === "number")).toBe(true);
     const accountTypes = ["eoa_candidate", "contract", "unknown"];
     expect(graph.nodes.every((node: { data: { type: string; accountType: string | null } }) =>
       node.data.type !== "counterparty" || accountTypes.includes(node.data.accountType ?? ""))).toBe(true);

@@ -136,10 +136,10 @@ const graph = {
     { data: { id: "counterparty:0x2222222222222222222222222222222222222222", label: "0x2222...2222\nEOA", type: "counterparty", address: "0x2222222222222222222222222222222222222222", tokenAddress: null, symbol: null, accountType: "eoa_candidate" } },
   ],
   edges: [
-    { data: { ...highQualityGraph, id: "edge:1", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "token_counterparty", source: "counterparty:0x1111111111111111111111111111111111111111", target: "token:0x2", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
-    { data: { ...highQualityGraph, id: "edge:2", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "wallet_token", source: "token:0x2", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 125 } },
-    { data: { ...unknownQualityGraph, id: "edge:3", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "token_counterparty", source: "counterparty:0x2222222222222222222222222222222222222222", target: "token:0x3", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 1 } },
-    { data: { ...unknownQualityGraph, id: "edge:4", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "wallet_token", source: "token:0x3", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1, amountDecimalSum: 1 } },
+    { data: { ...highQualityGraph, id: "edge:1", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "token_counterparty", source: "counterparty:0x1111111111111111111111111111111111111111", target: "token:0x2", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1 } },
+    { data: { ...highQualityGraph, id: "edge:2", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "wallet_token", source: "token:0x2", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1 } },
+    { data: { ...unknownQualityGraph, id: "edge:3", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "token_counterparty", source: "counterparty:0x2222222222222222222222222222222222222222", target: "token:0x3", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1 } },
+    { data: { ...unknownQualityGraph, id: "edge:4", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "wallet_token", source: "token:0x3", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1 } },
   ],
 };
 
@@ -168,7 +168,6 @@ const summaries = {
       counterparty_count: 1,
       sender_account_count: 1,
       recipient_account_count: 0,
-      amount_decimal_sum: 125,
       value_raw_sum: "125000000",
     },
     {
@@ -180,7 +179,7 @@ const summaries = {
       transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
       indirect_inbound_transfer_count: 0, indirect_outbound_transfer_count: 0,
       counterparty_count: 1, sender_account_count: 1, recipient_account_count: 0,
-      amount_decimal_sum: 1, value_raw_sum: "1000000000000000000",
+      value_raw_sum: "1000000000000000000",
     },
   ],
   counterparties: [
@@ -203,7 +202,7 @@ const summaries = {
   ],
 };
 
-const timeline = [{ ...highQuality, wallet_id: "vitalik", wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, amount_decimal_sum: 125, value_raw_sum: "125000000" }];
+const timeline = [{ ...highQuality, wallet_id: "vitalik", wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, value_raw_sum: "125000000" }];
 
 const events = [
   {
@@ -238,7 +237,6 @@ const events = [
     token_label_reason: "Canonical metadata",
     ...highQuality,
     value_raw: "125000000",
-    amount_decimal: 125,
   },
   {
     ...eoaEventEvidence,
@@ -253,7 +251,7 @@ const events = [
     token_symbol: "SPAM", token_name: "Spam Token", token_decimals: 18, token_status: "spam",
     metadata_source: "manual", metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
     ...unknownQuality,
-    value_raw: "1000000000000000000", amount_decimal: 1,
+    value_raw: "1000000000000000000",
   },
 ];
 

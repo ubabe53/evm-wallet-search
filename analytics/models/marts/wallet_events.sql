@@ -55,6 +55,5 @@ select
   interaction_legitimacy_score,
   interaction_legitimacy_reasons,
   interaction_legitimacy_version,
-  value_raw,
-  amount_decimal
+  value_raw
 from {{ ref('int_classified_wallet_transfer_events') }}

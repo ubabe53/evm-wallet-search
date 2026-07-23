@@ -37,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v7")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v8")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 6)
@@ -118,6 +118,25 @@ class DashboardApiTest(unittest.TestCase):
     def test_decimal_serialization_preserves_values_beyond_ieee_754_precision(self) -> None:
         value = Decimal("12345678901234567890.123456789012345678")
         self.assertEqual(json_value(value), "12345678901234567890.123456789012345678")
+
+    def test_raw_uint256_value_is_exact_in_event_and_token_responses(self) -> None:
+        expected = (
+            "115792089237316195423570985008687907853269984665640564039457"
+            "584007913129639935"
+        )
+        event_payload = self.client.get(
+            "/api/v1/events",
+            params={"q": "0xeee", "limit": 1},
+        ).json()
+        token_payload = self.client.get(
+            "/api/v1/tokens",
+            params={"q": "0x9999999999999999999999999999999999999999", "limit": 1},
+        ).json()
+
+        self.assertEqual(event_payload["items"][0]["value_raw"], expected)
+        self.assertNotIn("amount_decimal", event_payload["items"][0])
+        self.assertEqual(token_payload["items"][0]["value_raw_sum"], expected)
+        self.assertNotIn("amount_decimal_sum", token_payload["items"][0])
 
     def test_summary_uses_every_matching_row(self) -> None:
         default = self.client.get("/api/v1/summary").json()

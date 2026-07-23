@@ -28,10 +28,6 @@ select
   counterparty_account_type,
   direction,
   count(*) as transfer_count,
-  case
-    when count(amount_decimal) = count(*) then sum(amount_decimal)
-    else null
-  end as amount_decimal_sum,
   sum(cast(value_raw as bignum)) as value_raw_sum
 from {{ ref('wallet_events') }}
 group by wallet_id, wallet_address, block_date, token_address, token_symbol,

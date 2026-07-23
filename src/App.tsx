@@ -156,13 +156,6 @@ function compactAddress(address: string): string {
   return `${address.slice(0, 5)}...${address.slice(-3)}`;
 }
 
-function amountLabel(value: number | null | undefined): string {
-  if (value == null) {
-    return "amount unavailable";
-  }
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value);
-}
-
 type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality" | "recognition_status">;
 type DisplayedTokenSummary = Omit<TokenSummary, "counterparty_account_type">;
 type DisplayedTimelineRow = Omit<TimelineRow, "counterparty_account_type">;
@@ -189,9 +182,6 @@ export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSum
     existing.counterparty_count += row.counterparty_count;
     existing.sender_account_count += row.sender_account_count;
     existing.recipient_account_count += row.recipient_account_count;
-    existing.amount_decimal_sum = existing.amount_decimal_sum == null || row.amount_decimal_sum == null
-      ? null
-      : existing.amount_decimal_sum + row.amount_decimal_sum;
     existing.value_raw_sum = (BigInt(existing.value_raw_sum) + BigInt(row.value_raw_sum)).toString();
   }
 
@@ -217,9 +207,6 @@ export function aggregateTimelineRows(rows: TimelineRow[]): DisplayedTimelineRow
     }
 
     existing.transfer_count += row.transfer_count;
-    existing.amount_decimal_sum = existing.amount_decimal_sum == null || row.amount_decimal_sum == null
-      ? null
-      : existing.amount_decimal_sum + row.amount_decimal_sum;
     existing.value_raw_sum = (BigInt(existing.value_raw_sum) + BigInt(row.value_raw_sum)).toString();
   }
 
@@ -940,7 +927,6 @@ function EventList({
               {event.direction === "in" ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
               {event.direction}{event.is_indirect ? "*" : ""}
             </span>
-            <span>{amountLabel(event.amount_decimal)}</span>
             <EtherscanLink
               className="addressLink"
               href={etherscanAddressUrl(event.counterparty_address)}

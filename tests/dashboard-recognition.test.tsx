@@ -25,7 +25,6 @@ const token = {
   counterparty_count: 1,
   sender_account_count: 1,
   recipient_account_count: 0,
-  amount_decimal_sum: 1,
   value_raw_sum: "1000000",
 };
 

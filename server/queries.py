@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v7"
+API_SCHEMA_VERSION = "dashboard-api-v8"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -543,7 +543,6 @@ class QueryService:
                   count(distinct counterparty_address) filter (
                     where direction = 'out' and counterparty_address != '{ZERO_ADDRESS}' and counterparty_address != wallet_address
                   ) as recipient_account_count,
-                  case when count(amount_decimal) = count(*) then sum(amount_decimal) else null end as amount_decimal_sum,
                   cast(sum(cast(value_raw as bignum)) as varchar) as value_raw_sum
                 from filtered_events
                 group by token_address
