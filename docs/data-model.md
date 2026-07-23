@@ -37,7 +37,7 @@ The normalized fields are:
 - `token_label_reason`: required human context for manual classifications.
 - `rpc_block_number`, `rpc_fetch_status`, and `rpc_error_code`: audit fields for RPC enrichment attempts.
 
-Unknown tokens remain in event marts as internally `unverified` and publicly `other`, with `amount_decimal = null` when decimals are unavailable.
+Unknown tokens remain in event marts as internally `unverified` and publicly `other`. Sourced token `decimals` remain nullable metadata; they never alter the exact emitted raw value.
 
 ### `stg_counterparty_metadata`
 
@@ -58,7 +58,7 @@ Filters staged transfers to configured wallets and adds:
 - `direction`: `in` when the wallet is the recipient, `out` when it is the sender.
 - `counterparty_address`: the other side of the transfer.
 - `counterparty_account_type` plus the complete pinned observation, fetch status, reason codes, and evidence schema version; unenriched counterparties remain `unknown` / `not_fetched`.
-- `amount_decimal`: `value_raw / 10 ^ decimals` when metadata exists.
+- `value_raw`: the exact base-10 string emitted in the log. Token `decimals` remain adjacent sourced metadata so a future consumer can derive an amount with an explicit precision and presentation policy; the current model does not cast the raw value to floating point.
 - automatic token recognition status, reason, source, and classifier version copied from token enrichment without changing the event grain.
 - `transaction_sender_relation`: `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `from` and the emitted Transfer participants.
 - `transaction_target_relation`: `token_contract`, `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `to`, the emitting token, and Transfer participants.
@@ -94,8 +94,6 @@ The presentation layer shortens counterparty labels for readability while retain
 
 Each wallet-counterparty-token-direction interaction produces two directed legs: `wallet_token` and `token_counterparty`. Inbound flow is counterparty to token to wallet; outbound flow is wallet to token to counterparty. This makes every exported token node part of the graph.
 
-`amount_decimal_sum` remains null when token metadata is unavailable. It is never replaced with zero.
-
 Graph edges carry effective status, metadata provenance, and both evidence layers so the application query can exclude suspected and reviewed spam before projecting direct wallet-counterparty links.
 
 `counterparty_transfer_count` is the complete number of captured wallet-relevant Transfer-signature events for the wallet-counterparty pair across all emitting contracts and both directions. It is not a proven ERC-20-only count. It is repeated on each interaction edge so bounded graph exports retain the full-history activity metric used for gradual node sizing.
@@ -108,7 +106,7 @@ One row per wallet, emitting contract, effective status, quality, and exact coun
 
 `sender_account_count` counts distinct non-zero, non-self counterparties on inbound events. `recipient_account_count` applies the same exclusions on outbound events. `counterparty_count` is their distinct union, so it must not be calculated by adding the other two counts. These are event-address roles, not proof of human wallets or transaction initiation.
 
-`amount_decimal_sum` is null when token metadata is missing rather than implying a decimal-adjusted zero. `value_raw_sum` uses DuckDB `BIGNUM` and is serialized as a JSON string to preserve integer precision beyond JavaScript's safe-number range. Both fields remain in the data contract, but the current dashboard table does not display amounts.
+`value_raw_sum` uses DuckDB `BIGNUM` and is serialized as a JSON string to preserve integer precision beyond JavaScript's safe-number range. `token_decimals` remains sourced metadata at the same token-contract grain, but no floating-point normalized amount is materialized. The current dashboard table does not display token quantities.
 
 ### `counterparty_summary`
 
@@ -118,7 +116,7 @@ The ranking-serving mart excludes the zero address, the tracked wallet itself, a
 
 ### `timeline_daily`
 
-Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. This mart remains available for the fixture demo and a future time-series endpoint; the current local dashboard API does not expose a timeline route. Token addresses remain part of the displayed grain because decimal amounts from different assets cannot be meaningfully summed together. Raw totals are exact strings and decimal totals remain null without metadata.
+Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. This mart remains available for the fixture demo and a future time-series endpoint; the current local dashboard API does not expose a timeline route. Token addresses remain part of the displayed grain because raw values from different assets cannot be meaningfully summed together. Raw totals use arbitrary-precision integers in DuckDB and exact strings at JSON boundaries.
 
 ### `pipeline_metadata`
 
@@ -142,7 +140,7 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 
 ## Local API contract
 
-The `/api/v1` service currently advertises response schema `dashboard-api-v7`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, or a metadata run ID that does not match one completed `ops.pipeline_runs` row. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. The service exposes:
+The `/api/v1` service currently advertises response schema `dashboard-api-v8`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, or a metadata run ID that does not match one completed `ops.pipeline_runs` row. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. Event `value_raw` and token `value_raw_sum` fields cross the JSON boundary as exact strings; v8 removes the prior floating-point `amount_decimal` and `amount_decimal_sum` fields while retaining token-decimals metadata. The service exposes:
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, contiguous finalized snapshot bounds, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema remain separate from the indexer checkpoint;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
@@ -176,6 +174,7 @@ dbt tests enforce:
 - Null fixture snapshot claims and complete, internally ordered finalized snapshot fields for live builds.
 - Explicit CoinGecko-only OSCAR and PUPPIES coverage proving `listed`/`unverified`, not trusted.
 - Manual override precedence and unverified fallback behavior.
+- Exact preservation of a maximum `uint256` raw event value through staging, event, token-summary, API, and fixture-export contracts.
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.
 - Exact graph counterparty transfer counts across tokens and directions.
 - Counterparty-summary totals that reconcile with inbound plus outbound counts, with ranking exclusions enforced.

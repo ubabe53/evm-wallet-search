@@ -83,6 +83,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - Ethereum mainnet only; identity always includes `chain_id`.
 - Stable event key: `(chain_id, transaction_hash, log_index)`.
 - Raw quantities remain arbitrary-precision integers or exact strings.
+- Token-decimals metadata remains separate from exact raw values; the current serving contract does not materialize floating-point normalized amounts.
 - Quantities from different token contracts are never summed as if fungible.
 - Zero-address mint/burn semantics and self-transfer policy remain explicit.
 - Token and account labels are evidence, not canonical identity.
@@ -120,6 +121,7 @@ The loopback-only FastAPI service:
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
+- return event raw values and per-token raw totals as exact strings while retaining token-decimals metadata separately;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
 - apply manual token-recognition overrides before every filter, count, ranking, graph page, and event page;
 - expose only `recognition=all|recognized|other` as the public token-classification control while retaining detailed reputation evidence internally;

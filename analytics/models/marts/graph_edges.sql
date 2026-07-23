@@ -29,10 +29,6 @@ with interaction_counts as (
     counterparty_account_type,
     direction,
     count(*) as transfer_count,
-    case
-      when count(amount_decimal) = count(*) then sum(amount_decimal)
-      else null
-    end as amount_decimal_sum,
     min(block_timestamp) as first_seen_at,
     max(block_timestamp) as last_seen_at
   from {{ ref('wallet_events') }}

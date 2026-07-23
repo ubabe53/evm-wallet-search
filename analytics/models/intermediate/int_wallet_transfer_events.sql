@@ -84,12 +84,7 @@ matched as (
     coalesce(counterparties.fetch_status, 'not_fetched') as counterparty_evidence_fetch_status,
     coalesce(counterparties.reason_codes, 'account_evidence_not_fetched') as counterparty_evidence_reason_codes,
     counterparties.evidence_schema_version as counterparty_evidence_schema_version,
-    transfers.value_raw,
-    case
-      when tokens.decimals is not null
-        then try_cast(transfers.value_raw as double) / pow(10, tokens.decimals)
-      else null
-    end as amount_decimal
+    transfers.value_raw
   from transfers
   join wallets
     on transfers.from_address = wallets.wallet_address

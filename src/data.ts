@@ -57,7 +57,6 @@ export type GraphEdge = {
     inboundTransferCount?: number;
     outboundTransferCount?: number;
     tokenCount?: number;
-    amountDecimalSum?: number | null;
   };
 };
 
@@ -150,7 +149,6 @@ export type TokenSummary = {
   counterparty_count: number;
   sender_account_count: number;
   recipient_account_count: number;
-  amount_decimal_sum: number | null;
   value_raw_sum: string;
 };
 
@@ -182,7 +180,6 @@ export type TimelineRow = ClassificationEvidence & {
   counterparty_account_type: AccountType;
   direction: "in" | "out";
   transfer_count: number;
-  amount_decimal_sum: number | null;
   value_raw_sum: string;
 };
 
@@ -225,7 +222,6 @@ export type WalletEvent = ClassificationEvidence & {
   metadata_source_url: string | null;
   token_label_reason: string | null;
   value_raw: string;
-  amount_decimal: number | null;
 };
 
 export type PipelineMetadata = {
@@ -498,13 +494,6 @@ function apiGraph(items: ApiGraphCounterparty[]): DashboardGraph {
   return { nodes: [...nodes.values()], edges };
 }
 
-function normalizeEvent(event: WalletEvent): WalletEvent {
-  return {
-    ...event,
-    amount_decimal: event.amount_decimal == null ? null : Number(event.amount_decimal),
-  };
-}
-
 async function fetchJson<T>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, signal });
   if (!response.ok) {
@@ -561,7 +550,7 @@ export async function loadApiDashboardData(
       graph: apiGraph(graph.items),
       summaries: { tokens: tokens.items, counterparties: counterparties.items },
       timeline: [],
-      events: events.items.map(normalizeEvent),
+      events: events.items,
       metadata,
     },
     summary,
@@ -582,7 +571,7 @@ export async function loadNextApiEvents(
     `/api/v1/events?${apiQuery(query, { limit: 10, cursor })}`,
     signal,
   );
-  return { ...response, items: response.items.map(normalizeEvent) };
+  return response;
 }
 
 export type RecognitionOverrideResponse = {

@@ -8,7 +8,8 @@ where
       or token_quality_source_count != 0 or token_quality_reason != 'rpc_metadata_only'
       or token_quality_version != 'token-quality-v1'
       or token_name != 'Claim at visticlaim.com' or token_symbol != 'VISTI.COM'
-      or token_decimals != 6 or amount_decimal != 500000))
+      or token_decimals != 6
+      or value_raw != '115792089237316195423570985008687907853269984665640564039457584007913129639935'))
   or
   (token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
     and (token_status != 'trusted' or metadata_source != 'manual'

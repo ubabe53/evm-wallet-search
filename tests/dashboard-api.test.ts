@@ -90,14 +90,19 @@ describe("live dashboard API adapter", () => {
       complete_matching_count: 12,
       returned_count: 2,
       next_cursor: null,
-      items: [{ transfer_id: "one", amount_decimal: "1.25" }, { transfer_id: "two", amount_decimal: null }],
+      items: [{
+        transfer_id: "one",
+        value_raw: "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+      }],
     }));
     vi.stubGlobal("fetch", fetchMock);
 
     const page = await loadNextApiEvents(query, "opaque+/cursor");
 
     expect(String(fetchMock.mock.calls[0][0])).toContain("cursor=opaque%2B%2Fcursor");
-    expect(page.items.map((item) => item.amount_decimal)).toEqual([1.25, null]);
+    expect(page.items[0].value_raw).toBe(
+      "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    );
   });
 
   it("represents an empty account selection explicitly", async () => {

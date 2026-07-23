@@ -40,6 +40,7 @@ REQUIRED_EXPORT_COLUMNS = {
     "wallet_events": {
         "from_address",
         "to_address",
+        "value_raw",
         "transaction_from_address",
         "transaction_to_address",
         "transaction_sender_relation",
@@ -51,6 +52,7 @@ REQUIRED_EXPORT_COLUMNS = {
     "token_summary": {
         "indirect_inbound_transfer_count",
         "indirect_outbound_transfer_count",
+        "value_raw_sum",
         "token_quality",
         "counterparty_account_type",
     },
@@ -76,7 +78,7 @@ def json_default(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     if isinstance(value, Decimal):
-        return float(value)
+        return format(value, "f")
     return str(value)
 
 
@@ -219,7 +221,6 @@ def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dic
                     "counterpartyAccountType": edge["counterparty_account_type"],
                     "transferCount": edge["transfer_count"],
                     "counterpartyTransferCount": edge["counterparty_transfer_count"],
-                    "amountDecimalSum": edge["amount_decimal_sum"],
                 }
             }
             for edge in edges
