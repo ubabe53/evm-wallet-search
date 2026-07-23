@@ -1,0 +1,199 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+import duckdb
+
+from scripts.snapshot_runs import (
+    ConfiguredWallet,
+    FinalizedBlock,
+    HyperIndexMetadata,
+    SnapshotAlreadyCurrent,
+    ensure_run_table,
+    fetch_hyperindex_metadata,
+    finish_snapshot_run,
+    latest_completed_snapshot_run,
+    next_run_start,
+    resolve_finalized_block,
+    resolve_snapshot_target,
+    start_snapshot_run,
+)
+
+
+WALLET = ConfiguredWallet(
+    address="0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+    label="vitalik.eth",
+)
+
+
+class FakeRpcClient:
+    def call(self, method, params):
+        if method != "eth_getBlockByNumber" or params != ["finalized", False]:
+            raise AssertionError((method, params))
+        return {"number": "0x64", "hash": "0x" + "a" * 64}
+
+
+class LaggingRpcClient:
+    def call(self, method, params):
+        if method != "eth_getBlockByNumber":
+            raise AssertionError((method, params))
+        if params == ["finalized", False]:
+            return {"number": "0x64", "hash": "0x" + "a" * 64}
+        if params == ["0x4b", False]:
+            return {"number": "0x4b", "hash": "0x" + "b" * 64}
+        raise AssertionError(params)
+
+
+class SnapshotRunsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.database_path = Path(self.temporary_directory.name) / "live.duckdb"
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def test_reads_transactional_hyperindex_progress_and_finalized_rpc_block(self) -> None:
+        def transport(_url, payload):
+            self.assertEqual(payload["variables"], {"chainId": 1})
+            return {
+                "data": {
+                    "_meta": [{
+                        "chainId": 1,
+                        "progressBlock": 120,
+                        "startBlock": 3,
+                        "endBlock": None,
+                        "isReady": True,
+                    }]
+                }
+            }
+
+        metadata = fetch_hyperindex_metadata("http://hyperindex.test/graphql", transport=transport)
+        finalized = resolve_finalized_block(FakeRpcClient())
+
+        self.assertEqual(metadata, HyperIndexMetadata(3, 120, None, True))
+        self.assertEqual(finalized, FinalizedBlock(100, "0x" + "a" * 64))
+
+    def test_caps_snapshot_at_indexed_progress_when_indexer_lags_finality(self) -> None:
+        target = resolve_snapshot_target(
+            LaggingRpcClient(),
+            HyperIndexMetadata(3, 75, None, False),
+        )
+
+        self.assertEqual(target, FinalizedBlock(75, "0x" + "b" * 64))
+
+    def test_caps_snapshot_at_configured_indexer_end(self) -> None:
+        target = resolve_snapshot_target(
+            LaggingRpcClient(),
+            HyperIndexMetadata(3, 90, 75, True),
+        )
+
+        self.assertEqual(target, FinalizedBlock(75, "0x" + "b" * 64))
+
+    def test_records_one_run_per_contiguous_finalized_interval(self) -> None:
+        first = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        self.assertEqual((first.from_block, first.to_block), (3, 75))
+
+        with duckdb.connect(str(self.database_path)) as connection:
+            connection.execute(
+                "create table wallet_events (chain_id integer, wallet_address varchar, block_number bigint)"
+            )
+            connection.execute(
+                "insert into wallet_events values (1, ?, 50), (1, ?, 70)",
+                [WALLET.address, WALLET.address],
+            )
+        finish_snapshot_run(first, database_path=self.database_path, succeeded=True)
+
+        second = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 120, None, True),
+            finalized_block=FinalizedBlock(100, "0x" + "b" * 64),
+        )
+        self.assertEqual((second.from_block, second.to_block), (76, 100))
+
+        with duckdb.connect(str(self.database_path)) as connection:
+            first_row = connection.execute(
+                "select events_found, status from ops.pipeline_runs where run_id = ?",
+                [first.run_id],
+            ).fetchone()
+            self.assertEqual(first_row, (2, "completed"))
+
+    def test_refuses_gaps_stale_indexer_and_empty_increment(self) -> None:
+        with duckdb.connect(str(self.database_path)) as connection:
+            ensure_run_table(connection)
+            connection.execute(
+                """
+                insert into ops.pipeline_runs values (
+                  'gap', 1, ?, 'vitalik.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
+                )
+                """,
+                [WALLET.address, "0x" + "a" * 64, "wallet-transfer-signature-v1"],
+            )
+            with self.assertRaisesRegex(RuntimeError, "not contiguous"):
+                next_run_start(
+                    connection,
+                    chain_id=1,
+                    wallet_address=WALLET.address,
+                    scope_version="wallet-transfer-signature-v1",
+                    configured_start_block=3,
+                )
+
+        with self.assertRaisesRegex(RuntimeError, "has not fully processed"):
+            start_snapshot_run(
+                database_path=Path(self.temporary_directory.name) / "stale.duckdb",
+                wallet=WALLET,
+                metadata=HyperIndexMetadata(3, 74, None, False),
+                finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+            )
+
+        current_path = Path(self.temporary_directory.name) / "current.duckdb"
+        run = start_snapshot_run(
+            database_path=current_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 75, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        with duckdb.connect(str(current_path)) as connection:
+            connection.execute(
+                "create table wallet_events (chain_id integer, wallet_address varchar, block_number bigint)"
+            )
+        finish_snapshot_run(run, database_path=current_path, succeeded=True)
+        with self.assertRaises(SnapshotAlreadyCurrent):
+            start_snapshot_run(
+                database_path=current_path,
+                wallet=WALLET,
+                metadata=HyperIndexMetadata(3, 75, None, True),
+                finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+            )
+        current = latest_completed_snapshot_run(
+            database_path=current_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 75, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        self.assertEqual(current.run_id, run.run_id)
+
+    def test_failed_run_remains_retryable(self) -> None:
+        run = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        finish_snapshot_run(run, database_path=self.database_path, succeeded=False)
+        retry = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        self.assertEqual(retry.from_block, 3)
+
+
+if __name__ == "__main__":
+    unittest.main()

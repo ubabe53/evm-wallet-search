@@ -38,7 +38,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
-| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics plus the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
+| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics, finalized snapshot-run history, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
 | Local account evidence store | `analytics/artifacts/account_evidence.duckdb` | Checkpoint one successful pinned bytecode observation per event counterparty, with retryable failures | A checked-in seed, an implicit build-time RPC job, or proof of permanent identity |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
@@ -59,7 +59,7 @@ Rules:
 
 - The browser never receives Postgres/RPC credentials or direct database access.
 - HyperIndex Postgres is the ingestion source, not the application query interface.
-- DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. The isolated `app.token_recognition_overrides` table is mutable local product state and is never rewritten by dbt models.
+- DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. Orchestration owns `ops.pipeline_runs`, while the isolated `app.token_recognition_overrides` table is mutable local product state; dbt models rewrite neither schema.
 - Enrichment joins onto event facts. It may add sourced interpretation but must not rewrite immutable event evidence.
 - User-facing aggregations operate on eligible mart rows and keep token-contract identity in the grain where amounts are involved.
 - Generated demo files are downstream artifacts and are never hand-edited.
@@ -87,6 +87,8 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - Zero-address mint/burn semantics and self-transfer policy remain explicit.
 - Token and account labels are evidence, not canonical identity.
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
+- Account-evidence coverage is measured against the current snapshot's distinct nonzero, nonself event counterparties. Classified, failed, and not-checked address and event counts must reconcile to that population; cached rows outside it do not count.
+- Live completeness is a contiguous range of completed snapshot runs from the configured HyperIndex start through an Ethereum `finalized` block; event-bearing block extrema do not establish that range.
 - Suspected and reviewed spam remain distinct internal evidence and are not projected into the dashboard; the public token labels are only `Recognized` and `Other`.
 - Bounded outputs disclose their complete matching count, returned count, limits, provenance, and sampling state where applicable.
 
@@ -97,10 +99,10 @@ Detailed field grains and tests are in `docs/data-model.md`.
 ### Local analytics path
 
 ```text
-HyperIndex Postgres → dbt live source → `live.duckdb` → FastAPI → React
+HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
 ```
 
-The indexer and live analytics are explicit operations. Builds must not silently start indexing, backfills, registry refreshes, or RPC enrichment.
+The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, records one attempted interval in `ops.pipeline_runs`, and advances coverage only after dbt succeeds. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
 
 ### Fixture demo path
 
@@ -117,7 +119,8 @@ The loopback-only FastAPI service:
 - own DuckDB connections and limit writes to `app.token_recognition_overrides`;
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
-- return source, generation time, indexed bounds, enrichment coverage, complete matching counts, and returned limits;
+- return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
+- verify that live metadata references exactly one completed finalized snapshot run before serving it;
 - apply manual token-recognition overrides before every filter, count, ranking, graph page, and event page;
 - expose only `recognition=all|recognized|other` as the public token-classification control while retaining detailed reputation evidence internally;
 - treat recognition as inclusive counterparty-cohort membership for counterparty and graph rankings, then rank eligible addresses by their complete activity inside the remaining account/search scope;

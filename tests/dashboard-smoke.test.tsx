@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   App,
+  accountEvidenceCoverageDescription,
+  accountEvidenceCoverageLabel,
   accountEvidenceObservationBlockLabel,
   accountEvidenceObservationTimeLabel,
   accountMatches,
@@ -16,6 +18,7 @@ import {
   etherscanTransactionUrl,
   graphStyles,
   interactionEdgeLabel,
+  snapshotCoverageLabel,
   INDIRECT_TRANSFER_EXPLANATION,
 } from "../src/App";
 import type { CounterpartySummary, DashboardGraph, TimelineRow, TokenSummary } from "../src/data";
@@ -29,9 +32,6 @@ const contractAccountEvidence = {
   eip7702_delegation_target: null,
   evidence_fetch_status: "complete",
   evidence_reason_codes: "contract_code_observed",
-  evidence_coverage_scope: "fixture_complete",
-  evidence_coverage_start_block: 17_000_000,
-  evidence_coverage_end_block: 22_500_000,
   evidence_schema_version: "account-evidence-v2",
 } as const;
 
@@ -52,9 +52,6 @@ const contractEventEvidence = {
   counterparty_eip7702_delegation_target: null,
   counterparty_evidence_fetch_status: "complete",
   counterparty_evidence_reason_codes: "contract_code_observed",
-  counterparty_evidence_coverage_scope: "fixture_complete",
-  counterparty_evidence_coverage_start_block: 17_000_000,
-  counterparty_evidence_coverage_end_block: 22_500_000,
   counterparty_evidence_schema_version: "account-evidence-v2",
 } as const;
 
@@ -278,6 +275,13 @@ const metadata = {
   chain_id: 1,
   data_source: "fixture",
   generated_at: "2023-11-14T22:15:00+00:00",
+  snapshot_run_id: null,
+  snapshot_start_block: null,
+  snapshot_increment_start_block: null,
+  snapshot_end_block: null,
+  snapshot_end_block_hash: null,
+  snapshot_finality_policy: null,
+  snapshot_scope_version: null,
   transfer_count: 2,
   token_count: 2,
   recognized_transfer_count: 1,
@@ -291,15 +295,21 @@ const metadata = {
   spam_transfer_count: 1,
   spam_token_count: 1,
   interaction_count: 2,
-  account_evidence_address_count: 2,
-  account_evidence_complete_count: 2,
+  account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties",
+  account_evidence_eligible_address_count: 3,
+  account_evidence_classified_address_count: 2,
+  account_evidence_failed_address_count: 0,
+  account_evidence_not_checked_address_count: 1,
+  account_evidence_address_coverage_rate: 2 / 3,
+  account_evidence_eligible_event_count: 4,
+  account_evidence_classified_event_count: 3,
+  account_evidence_failed_event_count: 0,
+  account_evidence_not_checked_event_count: 1,
+  account_evidence_event_coverage_rate: 0.75,
   account_evidence_observation_block_number_min: 22_500_000,
   account_evidence_observation_block_number_max: 22_500_000,
   account_evidence_observation_block_timestamp_min: "2025-05-17T03:11:47+00:00",
   account_evidence_observation_block_timestamp_max: "2025-05-17T03:11:47+00:00",
-  account_evidence_coverage_scope: "fixture_complete",
-  account_evidence_coverage_start_block: 17_000_000,
-  account_evidence_coverage_end_block: 22_500_000,
   account_evidence_schema_version: "account-evidence-v1",
   token_summary_row_count: 2,
   counterparty_summary_row_count: 2,
@@ -380,6 +390,30 @@ describe("App", () => {
       .toBe("2025-05-17T03:11:47+00:00");
     expect(accountEvidenceObservationTimeLabel("2025-05-17T03:11:47+00:00", "2025-05-18T03:11:47+00:00"))
       .toBe("2025-05-17T03:11:47+00:00–2025-05-18T03:11:47+00:00");
+  });
+
+  it("shows account coverage with explicit address and event denominators", () => {
+    expect(accountEvidenceCoverageLabel(metadata)).toBe("address types 2/3");
+    expect(accountEvidenceCoverageDescription(metadata)).toContain(
+      "2 of 3 nonzero, nonself counterparties classified (66.7%)",
+    );
+    expect(accountEvidenceCoverageDescription(metadata)).toContain(
+      "3 of 4 captured transfers have classified counterparties (75%)",
+    );
+    expect(accountEvidenceCoverageDescription(metadata)).toContain("0 failed; 1 not checked");
+  });
+
+  it("labels only verified finalized snapshot coverage", () => {
+    expect(snapshotCoverageLabel({
+      snapshot_start_block: 3,
+      snapshot_end_block: 25_523_374,
+      snapshot_finality_policy: "ethereum_finalized",
+    })).toBe("Blocks 3–25,523,374 · Finalized");
+    expect(snapshotCoverageLabel({
+      snapshot_start_block: null,
+      snapshot_end_block: null,
+      snapshot_finality_policy: null,
+    })).toBe("Coverage not recorded");
   });
 
   it("does not expose removed Safe or ERC-4337 graph channels", () => {
@@ -595,6 +629,9 @@ describe("App", () => {
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
+    expect(screen.getByText("Data snapshot").parentElement).toHaveTextContent(
+      "Data snapshotCoverage not recorded",
+    );
     expect(screen.getByLabelText("Maximum graph counterparties")).toHaveValue("25");
     expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();

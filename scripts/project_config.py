@@ -12,6 +12,7 @@ from typing import Any, Mapping
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = ROOT / "config.yaml"
 PUBLIC_RPC_FALLBACK = "https://ethereum-rpc.publicnode.com"
+DEFAULT_HYPERINDEX_GRAPHQL_URL = "http://127.0.0.1:8080/v1/graphql"
 
 
 def load_config(path: Path | None = None) -> dict[str, Any]:
@@ -63,6 +64,13 @@ def resolved_runtime(config: Mapping[str, Any] | None = None) -> dict[str, str |
             values,
             "analytics",
             "hyperindex_postgres_dsn",
+        ),
+        "hyperindex_graphql_url": configured_value(
+            "HYPERINDEX_GRAPHQL_URL",
+            values,
+            "analytics",
+            "hyperindex_graphql_url",
+            default=DEFAULT_HYPERINDEX_GRAPHQL_URL,
         ),
         "ethereum_rpc_url": configured_value(
             "ETHEREUM_RPC_URL",

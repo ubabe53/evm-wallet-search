@@ -8,7 +8,7 @@ bun run indexer:dev
 bun run analytics:build:hyperindex
 ```
 
-This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads the already indexed HyperIndex entity table, and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
+This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads HyperIndex `_meta` through its local GraphQL endpoint, and resolves Ethereum's `finalized` head through RPC. Its target is the newest block covered by both transactional indexer progress and finality, capped by a configured HyperIndex end when present. It pins that target's canonical hash, reads the entity table only through the target, and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
 
 Start the local API after the live build:
 
@@ -27,6 +27,7 @@ envio:
   api_token: ""
 analytics:
   hyperindex_postgres_dsn: ""
+  hyperindex_graphql_url: "http://127.0.0.1:8080/v1/graphql"
 ethereum:
   rpc_url: ""
   public_rpc_url: "https://ethereum-rpc.publicnode.com"
@@ -95,6 +96,8 @@ The command selects distinct `wallet_events.counterparty_address` values, exclud
 
 The ignored `analytics/artifacts/account_evidence.duckdb` cache is checkpointed after every JSON-RPC batch. Successful rows are never selected or overwritten automatically; failed or malformed results stay `unknown` and are retried by a later invocation. The default run has no address limit. `--limit` exists only for an intentional partial run.
 
+After the next live analytics build, `pipeline_metadata` recomputes coverage against the current snapshot rather than counting every row in the cache. It reports distinct eligible, classified, failed, and not-checked nonzero/nonself counterparties plus the same reconciliation weighted by captured Transfer-signature events. This makes an intentional `--limit` run visibly partial. Cached addresses that are no longer in the current wallet population do not count toward coverage.
+
 The default work unit is 100 `eth_getCode` calls with two retries for unresolved calls. Providers with smaller limits can override these values without changing the evidence semantics:
 
 ```sh
@@ -138,7 +141,11 @@ bun run analytics:build:hyperindex
 
 dbt-duckdb attaches that database read-only as the `hyperindex` catalog. The wrapper stops with a clear error when live mode is requested without the DSN. Confirm the mapped local port with `docker port envio-postgres 5432`; this project currently maps it to `5433`. Store the URI under `analytics.hyperindex_postgres_dsn` in ignored `config.yaml` to avoid exporting it in every shell.
 
-The resulting `analytics/artifacts/live.duckdb` is the local application's query source and contains the isolated application-owned recognition override table. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API opens one short-lived DuckDB connection per request, applies overrides and filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
+The first successful build records one `ops.pipeline_runs` row from HyperIndex `_meta.startBlock` through the chosen finalized block. Each later snapshot begins at the previous completed `to_block + 1`; failed rows do not advance coverage and the same interval remains retryable. A run records its finalized end-block hash and completes only after dbt succeeds. If no newer finalized block exists, dbt still rebuilds transformed models against the latest completed range without creating a fictitious scan run. `HYPERINDEX_GRAPHQL_URL` or `analytics.hyperindex_graphql_url` may override the local GraphQL default.
+
+An ordinary dbt failure marks its run `failed`. An abrupt process termination can leave a `running` row; the next build refuses to overlap it. Inspect that row before manually marking it failed, then rerun the same command. Do not delete a completed row to move the checkpoint: completed ranges are the evidence for cumulative continuity.
+
+The resulting `analytics/artifacts/live.duckdb` is the local application's query source and contains both orchestration-owned `ops.pipeline_runs` and the isolated application-owned recognition override table. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API verifies that metadata references a matching completed finalized run, opens one short-lived DuckDB connection per request, applies overrides and filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
 
 ## Fixture Demo Export
 

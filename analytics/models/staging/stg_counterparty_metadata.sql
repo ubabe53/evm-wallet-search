@@ -11,9 +11,6 @@ select
   null::varchar as eip7702_delegation_target,
   null::varchar as fetch_status,
   null::varchar as reason_codes,
-  null::varchar as coverage_scope,
-  null::bigint as coverage_start_block,
-  null::bigint as coverage_end_block,
   null::varchar as evidence_schema_version,
   null::varchar as fetched_at
 where false
@@ -30,9 +27,6 @@ select
   eip7702_delegation_target,
   fetch_status,
   reason_code as reason_codes,
-  'all_distinct_event_counterparties' as coverage_scope,
-  null::bigint as coverage_start_block,
-  observation_block_number as coverage_end_block,
   evidence_schema_version,
   cast(fetched_at as varchar) as fetched_at
 from account_evidence.account_evidence

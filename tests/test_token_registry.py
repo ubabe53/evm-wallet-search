@@ -3,7 +3,13 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.project_config import PUBLIC_RPC_FALLBACK, configured_value, load_config, resolved_runtime
+from scripts.project_config import (
+    DEFAULT_HYPERINDEX_GRAPHQL_URL,
+    PUBLIC_RPC_FALLBACK,
+    configured_value,
+    load_config,
+    resolved_runtime,
+)
 from scripts.sync_token_registry import (
     merge_registries,
     normalize_coinbase_currencies,
@@ -32,6 +38,10 @@ class TokenRegistryTest(unittest.TestCase):
         )
         self.assertEqual(configured_value("ETHEREUM_RPC_URL", config, "ethereum", "rpc_url", environ={}), "https://yaml.example")
         self.assertEqual(resolved_runtime({})["ethereum_rpc_url"], PUBLIC_RPC_FALLBACK)
+        self.assertEqual(
+            resolved_runtime({})["hyperindex_graphql_url"],
+            DEFAULT_HYPERINDEX_GRAPHQL_URL,
+        )
 
     def test_configuration_rejects_non_mapping_yaml(self) -> None:
         with TemporaryDirectory() as directory:

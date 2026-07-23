@@ -25,11 +25,13 @@ class ArtifactPathsTest(unittest.TestCase):
             ["--vars", '{"use_fixture": false}'],
             use_hyperindex=True,
             hyperindex_dsn="postgresql://secret",
+            extra_env={"EVM_WALLET_SNAPSHOT_END_BLOCK": "100"},
         )
 
         environment = run.call_args.kwargs["env"]
         self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(LIVE_DB_PATH))
         self.assertEqual(environment[run_dbt.HYPERINDEX_DSN_ENV], "postgresql://secret")
+        self.assertEqual(environment["EVM_WALLET_SNAPSHOT_END_BLOCK"], "100")
 
     def test_live_build_requires_a_dsn(self) -> None:
         with self.assertRaisesRegex(SystemExit, "Live HyperIndex mode requires"):
