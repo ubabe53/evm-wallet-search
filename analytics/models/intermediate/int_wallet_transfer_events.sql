@@ -83,9 +83,6 @@ matched as (
     counterparties.eip7702_delegation_target as counterparty_eip7702_delegation_target,
     coalesce(counterparties.fetch_status, 'not_fetched') as counterparty_evidence_fetch_status,
     coalesce(counterparties.reason_codes, 'account_evidence_not_fetched') as counterparty_evidence_reason_codes,
-    counterparties.coverage_scope as counterparty_evidence_coverage_scope,
-    counterparties.coverage_start_block as counterparty_evidence_coverage_start_block,
-    counterparties.coverage_end_block as counterparty_evidence_coverage_end_block,
     counterparties.evidence_schema_version as counterparty_evidence_schema_version,
     transfers.value_raw,
     case

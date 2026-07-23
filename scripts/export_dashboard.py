@@ -179,8 +179,6 @@ def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dic
                     "eip7702DelegationTarget": node["eip7702_delegation_target"],
                     "evidenceFetchStatus": node["evidence_fetch_status"],
                     "evidenceReasonCodes": node["evidence_reason_codes"],
-                    "evidenceCoverageStartBlock": node["evidence_coverage_start_block"],
-                    "evidenceCoverageEndBlock": node["evidence_coverage_end_block"],
                 }
             }
             for node in nodes

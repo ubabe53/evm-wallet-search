@@ -96,6 +96,8 @@ The command selects distinct `wallet_events.counterparty_address` values, exclud
 
 The ignored `analytics/artifacts/account_evidence.duckdb` cache is checkpointed after every JSON-RPC batch. Successful rows are never selected or overwritten automatically; failed or malformed results stay `unknown` and are retried by a later invocation. The default run has no address limit. `--limit` exists only for an intentional partial run.
 
+After the next live analytics build, `pipeline_metadata` recomputes coverage against the current snapshot rather than counting every row in the cache. It reports distinct eligible, classified, failed, and not-checked nonzero/nonself counterparties plus the same reconciliation weighted by captured Transfer-signature events. This makes an intentional `--limit` run visibly partial. Cached addresses that are no longer in the current wallet population do not count toward coverage.
+
 The default work unit is 100 `eth_getCode` calls with two retries for unresolved calls. Providers with smaller limits can override these values without changing the evidence semantics:
 
 ```sh

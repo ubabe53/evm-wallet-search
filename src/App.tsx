@@ -356,6 +356,45 @@ export function accountEvidenceObservationTimeLabel(minimum: string | null, maxi
   return minimum === maximum ? minimum : `${minimum}–${maximum}`;
 }
 
+function coverageRateLabel(classified: number, eligible: number): string {
+  if (eligible === 0) {
+    return "not applicable";
+  }
+  return `${(classified / eligible * 100).toLocaleString("en-US", {
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
+export function accountEvidenceCoverageLabel(
+  metadata: Pick<
+    DashboardMetadata,
+    "account_evidence_classified_address_count" | "account_evidence_eligible_address_count"
+  >,
+): string {
+  return `address types ${metadata.account_evidence_classified_address_count.toLocaleString("en-US")}/${metadata.account_evidence_eligible_address_count.toLocaleString("en-US")}`;
+}
+
+export function accountEvidenceCoverageDescription(
+  metadata: Pick<
+    DashboardMetadata,
+    | "account_evidence_classified_address_count"
+    | "account_evidence_eligible_address_count"
+    | "account_evidence_failed_address_count"
+    | "account_evidence_not_checked_address_count"
+    | "account_evidence_classified_event_count"
+    | "account_evidence_eligible_event_count"
+    | "account_evidence_observation_block_timestamp_min"
+    | "account_evidence_observation_block_timestamp_max"
+  >,
+): string {
+  return [
+    `${metadata.account_evidence_classified_address_count.toLocaleString("en-US")} of ${metadata.account_evidence_eligible_address_count.toLocaleString("en-US")} nonzero, nonself counterparties classified (${coverageRateLabel(metadata.account_evidence_classified_address_count, metadata.account_evidence_eligible_address_count)})`,
+    `${metadata.account_evidence_classified_event_count.toLocaleString("en-US")} of ${metadata.account_evidence_eligible_event_count.toLocaleString("en-US")} captured transfers have classified counterparties (${coverageRateLabel(metadata.account_evidence_classified_event_count, metadata.account_evidence_eligible_event_count)})`,
+    `${metadata.account_evidence_failed_address_count.toLocaleString("en-US")} failed; ${metadata.account_evidence_not_checked_address_count.toLocaleString("en-US")} not checked`,
+    `successful observations at ${accountEvidenceObservationTimeLabel(metadata.account_evidence_observation_block_timestamp_min, metadata.account_evidence_observation_block_timestamp_max)}`,
+  ].join("; ");
+}
+
 function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="stat">
@@ -1407,8 +1446,8 @@ export function App() {
           <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
             <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
             <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
-            <span title={`Address type observed at ${accountEvidenceObservationTimeLabel(data.metadata.account_evidence_observation_block_timestamp_min, data.metadata.account_evidence_observation_block_timestamp_max)}; coverage: ${data.metadata.account_evidence_coverage_scope}; blocks ${data.metadata.account_evidence_coverage_start_block ?? "unknown"}-${data.metadata.account_evidence_coverage_end_block}`}>
-              address type snapshot at {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
+            <span title={accountEvidenceCoverageDescription(data.metadata)}>
+              {accountEvidenceCoverageLabel(data.metadata)} · {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
             </span>
             {data.metadata.is_sampled && (
               <span>{data.metadata.exported_event_count.toLocaleString()} recent events shown</span>

@@ -37,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v6")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v7")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 6)
@@ -47,6 +47,22 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(metadata["finality_status"], "not_recorded")
         self.assertIsNone(metadata["snapshot_start_block"])
         self.assertIsNone(metadata["snapshot_end_block"])
+        self.assertEqual(
+            metadata["account_evidence_population_scope"],
+            "distinct_nonzero_nonself_event_counterparties",
+        )
+        self.assertEqual(
+            metadata["account_evidence_eligible_address_count"],
+            metadata["account_evidence_classified_address_count"]
+            + metadata["account_evidence_failed_address_count"]
+            + metadata["account_evidence_not_checked_address_count"],
+        )
+        self.assertEqual(
+            metadata["account_evidence_eligible_event_count"],
+            metadata["account_evidence_classified_event_count"]
+            + metadata["account_evidence_failed_event_count"]
+            + metadata["account_evidence_not_checked_event_count"],
+        )
 
     def test_completed_snapshot_run_exposes_finalized_contiguous_coverage(self) -> None:
         with TemporaryDirectory() as directory:

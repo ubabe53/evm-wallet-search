@@ -11,9 +11,7 @@ select
   cast(null as varchar) as observation_block_timestamp,
   cast(null as varchar) as eip7702_delegation_target,
   cast(null as varchar) as evidence_fetch_status,
-  cast(null as varchar) as evidence_reason_codes,
-  cast(null as bigint) as evidence_coverage_start_block,
-  cast(null as bigint) as evidence_coverage_end_block
+  cast(null as varchar) as evidence_reason_codes
 from {{ ref('wallet_events') }}
 group by wallet_address, ens
 
@@ -32,9 +30,7 @@ select
   any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
   any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
   any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
-  any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
-  any_value(counterparty_evidence_coverage_start_block) as evidence_coverage_start_block,
-  any_value(counterparty_evidence_coverage_end_block) as evidence_coverage_end_block
+  any_value(counterparty_evidence_reason_codes) as evidence_reason_codes
 from {{ ref('wallet_events') }}
 group by counterparty_address
 
@@ -53,8 +49,6 @@ select
   cast(null as varchar) as observation_block_timestamp,
   cast(null as varchar) as eip7702_delegation_target,
   cast(null as varchar) as evidence_fetch_status,
-  cast(null as varchar) as evidence_reason_codes,
-  cast(null as bigint) as evidence_coverage_start_block,
-  cast(null as bigint) as evidence_coverage_end_block
+  cast(null as varchar) as evidence_reason_codes
 from {{ ref('wallet_events') }}
 group by token_address, token_symbol

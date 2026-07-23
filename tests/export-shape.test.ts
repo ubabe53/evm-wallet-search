@@ -28,7 +28,17 @@ describe("dashboard export shape", () => {
     expect(metadata.account_evidence_observation_block_number_max).toBeNull();
     expect(metadata.account_evidence_observation_block_timestamp_min).toBeNull();
     expect(metadata.account_evidence_observation_block_timestamp_max).toBeNull();
-    expect(metadata.account_evidence_complete_count).toBeLessThanOrEqual(metadata.account_evidence_address_count);
+    expect(metadata.account_evidence_population_scope).toBe("distinct_nonzero_nonself_event_counterparties");
+    expect(metadata.account_evidence_eligible_address_count).toBe(
+      metadata.account_evidence_classified_address_count +
+      metadata.account_evidence_failed_address_count +
+      metadata.account_evidence_not_checked_address_count,
+    );
+    expect(metadata.account_evidence_eligible_event_count).toBe(
+      metadata.account_evidence_classified_event_count +
+      metadata.account_evidence_failed_event_count +
+      metadata.account_evidence_not_checked_event_count,
+    );
     expect(metadata.exported_event_count).toBeLessThanOrEqual(
       metadata.event_export_limit_per_status_quality_account_evidence * metadata.status_quality_account_evidence_cell_count,
     );

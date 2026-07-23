@@ -36,19 +36,51 @@ timeline_metrics as (
   group by wallet_id
 ),
 
+account_evidence_population as (
+  select
+    wallet_id,
+    counterparty_address,
+    count(*) as event_count,
+    any_value(counterparty_evidence_fetch_status) as fetch_status,
+    any_value(counterparty_observation_block_number) as observation_block_number,
+    any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
+    any_value(counterparty_evidence_schema_version) as evidence_schema_version
+  from {{ ref('wallet_events') }}
+  where counterparty_address != '0x0000000000000000000000000000000000000000'
+    and counterparty_address != wallet_address
+  group by wallet_id, counterparty_address
+),
+
 account_evidence_metrics as (
   select
-    count(*) as account_evidence_address_count,
-    count(*) filter (where fetch_status = 'complete') as account_evidence_complete_count,
-    min(observation_block_number) as account_evidence_observation_block_number_min,
-    max(observation_block_number) as account_evidence_observation_block_number_max,
-    min(cast(observation_block_timestamp as timestamptz)) as account_evidence_observation_block_timestamp_min,
-    max(cast(observation_block_timestamp as timestamptz)) as account_evidence_observation_block_timestamp_max,
-    string_agg(distinct coverage_scope, '|') as account_evidence_coverage_scope,
-    min(coverage_start_block) as account_evidence_coverage_start_block,
-    max(coverage_end_block) as account_evidence_coverage_end_block,
-    any_value(evidence_schema_version) as account_evidence_schema_version
-  from {{ ref('stg_counterparty_metadata') }}
+    wallet_id,
+    count(*) as account_evidence_eligible_address_count,
+    count(*) filter (where fetch_status = 'complete') as account_evidence_classified_address_count,
+    count(*) filter (where fetch_status = 'failed') as account_evidence_failed_address_count,
+    count(*) filter (where fetch_status = 'not_fetched') as account_evidence_not_checked_address_count,
+    case
+      when count(*) = 0 then null
+      else count(*) filter (where fetch_status = 'complete')::double / count(*)
+    end as account_evidence_address_coverage_rate,
+    sum(event_count) as account_evidence_eligible_event_count,
+    coalesce(sum(event_count) filter (where fetch_status = 'complete'), 0) as account_evidence_classified_event_count,
+    coalesce(sum(event_count) filter (where fetch_status = 'failed'), 0) as account_evidence_failed_event_count,
+    coalesce(sum(event_count) filter (where fetch_status = 'not_fetched'), 0) as account_evidence_not_checked_event_count,
+    case
+      when sum(event_count) = 0 then null
+      else coalesce(sum(event_count) filter (where fetch_status = 'complete'), 0)::double / sum(event_count)
+    end as account_evidence_event_coverage_rate,
+    min(observation_block_number) filter (where fetch_status = 'complete') as account_evidence_observation_block_number_min,
+    max(observation_block_number) filter (where fetch_status = 'complete') as account_evidence_observation_block_number_max,
+    min(cast(observation_block_timestamp as timestamptz)) filter (
+      where fetch_status = 'complete'
+    ) as account_evidence_observation_block_timestamp_min,
+    max(cast(observation_block_timestamp as timestamptz)) filter (
+      where fetch_status = 'complete'
+    ) as account_evidence_observation_block_timestamp_max,
+    any_value(evidence_schema_version) filter (where fetch_status = 'complete') as account_evidence_schema_version
+  from account_evidence_population
+  group by wallet_id
 )
 
 select
@@ -91,15 +123,21 @@ select
   coalesce(events.suspected_spam_token_count, 0) as suspected_spam_token_count,
   coalesce(interactions.interaction_count, 0) as interaction_count,
   coalesce(timeline.timeline_row_count, 0) as timeline_row_count,
-  evidence.account_evidence_address_count,
-  evidence.account_evidence_complete_count,
+  'distinct_nonzero_nonself_event_counterparties' as account_evidence_population_scope,
+  coalesce(evidence.account_evidence_eligible_address_count, 0) as account_evidence_eligible_address_count,
+  coalesce(evidence.account_evidence_classified_address_count, 0) as account_evidence_classified_address_count,
+  coalesce(evidence.account_evidence_failed_address_count, 0) as account_evidence_failed_address_count,
+  coalesce(evidence.account_evidence_not_checked_address_count, 0) as account_evidence_not_checked_address_count,
+  evidence.account_evidence_address_coverage_rate,
+  coalesce(evidence.account_evidence_eligible_event_count, 0) as account_evidence_eligible_event_count,
+  coalesce(evidence.account_evidence_classified_event_count, 0) as account_evidence_classified_event_count,
+  coalesce(evidence.account_evidence_failed_event_count, 0) as account_evidence_failed_event_count,
+  coalesce(evidence.account_evidence_not_checked_event_count, 0) as account_evidence_not_checked_event_count,
+  evidence.account_evidence_event_coverage_rate,
   evidence.account_evidence_observation_block_number_min,
   evidence.account_evidence_observation_block_number_max,
   evidence.account_evidence_observation_block_timestamp_min,
   evidence.account_evidence_observation_block_timestamp_max,
-  evidence.account_evidence_coverage_scope,
-  evidence.account_evidence_coverage_start_block,
-  evidence.account_evidence_coverage_end_block,
   evidence.account_evidence_schema_version,
   events.first_event_at,
   events.last_event_at
@@ -107,4 +145,4 @@ from {{ ref('stg_wallets') }} as wallets
 left join event_metrics as events using (wallet_id)
 left join interaction_metrics as interactions using (wallet_id)
 left join timeline_metrics as timeline using (wallet_id)
-cross join account_evidence_metrics as evidence
+left join account_evidence_metrics as evidence using (wallet_id)

@@ -13,8 +13,6 @@ export type GraphNode = {
     eip7702DelegationTarget: string | null;
     evidenceFetchStatus: EvidenceFetchStatus | null;
     evidenceReasonCodes: string | null;
-    evidenceCoverageStartBlock: number | null;
-    evidenceCoverageEndBlock: number | null;
     size?: number;
     transferCount?: number;
   };
@@ -86,9 +84,6 @@ export type AccountEvidence = {
   eip7702_delegation_target: string | null;
   evidence_fetch_status: EvidenceFetchStatus;
   evidence_reason_codes: string;
-  evidence_coverage_scope: string | null;
-  evidence_coverage_start_block: number | null;
-  evidence_coverage_end_block: number | null;
   evidence_schema_version: string | null;
 };
 
@@ -220,9 +215,6 @@ export type WalletEvent = ClassificationEvidence & {
   counterparty_eip7702_delegation_target: string | null;
   counterparty_evidence_fetch_status: EvidenceFetchStatus;
   counterparty_evidence_reason_codes: string;
-  counterparty_evidence_coverage_scope: string | null;
-  counterparty_evidence_coverage_start_block: number | null;
-  counterparty_evidence_coverage_end_block: number | null;
   counterparty_evidence_schema_version: string | null;
   token_address: string;
   token_symbol: string | null;
@@ -265,15 +257,21 @@ export type PipelineMetadata = {
   suspected_spam_transfer_count: number;
   suspected_spam_token_count: number;
   interaction_count: number;
-  account_evidence_address_count: number;
-  account_evidence_complete_count: number;
+  account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties";
+  account_evidence_eligible_address_count: number;
+  account_evidence_classified_address_count: number;
+  account_evidence_failed_address_count: number;
+  account_evidence_not_checked_address_count: number;
+  account_evidence_address_coverage_rate: number | null;
+  account_evidence_eligible_event_count: number;
+  account_evidence_classified_event_count: number;
+  account_evidence_failed_event_count: number;
+  account_evidence_not_checked_event_count: number;
+  account_evidence_event_coverage_rate: number | null;
   account_evidence_observation_block_number_min: number | null;
   account_evidence_observation_block_number_max: number | null;
   account_evidence_observation_block_timestamp_min: string | null;
   account_evidence_observation_block_timestamp_max: string | null;
-  account_evidence_coverage_scope: string | null;
-  account_evidence_coverage_start_block: number | null;
-  account_evidence_coverage_end_block: number | null;
   account_evidence_schema_version: string | null;
   token_summary_row_count: number;
   counterparty_summary_row_count: number;
@@ -341,13 +339,21 @@ export type ApiMetadata = {
   spam_transfer_count: number;
   first_event_at: string | null;
   last_event_at: string | null;
+  account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties";
+  account_evidence_eligible_address_count: number;
+  account_evidence_classified_address_count: number;
+  account_evidence_failed_address_count: number;
+  account_evidence_not_checked_address_count: number;
+  account_evidence_address_coverage_rate: number | null;
+  account_evidence_eligible_event_count: number;
+  account_evidence_classified_event_count: number;
+  account_evidence_failed_event_count: number;
+  account_evidence_not_checked_event_count: number;
+  account_evidence_event_coverage_rate: number | null;
   account_evidence_observation_block_number_min: number | null;
   account_evidence_observation_block_number_max: number | null;
   account_evidence_observation_block_timestamp_min: string | null;
   account_evidence_observation_block_timestamp_max: string | null;
-  account_evidence_coverage_scope: string | null;
-  account_evidence_coverage_start_block: number | null;
-  account_evidence_coverage_end_block: number | null;
   account_evidence_schema_version: string | null;
   event_block_number_min: number | null;
   event_block_number_max: number | null;
@@ -416,8 +422,6 @@ type ApiGraphCounterparty = {
   eip7702_delegation_target: string | null;
   evidence_fetch_status: EvidenceFetchStatus;
   evidence_reason_codes: string;
-  evidence_coverage_start_block: number | null;
-  evidence_coverage_end_block: number | null;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -459,7 +463,7 @@ function apiGraph(items: ApiGraphCounterparty[]): DashboardGraph {
         tokenAddress: null, symbol: null, accountType: null, codeState: null,
         observationBlockNumber: null, observationBlockTimestamp: null,
         eip7702DelegationTarget: null, evidenceFetchStatus: null,
-        evidenceReasonCodes: null, evidenceCoverageStartBlock: null, evidenceCoverageEndBlock: null,
+        evidenceReasonCodes: null,
       },
     });
     nodes.set(counterpartyNodeId, {
@@ -474,8 +478,6 @@ function apiGraph(items: ApiGraphCounterparty[]): DashboardGraph {
         eip7702DelegationTarget: item.eip7702_delegation_target,
         evidenceFetchStatus: item.evidence_fetch_status,
         evidenceReasonCodes: item.evidence_reason_codes,
-        evidenceCoverageStartBlock: item.evidence_coverage_start_block,
-        evidenceCoverageEndBlock: item.evidence_coverage_end_block,
       },
     });
     edges.push({

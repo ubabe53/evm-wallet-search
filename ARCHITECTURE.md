@@ -87,6 +87,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - Zero-address mint/burn semantics and self-transfer policy remain explicit.
 - Token and account labels are evidence, not canonical identity.
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
+- Account-evidence coverage is measured against the current snapshot's distinct nonzero, nonself event counterparties. Classified, failed, and not-checked address and event counts must reconcile to that population; cached rows outside it do not count.
 - Live completeness is a contiguous range of completed snapshot runs from the configured HyperIndex start through an Ethereum `finalized` block; event-bearing block extrema do not establish that range.
 - Suspected and reviewed spam remain distinct internal evidence and are not projected into the dashboard; the public token labels are only `Recognized` and `Other`.
 - Bounded outputs disclose their complete matching count, returned count, limits, provenance, and sampling state where applicable.
@@ -118,7 +119,7 @@ The loopback-only FastAPI service:
 - own DuckDB connections and limit writes to `app.token_recognition_overrides`;
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
-- return source, generation time, indexed bounds, enrichment coverage, complete matching counts, and returned limits;
+- return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
 - apply manual token-recognition overrides before every filter, count, ranking, graph page, and event page;
 - expose only `recognition=all|recognized|other` as the public token-classification control while retaining detailed reputation evidence internally;

@@ -51,7 +51,6 @@ describe("live dashboard API adapter", () => {
             observation_block_number: 22_500_000,
             eip7702_delegation_target: null,
             evidence_fetch_status: "complete", evidence_reason_codes: "code_observed",
-            evidence_coverage_start_block: 17_000_000, evidence_coverage_end_block: 22_500_000,
             transfer_count: 20, inbound_transfer_count: 5, outbound_transfer_count: 15,
             token_count: 3,
           }],

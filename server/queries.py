@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v6"
+API_SCHEMA_VERSION = "dashboard-api-v7"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -324,12 +324,23 @@ class QueryService:
               metadata.snapshot_increment_start_block, metadata.snapshot_end_block,
               metadata.snapshot_end_block_hash, metadata.snapshot_finality_policy,
               metadata.snapshot_scope_version,
-              first_event_at, last_event_at, account_evidence_observation_block_number_min,
+              first_event_at, last_event_at,
+              account_evidence_population_scope,
+              account_evidence_eligible_address_count,
+              account_evidence_classified_address_count,
+              account_evidence_failed_address_count,
+              account_evidence_not_checked_address_count,
+              account_evidence_address_coverage_rate,
+              account_evidence_eligible_event_count,
+              account_evidence_classified_event_count,
+              account_evidence_failed_event_count,
+              account_evidence_not_checked_event_count,
+              account_evidence_event_coverage_rate,
+              account_evidence_observation_block_number_min,
               account_evidence_observation_block_number_max,
               account_evidence_observation_block_timestamp_min,
               account_evidence_observation_block_timestamp_max,
-              account_evidence_coverage_scope, account_evidence_coverage_start_block,
-              account_evidence_coverage_end_block, account_evidence_schema_version,
+              account_evidence_schema_version,
               min(events.block_number) as event_block_number_min,
               max(events.block_number) as event_block_number_max
             from pipeline_metadata as metadata
@@ -583,9 +594,6 @@ class QueryService:
                   any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
                   any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
                   any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
-                  any_value(counterparty_evidence_coverage_scope) as evidence_coverage_scope,
-                  any_value(counterparty_evidence_coverage_start_block) as evidence_coverage_start_block,
-                  any_value(counterparty_evidence_coverage_end_block) as evidence_coverage_end_block,
                   any_value(counterparty_evidence_schema_version) as evidence_schema_version,
                   count(*) as transfer_count,
                   count(*) filter (where direction = 'in') as inbound_transfer_count,
@@ -637,9 +645,6 @@ class QueryService:
             any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
             any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
             any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
-            any_value(counterparty_evidence_coverage_scope) as evidence_coverage_scope,
-            any_value(counterparty_evidence_coverage_start_block) as evidence_coverage_start_block,
-            any_value(counterparty_evidence_coverage_end_block) as evidence_coverage_end_block,
             any_value(counterparty_evidence_schema_version) as evidence_schema_version,
             count(*) as transfer_count,
             count(*) filter (where direction = 'in') as inbound_transfer_count,

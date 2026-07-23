@@ -268,6 +268,12 @@ models:
           - accepted_values:
               arguments:
                 values: ["eoa_candidate", "contract", "unknown"]
+      - name: counterparty_evidence_fetch_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["complete", "failed", "not_fetched"]
   - name: graph_nodes
     columns:
       - name: node_id
@@ -471,7 +477,7 @@ models:
               arguments:
                 values: ["eoa_candidate", "contract", "unknown"]
   - name: pipeline_metadata
-    description: Export provenance and complete mart counts for each configured wallet, including finalized contiguous snapshot coverage in live mode and nullable account-evidence observation bounds. Fixture builds intentionally have no indexer checkpoint or account evidence.
+    description: Export provenance and complete mart counts for each configured wallet, including finalized contiguous snapshot coverage in live mode and population-reconciled account-evidence coverage. Fixture builds intentionally have no indexer checkpoint or account evidence.
     columns:
       - name: wallet_address
         tests:
@@ -489,6 +495,38 @@ models:
       - name: snapshot_end_block_hash
       - name: snapshot_finality_policy
       - name: snapshot_scope_version
+      - name: account_evidence_population_scope
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["distinct_nonzero_nonself_event_counterparties"]
+      - name: account_evidence_eligible_address_count
+        tests:
+          - not_null
+      - name: account_evidence_classified_address_count
+        tests:
+          - not_null
+      - name: account_evidence_failed_address_count
+        tests:
+          - not_null
+      - name: account_evidence_not_checked_address_count
+        tests:
+          - not_null
+      - name: account_evidence_address_coverage_rate
+      - name: account_evidence_eligible_event_count
+        tests:
+          - not_null
+      - name: account_evidence_classified_event_count
+        tests:
+          - not_null
+      - name: account_evidence_failed_event_count
+        tests:
+          - not_null
+      - name: account_evidence_not_checked_event_count
+        tests:
+          - not_null
+      - name: account_evidence_event_coverage_rate
       - name: account_evidence_observation_block_number_min
       - name: account_evidence_observation_block_number_max
       - name: account_evidence_observation_block_timestamp_min
