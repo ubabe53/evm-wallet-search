@@ -469,6 +469,19 @@ export function timelineYears(firstEventAt: string | null, lastEventAt: string |
   return Array.from({ length: lastYear - firstYear + 1 }, (_, index) => firstYear + index);
 }
 
+export function timelineScaleTicks(maximum: number): number[] {
+  if (maximum <= 0) {
+    return [0];
+  }
+  return [1, 0.75, 0.5, 0.25, 0].map((position) => maximum * position);
+}
+
+function timelineScaleLabel(value: number, maximum: number): string {
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: maximum < 100 ? 2 : 0,
+  });
+}
+
 export function ActivityTimeline({
   buckets,
   interval,
@@ -490,8 +503,14 @@ export function ActivityTimeline({
   onClearScope: () => void;
   partialThrough: string | null;
 }) {
-  const maximum = Math.max(1, ...buckets.map((bucket) => bucket.transfer_count));
+  const maximum = Math.max(0, ...buckets.map((bucket) => bucket.transfer_count));
+  const scaleMaximum = Math.max(1, maximum);
+  const scaleTicks = timelineScaleTicks(maximum);
   const partialDate = partialThrough ? new Date(partialThrough) : null;
+  const tooltipId = useId();
+  const [activeBucketStart, setActiveBucketStart] = useState<string | null>(null);
+  const activeBucketIndex = buckets.findIndex((bucket) => bucket.bucket_start === activeBucketStart);
+  const activeBucket = activeBucketIndex >= 0 ? buckets[activeBucketIndex] : null;
   return (
     <>
       <div className="timelineToolbar">
@@ -531,9 +550,11 @@ export function ActivityTimeline({
           <div className="timelineEmpty">No timeline activity matches</div>
         ) : (
           <div className="timelineChart">
-            <div className="timelineScale">
-              <span>{maximum.toLocaleString("en-US")}</span>
-              <span>0</span>
+            <div className="timelineYAxisTitle">Captured events</div>
+            <div className={`timelineScale${maximum === 0 ? " empty" : ""}`} aria-label="Captured event count scale">
+              {scaleTicks.map((tick, index) => (
+                <span key={`${tick}-${index}`}>{timelineScaleLabel(tick, maximum)}</span>
+              ))}
             </div>
             <div className="timelinePlot">
               {buckets.map((bucket) => {
@@ -545,7 +566,7 @@ export function ActivityTimeline({
                   partialDate < bucketEndDate;
                 const height = bucket.transfer_count === 0
                   ? 0
-                  : Math.max(1.5, bucket.transfer_count / maximum * 100);
+                  : Math.max(1.5, bucket.transfer_count / scaleMaximum * 100);
                 const inboundShare = bucket.transfer_count === 0
                   ? 0
                   : bucket.inbound_transfer_count / bucket.transfer_count * 100;
@@ -561,10 +582,14 @@ export function ActivityTimeline({
                     type="button"
                     className={`timelineBucket${selectedPeriod ? " selected" : ""}${isPartial ? " partial" : ""}`}
                     style={style}
-                    title={title}
                     aria-label={`${title}${interactive ? interval === "year" ? ". Open this year." : ". Select this month." : ""}`}
+                    aria-describedby={activeBucketStart === bucket.bucket_start ? tooltipId : undefined}
                     aria-pressed={interactive ? selectedPeriod : undefined}
-                    disabled={!interactive}
+                    aria-disabled={!interactive}
+                    onMouseEnter={() => setActiveBucketStart(bucket.bucket_start)}
+                    onMouseLeave={() => setActiveBucketStart(null)}
+                    onFocus={() => setActiveBucketStart(bucket.bucket_start)}
+                    onBlur={() => setActiveBucketStart(null)}
                     onClick={() => interactive && onSelect(bucket)}
                   >
                     <span className="timelineBar" aria-hidden="true">
@@ -577,6 +602,25 @@ export function ActivityTimeline({
                   </button>
                 );
               })}
+              {activeBucket && (
+                <div
+                  className="timelineHoverTooltip"
+                  id={tooltipId}
+                  role="tooltip"
+                  style={{
+                    "--timeline-tooltip-position":
+                      `${(activeBucketIndex + 0.5) / buckets.length * 100}%`,
+                  } as CSSProperties}
+                >
+                  <strong>{timelinePeriodLabel(activeBucket, interval)} UTC</strong>
+                  <span>{activeBucket.transfer_count.toLocaleString("en-US")} captured events</span>
+                  <span>
+                    {activeBucket.inbound_transfer_count.toLocaleString("en-US")} inbound
+                    {" · "}
+                    {activeBucket.outbound_transfer_count.toLocaleString("en-US")} outbound
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}

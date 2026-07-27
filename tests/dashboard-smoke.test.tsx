@@ -16,6 +16,7 @@ import {
   etherscanTokenUrl,
   etherscanTransactionUrl,
   snapshotCoverageLabel,
+  timelineScaleTicks,
   timelineYears,
   INDIRECT_TRANSFER_EXPLANATION,
   SELF_TRANSFER_EXPLANATION,
@@ -478,6 +479,7 @@ describe("App", () => {
     });
     expect(timelineYears("2022-02-01T00:00:00Z", "2024-07-01T00:00:00Z"))
       .toEqual([2022, 2023, 2024]);
+    expect(timelineScaleTicks(100)).toEqual([100, 75, 50, 25, 0]);
   });
 
   it("selects an exact timeline bucket and exposes a clear action", () => {
@@ -505,6 +507,14 @@ describe("App", () => {
         partialThrough="2026-07-15T00:00:00Z"
       />,
     );
+    expect(screen.getByText("Captured events")).toBeInTheDocument();
+    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("5");
+    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("3.75");
+    fireEvent.mouseEnter(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("5 captured events");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("3 inbound · 2 outbound");
+    fireEvent.mouseLeave(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }));
     expect(onSelect).toHaveBeenCalledWith(bucket);
     expect(screen.getByText(/Current calendar period is partial/)).toBeInTheDocument();
@@ -555,7 +565,8 @@ describe("App", () => {
         partialThrough={null}
       />,
     );
-    expect(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }))
+      .toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText("Showing 2026 monthly activity")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "All years" }));
     expect(onClearScope).toHaveBeenCalled();
