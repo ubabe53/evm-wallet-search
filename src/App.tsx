@@ -1,16 +1,14 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import cytoscape from "cytoscape";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Activity,
   ArrowDownLeft,
   ArrowUpRight,
+  CalendarDays,
   ChevronDown,
   ChevronUp,
   Database,
   ExternalLink,
   Info,
-  Maximize2,
-  Minimize2,
   Moon,
   Network,
   Repeat2,
@@ -26,10 +24,8 @@ import {
   CounterpartySummary,
   CodeState,
   DashboardData,
-  DashboardGraph,
   DashboardMetadata,
   DashboardQuery,
-  GraphEdge,
   RecognitionFilter,
   RecognitionStatus,
   dashboardDataMode,
@@ -38,6 +34,8 @@ import {
   loadNextApiEvents,
   resetTokenRecognition,
   setTokenRecognition,
+  TimelineBucket,
+  TimelineInterval,
   TimelineRow,
   TokenSummary,
   WalletEvent,
@@ -45,13 +43,11 @@ import {
 
 type Theme = "light" | "dark";
 const EVENT_PAGE_SIZE = 10;
-const DEFAULT_GRAPH_INTERACTION_LIMIT = 25;
-const GRAPH_INTERACTION_LIMITS = [10, 25, 50, 100] as const;
 const DEFAULT_COUNTERPARTY_LIMIT = 10;
 const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
+const TIMELINE_INTERVALS: TimelineInterval[] = ["day", "week", "month"];
 const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "contract"];
 const RECOGNITION_FILTERS: RecognitionFilter[] = ["all", "recognized", "other"];
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
 export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic event emission; the mismatch alone does not prove intent or legitimacy.";
 export const SELF_TRANSFER_EXPLANATION = "Transfer.from and Transfer.to are both the tracked wallet. The event is preserved once, but it is neither inbound nor outbound and has no external counterparty.";
@@ -68,17 +64,6 @@ export function etherscanTransactionUrl(hash: string): string {
   return `${ETHERSCAN_BASE_URL}/tx/${hash}`;
 }
 
-export function etherscanInteractionUrl(walletAddress: string, counterpartyAddress: string): string {
-  const parameters = new URLSearchParams();
-  parameters.set("txntype", "2");
-  parameters.append("fadd", walletAddress);
-  parameters.append("fadd", counterpartyAddress);
-  parameters.append("tadd", walletAddress);
-  parameters.append("tadd", counterpartyAddress);
-  parameters.set("qt", "1");
-  return `${ETHERSCAN_BASE_URL}/advanced-filter?${parameters.toString()}`;
-}
-
 export function snapshotCoverageLabel(
   metadata: Pick<
     DashboardMetadata,
@@ -93,13 +78,6 @@ export function snapshotCoverageLabel(
     return "Coverage not recorded";
   }
   return `Blocks ${metadata.snapshot_start_block.toLocaleString("en-US")}–${metadata.snapshot_end_block.toLocaleString("en-US")} · Finalized`;
-}
-
-function openEtherscan(url: string) {
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (opened) {
-    opened.opener = null;
-  }
 }
 
 function EtherscanLink({
@@ -252,83 +230,6 @@ export function aggregateCounterparties(rows: CounterpartySummary[]): RankedCoun
   );
 }
 
-export function counterpartyNodeSize(transferCount: number): number {
-  const ratio = Math.log10(Math.max(1, transferCount)) / 4;
-  return Math.round(26 + Math.max(0, Math.min(1, ratio)) * 42);
-}
-
-export function interactionEdgeLabel(transferCount: number): string {
-  return `${transferCount.toLocaleString("en-US")} ${transferCount === 1 ? "transfer" : "transfers"}`;
-}
-
-export function buildCounterpartyGraph(
-  data: {
-    graph: DashboardGraph;
-    summaries: { counterparties: CounterpartySummary[] };
-  },
-  limit: number,
-): DashboardGraph {
-  const rankedSummaries = aggregateCounterparties(data.summaries.counterparties);
-  const counterpartyCounts = new Map(
-    rankedSummaries.map((row) => [row.counterparty_address, row.transfer_count]),
-  );
-  const representatives = new Map<string, GraphEdge>();
-
-  for (const edge of data.graph.edges) {
-    if (
-      edge.data.counterpartyAddress !== ZERO_ADDRESS &&
-      counterpartyCounts.has(edge.data.counterpartyAddress) &&
-      !representatives.has(edge.data.counterpartyAddress)
-    ) {
-      representatives.set(edge.data.counterpartyAddress, edge);
-    }
-  }
-
-  const rankedCounterparties = rankedSummaries
-    .map((row) => [row.counterparty_address, representatives.get(row.counterparty_address)] as const)
-    .filter((entry): entry is readonly [string, GraphEdge] => entry[1] != null)
-    .slice(0, limit);
-
-  const edges = rankedCounterparties.map(([counterpartyAddress, edge]): GraphEdge => {
-    const transferCount = counterpartyCounts.get(counterpartyAddress) ?? 0;
-    const walletNodeId = `wallet:${edge.data.walletAddress}`;
-    const counterpartyNodeId = `counterparty:${counterpartyAddress}`;
-    return {
-      data: {
-        ...edge.data,
-        id: `counterparty:${edge.data.walletAddress}:${counterpartyAddress}:edge`,
-        interactionId: `counterparty:${edge.data.walletAddress}:${counterpartyAddress}`,
-        label: interactionEdgeLabel(transferCount),
-        edgeRole: "wallet_counterparty",
-        source: walletNodeId,
-        target: counterpartyNodeId,
-        direction: "both",
-        tokenAddress: null,
-        tokenSymbol: null,
-        transferCount,
-        counterpartyTransferCount: transferCount,
-      },
-    };
-  });
-  const nodeIds = new Set(edges.flatMap((edge) => [edge.data.source, edge.data.target]));
-  const nodes = data.graph.nodes
-    .filter((node) => node.data.type !== "token" && nodeIds.has(node.data.id))
-    .map((node) => {
-      if (node.data.type === "wallet") {
-        return { data: { ...node.data, size: 44 } };
-      }
-      const transferCount = counterpartyCounts.get(node.data.address ?? "") ?? 1;
-      return {
-        data: {
-          ...node.data,
-          size: counterpartyNodeSize(transferCount),
-          transferCount,
-        },
-      };
-    });
-  return { nodes, edges };
-}
-
 export function accountEvidenceObservationBlockLabel(minimum: number | null, maximum: number | null): string {
   if (minimum == null || maximum == null) {
     return "not collected";
@@ -454,278 +355,208 @@ function eventBadgeEvidence(event: WalletEvent): BadgeEvidence {
   };
 }
 
-export function graphStyles(container: HTMLElement): cytoscape.StylesheetJson {
-  const styles = getComputedStyle(container);
-  const nodeText = styles.getPropertyValue("--graph-label").trim();
-  const edgeColor = styles.getPropertyValue("--graph-edge").trim();
-  const counterpartyColor = styles.getPropertyValue("--graph-counterparty").trim();
-  const unknownColor = styles.getPropertyValue("--graph-unknown").trim();
-  const walletColor = styles.getPropertyValue("--graph-wallet").trim();
-  const nodeBorder = styles.getPropertyValue("--graph-node-border").trim();
-  const nodeOutline = styles.getPropertyValue("--graph-label-outline").trim();
-  const edgeLabelBackground = styles.getPropertyValue("--graph-edge-label-bg").trim();
-
-  return [
-    {
-      selector: "node",
-      style: {
-        "background-color": counterpartyColor,
-        "border-color": nodeBorder,
-        "border-width": 1.5,
-        color: nodeText,
-        label: "data(label)",
-        "font-family": "SFMono-Regular, Consolas, Liberation Mono, monospace",
-        "font-size": 10,
-        "font-weight": 500,
-        "text-outline-color": nodeOutline,
-        "text-outline-width": 2,
-        "text-wrap": "wrap",
-        "text-max-width": "110px",
-        "text-valign": "bottom",
-        "text-margin-y": 8,
-        width: "data(size)",
-        height: "data(size)",
-      },
-    },
-    {
-      selector: 'node[type = "wallet"]',
-      style: { "background-color": walletColor, width: 44, height: 44, "border-width": 2 },
-    },
-    {
-      selector: 'node[accountType = "contract"]',
-      style: { shape: "round-rectangle" },
-    },
-    {
-      selector: 'node[accountType = "unknown"]',
-      style: { "background-color": unknownColor, "border-style": "solid" },
-    },
-    {
-      selector: "edge",
-      style: {
-        width: "mapData(transferCount, 1, 10000, 0.8, 3.2)",
-        "line-color": edgeColor,
-        "target-arrow-shape": "none",
-        opacity: 0.58,
-        "curve-style": "straight",
-        color: nodeText,
-        label: "data(label)",
-        "font-family": "SFMono-Regular, Consolas, Liberation Mono, monospace",
-        "font-size": 9,
-        "font-weight": 600,
-        "text-background-color": edgeLabelBackground,
-        "text-background-opacity": 0.88,
-        "text-background-padding": "3px",
-        "text-rotation": "autorotate",
-      },
-    },
-    {
-      selector: ".dimmed",
-      style: { opacity: 0.08, "text-opacity": 0.08 },
-    },
-    {
-      selector: "node.focused",
-      style: { opacity: 1, "text-opacity": 1, "border-width": 3, "z-index": 10 },
-    },
-    {
-      selector: "edge.focused",
-      style: { opacity: 1, "z-index": 9 },
-    },
-  ];
+function utcDate(value: string): Date {
+  return new Date(`${value}T00:00:00Z`);
 }
 
-function Graph({ data, theme, theaterMode }: { data: DashboardGraph; theme: Theme; theaterMode: boolean }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const cyRef = useRef<cytoscape.Core | null>(null);
-  const isClampingRef = useRef(false);
+function isoDate(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
 
-  function fitGraph() {
-    const cy = cyRef.current;
-    if (!cy || cy.nodes().length === 0) {
-      return;
-    }
-
-    // Clear the previous adaptive bounds before fitting a newly sized viewport.
-    cy.minZoom(0.01);
-    cy.maxZoom(10);
-    cy.fit(undefined, 36);
-    setAdaptiveZoomBounds(cy);
-    clampPan(cy);
+function bucketStart(value: string, interval: TimelineInterval): string {
+  const date = utcDate(value);
+  if (interval === "month") {
+    date.setUTCDate(1);
+  } else if (interval === "week") {
+    const daysSinceMonday = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - daysSinceMonday);
   }
+  return isoDate(date);
+}
 
-  function clampPan(cy: cytoscape.Core) {
-    if (isClampingRef.current || cy.nodes().length === 0) {
-      return;
-    }
-
-    const box = cy.elements().renderedBoundingBox({ includeLabels: true });
-    const container = cy.container();
-    const width = container?.clientWidth ?? 0;
-    const height = container?.clientHeight ?? 0;
-    const margin = Math.min(140, Math.max(72, Math.min(width, height) * 0.18));
-    const pan = cy.pan();
-    const nextPan = { ...pan };
-
-    if (box.w <= width - margin * 2) {
-      const graphCenter = box.x1 + box.w / 2;
-      const viewportCenter = width / 2;
-      const maxOffset = Math.max(56, width * 0.18);
-      const offset = graphCenter - viewportCenter;
-      if (offset > maxOffset) nextPan.x -= offset - maxOffset;
-      if (offset < -maxOffset) nextPan.x -= offset + maxOffset;
-    } else if (box.x2 < margin) {
-      nextPan.x += margin - box.x2;
-    } else if (box.x1 > width - margin) {
-      nextPan.x -= box.x1 - (width - margin);
-    }
-
-    if (box.h <= height - margin * 2) {
-      const graphCenter = box.y1 + box.h / 2;
-      const viewportCenter = height / 2;
-      const maxOffset = Math.max(56, height * 0.18);
-      const offset = graphCenter - viewportCenter;
-      if (offset > maxOffset) nextPan.y -= offset - maxOffset;
-      if (offset < -maxOffset) nextPan.y -= offset + maxOffset;
-    } else if (box.y2 < margin) {
-      nextPan.y += margin - box.y2;
-    } else if (box.y1 > height - margin) {
-      nextPan.y -= box.y1 - (height - margin);
-    }
-
-    if (nextPan.x !== pan.x || nextPan.y !== pan.y) {
-      isClampingRef.current = true;
-      cy.pan(nextPan);
-      isClampingRef.current = false;
-    }
+function nextBucket(value: string, interval: TimelineInterval): string {
+  const date = utcDate(value);
+  if (interval === "month") {
+    date.setUTCMonth(date.getUTCMonth() + 1);
+  } else if (interval === "week") {
+    date.setUTCDate(date.getUTCDate() + 7);
+  } else {
+    date.setUTCDate(date.getUTCDate() + 1);
   }
+  return isoDate(date);
+}
 
-  function setAdaptiveZoomBounds(cy: cytoscape.Core) {
-    const fitZoom = cy.zoom();
-    const minZoom = Math.max(0.04, fitZoom * 0.45);
-    const maxZoom = Math.min(5, Math.max(1.25, fitZoom * 4));
-    cy.minZoom(minZoom);
-    cy.maxZoom(maxZoom);
-  }
-
-  useEffect(() => {
-    // jsdom has no real canvas or layout engine; production still initializes Cytoscape.
-    if (import.meta.env.MODE === "test") {
-      return;
-    }
-
-    if (!containerRef.current) {
-      return;
-    }
-
-    const cy = cytoscape({
-      container: containerRef.current,
-      elements: [...data.nodes, ...data.edges],
-      minZoom: 0.05,
-      maxZoom: 5,
-      wheelSensitivity: 0.18,
-      style: graphStyles(containerRef.current),
-      layout: {
-        name: "concentric",
-        animate: false,
-        fit: true,
-        padding: 42,
-        avoidOverlap: true,
-        minNodeSpacing: 28,
-        concentric: (node) => node.data("type") === "wallet" ? 2 : 1,
-        levelWidth: () => 1,
-      },
-    });
-    cyRef.current = cy;
-    const fitFrame = window.requestAnimationFrame(fitGraph);
-    cy.on("pan zoom resize", () => clampPan(cy));
-
-    const clearFocus = () => {
-      cy.elements().removeClass("dimmed focused");
-      const container = cy.container();
-      if (container) container.style.cursor = "default";
+export function bucketTimelineRows(
+  rows: readonly Pick<TimelineRow, "block_date" | "direction" | "transfer_count">[],
+  interval: TimelineInterval,
+): TimelineBucket[] {
+  const counts = new Map<string, TimelineBucket>();
+  for (const row of rows) {
+    const start = bucketStart(row.block_date, interval);
+    const current = counts.get(start) ?? {
+      bucket_start: start,
+      bucket_end: nextBucket(start, interval),
+      transfer_count: 0,
+      inbound_transfer_count: 0,
+      outbound_transfer_count: 0,
     };
-    cy.on("mouseover", "node", (event) => {
-      const container = cy.container();
-      if (container) container.style.cursor = "pointer";
-      cy.elements().addClass("dimmed");
-      event.target.closedNeighborhood().removeClass("dimmed");
-      event.target.addClass("focused");
-      event.target.connectedEdges().addClass("focused");
-    });
-    cy.on("mouseout", "node", clearFocus);
-    cy.on("mouseover", "edge", (event) => {
-      const container = cy.container();
-      if (container) container.style.cursor = "pointer";
-      const interactionId = event.target.data("interactionId");
-      const interactionEdges = cy.edges().filter((edge) => edge.data("interactionId") === interactionId);
-      cy.elements().addClass("dimmed");
-      interactionEdges.removeClass("dimmed").addClass("focused");
-      interactionEdges.connectedNodes().removeClass("dimmed");
-    });
-    cy.on("mouseout", "edge", clearFocus);
-    cy.on("tap", "node", (event) => {
-      const address = event.target.data("address");
-      if (address) {
-        openEtherscan(etherscanAddressUrl(address));
-      }
-    });
-    cy.on("tap", "edge", (event) => {
-      const walletAddress = event.target.data("walletAddress");
-      const counterpartyAddress = event.target.data("counterpartyAddress");
-      if (walletAddress && counterpartyAddress) {
-        openEtherscan(etherscanInteractionUrl(walletAddress, counterpartyAddress));
-      }
-    });
-
-    return () => {
-      window.cancelAnimationFrame(fitFrame);
-      cyRef.current = null;
-      cy.destroy();
-    };
-  }, [data]);
-
-  useEffect(() => {
-    const cy = cyRef.current;
-    const container = containerRef.current;
-    if (!cy || !container) {
-      return;
+    current.transfer_count += row.transfer_count;
+    if (row.direction === "in") {
+      current.inbound_transfer_count += row.transfer_count;
+    } else {
+      current.outbound_transfer_count += row.transfer_count;
     }
-
-    // Updating the stylesheet preserves node positions, pan, and zoom.
-    cy.style(graphStyles(container));
-  }, [theme]);
-
-  useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy) {
-      return;
-    }
-
-    const resizeFrame = window.requestAnimationFrame(() => {
-      cy.resize();
-      fitGraph();
+    counts.set(start, current);
+  }
+  const starts = [...counts.keys()].sort();
+  if (starts.length === 0) {
+    return [];
+  }
+  const buckets: TimelineBucket[] = [];
+  for (let start = starts[0]; start <= starts[starts.length - 1]; start = nextBucket(start, interval)) {
+    buckets.push(counts.get(start) ?? {
+      bucket_start: start,
+      bucket_end: nextBucket(start, interval),
+      transfer_count: 0,
+      inbound_transfer_count: 0,
+      outbound_transfer_count: 0,
     });
-    return () => window.cancelAnimationFrame(resizeFrame);
-  }, [theaterMode]);
+  }
+  return buckets;
+}
 
+function timelinePeriodLabel(
+  bucket: Pick<TimelineBucket, "bucket_start" | "bucket_end">,
+  interval: TimelineInterval,
+): string {
+  const start = utcDate(bucket.bucket_start);
+  if (interval === "month") {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(start);
+  }
+  const end = utcDate(bucket.bucket_end);
+  end.setUTCDate(end.getUTCDate() - 1);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return interval === "day"
+    ? formatter.format(start)
+    : `${formatter.format(start)}–${formatter.format(end)}`;
+}
+
+export function ActivityTimeline({
+  buckets,
+  interval,
+  selected,
+  interactive,
+  onIntervalChange,
+  onSelect,
+  onClear,
+}: {
+  buckets: TimelineBucket[];
+  interval: TimelineInterval;
+  selected: { start: string; end: string } | null;
+  interactive: boolean;
+  onIntervalChange: (value: TimelineInterval) => void;
+  onSelect: (bucket: TimelineBucket) => void;
+  onClear: () => void;
+}) {
+  const maximum = Math.max(1, ...buckets.map((bucket) => bucket.transfer_count));
+  const labelStep = Math.max(1, Math.ceil(buckets.length / 7));
+  const minimumWidth = Math.max(600, buckets.length * (interval === "day" ? 5 : interval === "week" ? 8 : 11));
   return (
-    <div className="graphShell" data-graph-theme={theme}>
-      <button className="iconButton graphReset" type="button" onClick={fitGraph} aria-label="Reset graph view" title="Reset graph view">
-        <RotateCcw size={16} />
-      </button>
-      <div
-        className="graph"
-        ref={containerRef}
-        role="img"
-        aria-label={`Wallet counterparty graph with ${data.nodes.length} nodes and ${data.edges.length} edges`}
-      />
-      {data.nodes.length === 0 && <div className="graphEmpty">No graph matches</div>}
-      <div className="graphLegend" aria-label="Graph legend">
-        <span><i className="walletSwatch" />Tracked address</span>
-        <span><i className="counterpartySwatch" />EOA</span>
-        <span><i className="contractSwatch" />Contract</span>
-        <span><i className="unknownSwatch" />Unclassified</span>
+    <>
+      <div className="timelineToolbar">
+        <div className="timelineIntervals" role="group" aria-label="Timeline interval">
+          {TIMELINE_INTERVALS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={interval === value ? "active" : ""}
+              aria-pressed={interval === value}
+              onClick={() => onIntervalChange(value)}
+            >
+              {value[0].toUpperCase() + value.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="timelineLegend" aria-label="Timeline legend">
+          <span><i className="timelineInSwatch" />Inbound</span>
+          <span><i className="timelineOutSwatch" />Outbound</span>
+        </div>
       </div>
-    </div>
+      {selected && (
+        <div className="timelineSelection">
+          <span>
+            <CalendarDays size={15} aria-hidden="true" />
+            Filtering dashboard to {timelinePeriodLabel({
+              bucket_start: selected.start,
+              bucket_end: selected.end,
+            }, interval)} UTC
+          </span>
+          <button type="button" onClick={onClear}>Clear period</button>
+        </div>
+      )}
+      {!interactive && (
+        <p className="timelineDemoNote">Period cross-filtering is available in local live mode.</p>
+      )}
+      <div className="timelineScroll" role="region" aria-label="Captured event activity over time" tabIndex={0}>
+        {buckets.length === 0 ? (
+          <div className="timelineEmpty">No timeline activity matches</div>
+        ) : (
+          <div className="timelineChart" style={{ minWidth: `${minimumWidth}px` }}>
+            <div className="timelineScale">
+              <span>{maximum.toLocaleString("en-US")}</span>
+              <span>0</span>
+            </div>
+            <div className="timelinePlot">
+              {buckets.map((bucket, index) => {
+                const selectedPeriod = selected?.start === bucket.bucket_start && selected.end === bucket.bucket_end;
+                const height = bucket.transfer_count === 0
+                  ? 0
+                  : Math.max(1.5, bucket.transfer_count / maximum * 100);
+                const inboundShare = bucket.transfer_count === 0
+                  ? 0
+                  : bucket.inbound_transfer_count / bucket.transfer_count * 100;
+                const style = {
+                  "--timeline-height": `${height}%`,
+                  "--timeline-in-share": `${inboundShare}%`,
+                } as CSSProperties;
+                const period = timelinePeriodLabel(bucket, interval);
+                const title = `${period} UTC: ${bucket.transfer_count.toLocaleString("en-US")} captured events (${bucket.inbound_transfer_count.toLocaleString("en-US")} inbound, ${bucket.outbound_transfer_count.toLocaleString("en-US")} outbound)`;
+                return (
+                  <button
+                    key={bucket.bucket_start}
+                    type="button"
+                    className={`timelineBucket${selectedPeriod ? " selected" : ""}`}
+                    style={style}
+                    title={title}
+                    aria-label={`${title}${interactive ? ". Select this period." : ""}`}
+                    aria-pressed={interactive ? selectedPeriod : undefined}
+                    disabled={!interactive}
+                    onClick={() => interactive && onSelect(bucket)}
+                  >
+                    <span className="timelineBar" aria-hidden="true">
+                      <i className="timelineInSegment" />
+                      <i className="timelineOutSegment" />
+                    </span>
+                    <span className="timelineTick" aria-hidden="true">
+                      {index % labelStep === 0 ? bucket.bucket_start : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -988,9 +819,9 @@ export function App() {
   const [eventLimit, setEventLimit] = useState(EVENT_PAGE_SIZE);
   const [loadingMoreEvents, setLoadingMoreEvents] = useState(false);
   const apiMetadataRef = useRef<ApiDashboardData["data"]["metadata"] | undefined>(undefined);
-  const [graphInteractionLimit, setGraphInteractionLimit] = useState(DEFAULT_GRAPH_INTERACTION_LIMIT);
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
-  const [graphTheaterMode, setGraphTheaterMode] = useState(false);
+  const [timelineInterval, setTimelineInterval] = useState<TimelineInterval>("month");
+  const [selectedPeriod, setSelectedPeriod] = useState<{ start: string; end: string } | null>(null);
   const [recognitionFilter, setRecognitionFilter] = useState<RecognitionFilter>("all");
   const [dataRevision, setDataRevision] = useState(0);
   const [updatingToken, setUpdatingToken] = useState<string | null>(null);
@@ -1033,9 +864,11 @@ export function App() {
     recognition: recognitionFilter,
     accountFilters: selectedAccountFilters,
     query: debouncedQuery,
-    graphLimit: graphInteractionLimit,
     counterpartyLimit,
-  }), [recognitionFilter, selectedAccountFilters, debouncedQuery, graphInteractionLimit, counterpartyLimit]);
+    timelineInterval,
+    startDate: selectedPeriod?.start ?? null,
+    endDate: selectedPeriod?.end ?? null,
+  }), [recognitionFilter, selectedAccountFilters, debouncedQuery, counterpartyLimit, timelineInterval, selectedPeriod]);
   const dashboardQueryKey = JSON.stringify(dashboardQuery);
   const dashboardQueryKeyRef = useRef(dashboardQueryKey);
   const dashboardLoadGenerationRef = useRef(0);
@@ -1080,33 +913,20 @@ export function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => setEventLimit(EVENT_PAGE_SIZE), [debouncedQuery, recognitionFilter, selectedAccountFilters]);
-  useEffect(() => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT), [debouncedQuery, recognitionFilter, selectedAccountFilters]);
+  useEffect(
+    () => setEventLimit(EVENT_PAGE_SIZE),
+    [debouncedQuery, recognitionFilter, selectedAccountFilters, selectedPeriod],
+  );
+  useEffect(
+    () => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT),
+    [debouncedQuery, recognitionFilter, selectedAccountFilters, selectedPeriod],
+  );
 
   useEffect(() => () => {
     if (undoTimerRef.current != null) {
       window.clearTimeout(undoTimerRef.current);
     }
   }, []);
-
-  useEffect(() => {
-    if (!graphTheaterMode) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setGraphTheaterMode(false);
-      }
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [graphTheaterMode]);
 
   const filtered = useMemo(() => {
     if (!data) {
@@ -1128,23 +948,12 @@ export function App() {
     const visibleCounterparties = data.summaries.counterparties.filter((row) =>
       recognitionVisible(row.recognition_status) &&
       accountVisible(row.account_type));
-    const visibleCounterpartyNodeIds = new Set(
-      data.graph.nodes
-        .filter((node) => node.data.type === "counterparty" && node.data.accountType && accountVisible(node.data.accountType))
-        .map((node) => node.data.id),
-    );
-    const visibleGraphEdges = data.graph.edges.filter((edge) =>
-      edge.data.recognitionStatus != null && recognitionVisible(edge.data.recognitionStatus) &&
-      visibleCounterpartyNodeIds.has(`counterparty:${edge.data.counterpartyAddress}`));
-    const visibleNodeIds = new Set(visibleGraphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
-    const visibleGraphNodes = data.graph.nodes.filter((node) => visibleNodeIds.has(node.data.id));
     const visibleTimeline = data.timeline.filter((row) =>
       recognitionVisible(row.recognition_status) &&
       accountVisible(row.counterparty_account_type));
     const visibleData = {
       ...data,
       events: visibleEvents,
-      graph: { nodes: visibleGraphNodes, edges: visibleGraphEdges },
       summaries: { tokens: aggregateTokenSummaries(visibleTokens), counterparties: visibleCounterparties },
       timeline: aggregateTimelineRows(visibleTimeline),
     };
@@ -1194,12 +1003,6 @@ export function App() {
         .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
     );
 
-    const interactionIds = new Set(
-      events.map(
-        (event) =>
-          `interaction:${event.wallet_address}:${event.counterparty_address}:${event.token_address}:${event.direction}`,
-      ),
-    );
     const tokenAddresses = new Set([
       ...events.map((event) => event.token_address),
       ...directlyMatchedTokens.map((row) => row.token_address),
@@ -1208,9 +1011,6 @@ export function App() {
       ...events.map((event) => event.counterparty_address),
       ...directlyMatchedCounterparties.map((row) => row.counterparty_address),
     ]);
-    const walletMatches = [data.metadata.ens, data.metadata.wallet_address]
-      .some((value) => value.toLowerCase().includes(normalizedQuery));
-
     const tokens = visibleData.summaries.tokens.filter(
       (row) => tokenAddresses.has(row.token_address) || tokenMatches(row),
     );
@@ -1218,25 +1018,9 @@ export function App() {
       (row) => counterpartyAddresses.has(row.counterparty_address),
     );
 
-    const graphEdges = visibleData.graph.edges.filter((edge) =>
-      walletMatches ||
-      interactionIds.has(edge.data.interactionId) ||
-      (edge.data.tokenAddress != null && tokenAddresses.has(edge.data.tokenAddress)) ||
-      counterpartyAddresses.has(edge.data.counterpartyAddress) ||
-      [edge.data.id, edge.data.direction, edge.data.tokenSymbol, edge.data.recognitionStatus,
-        edge.data.recognitionSource, edge.data.metadataAvailability,
-        edge.data.metadataSource, edge.data.target, edge.data.source]
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
-    );
-    const connectedNodeIds = new Set(graphEdges.flatMap((edge) => [edge.data.source, edge.data.target]));
-    const graphNodes = visibleData.graph.nodes.filter(
-      (node) => connectedNodeIds.has(node.data.id) || node.data.label.toLowerCase().includes(normalizedQuery),
-    );
-
     return {
       ...visibleData,
       events,
-      graph: { nodes: graphNodes, edges: graphEdges },
       summaries: { tokens, counterparties },
       timeline: visibleData.timeline.filter(
         (row) =>
@@ -1273,12 +1057,12 @@ export function App() {
     return { transferCount, tokenCount, counterpartyCount };
   }, [apiResult, data, filtered]);
 
-  const displayedGraph = useMemo(() => {
-    if (!filtered) {
-      return null;
-    }
-    return buildCounterpartyGraph(filtered, graphInteractionLimit);
-  }, [filtered, graphInteractionLimit]);
+  const timelineBuckets = useMemo(
+    () => dashboardDataMode === "api"
+      ? (apiResult?.timelineBuckets ?? [])
+      : bucketTimelineRows(filtered?.timeline ?? [], timelineInterval),
+    [apiResult, filtered, timelineInterval],
+  );
 
   const eventCount = dashboardDataMode === "api"
     ? (apiResult?.eventCount ?? 0)
@@ -1287,6 +1071,18 @@ export function App() {
     ? (apiResult?.tokenCount ?? 0)
     : (filtered?.summaries.tokens.length ?? 0);
   const apiResultIsCurrent = dashboardDataMode !== "api" || apiResultQueryKey === dashboardQueryKey;
+
+  function changeTimelineInterval(value: TimelineInterval) {
+    setTimelineInterval(value);
+    setSelectedPeriod(null);
+  }
+
+  function selectTimelineBucket(bucket: TimelineBucket) {
+    setSelectedPeriod((current) =>
+      current?.start === bucket.bucket_start && current.end === bucket.bucket_end
+        ? null
+        : { start: bucket.bucket_start, end: bucket.bucket_end });
+  }
 
   async function showMoreEvents() {
     if (!data || loadingMoreEvents || !apiResultIsCurrent) {
@@ -1391,30 +1187,6 @@ export function App() {
     }
   }
 
-  function trapTheaterFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (!graphTheaterMode || event.key !== "Tab") {
-      return;
-    }
-
-    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
-      "button:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])",
-    )];
-    if (focusable.length === 0) {
-      event.preventDefault();
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   if (error) {
     return (
       <main className="shell">
@@ -1431,7 +1203,7 @@ export function App() {
     );
   }
 
-  if (!data || !stats || !filtered || !displayedGraph) {
+  if (!data || !stats || !filtered) {
     return (
       <main className="shell">
         <section className="empty">
@@ -1544,50 +1316,23 @@ export function App() {
       </section>
 
       <section className="workspace">
-        {graphTheaterMode && (
-          <div className="theaterBackdrop" aria-hidden="true" onClick={() => setGraphTheaterMode(false)} />
-        )}
-        <div
-          className={`panel graphPanel${graphTheaterMode ? " theater" : ""}`}
-          role={graphTheaterMode ? "dialog" : undefined}
-          aria-modal={graphTheaterMode ? "true" : undefined}
-          aria-label={graphTheaterMode ? "Counterparty Graph theater mode" : undefined}
-          onKeyDown={trapTheaterFocus}
-        >
+        <div className="panel timelinePanel">
           <div className="panelHeader">
             <div className="panelTitle">
-              <h2>Counterparty Graph</h2>
-              <p>One edge per address, ranked by captured transfers with the tracked wallet.</p>
+              <h2>Activity Timeline</h2>
+              <p>Captured Transfer-signature events, bucketed by block timestamp in UTC.</p>
             </div>
-            <div className="graphHeaderControls">
-              <span>{displayedGraph.nodes.length} nodes / {displayedGraph.edges.length} edges</span>
-              {dashboardDataMode === "api" && apiResult && (
-                <span>{displayedGraph.edges.length} of {apiResult.graphCounterpartyCount.toLocaleString("en-US")} counterparties</span>
-              )}
-              <label className="graphLimit">
-                <span>Counterparties</span>
-                <select
-                  aria-label="Maximum graph counterparties"
-                  value={graphInteractionLimit}
-                  onChange={(event) => setGraphInteractionLimit(Number(event.target.value))}
-                >
-                  {GRAPH_INTERACTION_LIMITS.map((limit) => (
-                    <option key={limit} value={limit}>{limit}</option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="iconButton theaterToggle"
-                type="button"
-                onClick={() => setGraphTheaterMode((current) => !current)}
-                aria-label={graphTheaterMode ? "Exit graph theater mode" : "Open graph theater mode"}
-                title={graphTheaterMode ? "Exit theater mode (Esc)" : "Open graph theater mode"}
-              >
-                {graphTheaterMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-              </button>
-            </div>
+            <span>{timelineBuckets.length.toLocaleString("en-US")} {timelineInterval} buckets</span>
           </div>
-          <Graph data={displayedGraph} theme={theme} theaterMode={graphTheaterMode} />
+          <ActivityTimeline
+            buckets={timelineBuckets}
+            interval={timelineInterval}
+            selected={selectedPeriod}
+            interactive={dashboardDataMode === "api"}
+            onIntervalChange={changeTimelineInterval}
+            onSelect={selectTimelineBucket}
+            onClear={() => setSelectedPeriod(null)}
+          />
         </div>
 
         <div className="panel counterpartyPanel">
@@ -1596,7 +1341,7 @@ export function App() {
               <h2>Top ERC-20 Counterparties</h2>
               <p>Direct transfers; mint/burn, self, and token contracts excluded.</p>
             </div>
-            <label className="graphLimit">
+            <label className="panelSelect">
               <span>Top</span>
               <select
                 aria-label="Maximum counterparties"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, time, timezone
 from enum import Enum
 from typing import Annotated, Literal
 
@@ -33,6 +34,12 @@ class RecognitionFilter(str, Enum):
     other = "other"
 
 
+class TimelineInterval(str, Enum):
+    day = "day"
+    week = "week"
+    month = "month"
+
+
 class RecognitionOverrideRequest(BaseModel):
     status: Literal["recognized", "other"]
 
@@ -41,6 +48,8 @@ def dashboard_filters(
     recognition: RecognitionFilter = RecognitionFilter.all,
     account: Annotated[list[AccountFilter] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=128)] = None,
+    start: date | None = None,
+    end: date | None = None,
 ) -> DashboardFilters:
     if account and AccountFilter.none in account:
         if len(account) != 1:
@@ -48,11 +57,17 @@ def dashboard_filters(
         selected = ()
     else:
         selected = tuple(item.value for item in account) if account else ACCOUNT_FILTERS
+    if (start is None) != (end is None):
+        raise HTTPException(status_code=422, detail="start and end must be provided together")
+    if start is not None and end is not None and start >= end:
+        raise HTTPException(status_code=422, detail="start must be before exclusive end")
     normalized_query = q.strip() if q and q.strip() else None
     return DashboardFilters(
         account_filters=selected,
         query=normalized_query,
         recognition=recognition.value,
+        start_at=datetime.combine(start, time.min, timezone.utc) if start else None,
+        end_before=datetime.combine(end, time.min, timezone.utc) if end else None,
     )
 
 
@@ -119,6 +134,13 @@ def create_app(service: QueryService | None = None) -> FastAPI:
     @application.delete("/api/v1/tokens/{token_address}/recognition")
     def reset_token_recognition(token_address: str) -> dict:
         return query_service.reset_token_recognition(token_address)
+
+    @application.get("/api/v1/timeline")
+    def timeline(
+        filters: Annotated[DashboardFilters, Depends(dashboard_filters)],
+        interval: TimelineInterval = TimelineInterval.month,
+    ) -> dict:
+        return query_service.timeline(filters, interval=interval.value)
 
     @application.get("/api/v1/counterparties")
     def counterparties(

@@ -249,6 +249,77 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(result["transfer_count"], 1)
         self.assertEqual(result["token_count"], 1)
 
+    def test_timeline_buckets_reconcile_to_exact_date_filtered_queries(self) -> None:
+        timeline = self.client.get(
+            "/api/v1/timeline",
+            params={"interval": "day"},
+        )
+        self.assertEqual(timeline.status_code, 200, timeline.text)
+        payload = timeline.json()
+        self.assertEqual(payload["interval"], "day")
+        self.assertEqual(payload["complete_matching_count"], 6)
+        self.assertEqual(
+            sum(item["transfer_count"] for item in payload["items"]),
+            payload["complete_matching_count"],
+        )
+        self.assertTrue(all(
+            item["transfer_count"]
+            == item["inbound_transfer_count"] + item["outbound_transfer_count"]
+            for item in payload["items"]
+        ))
+
+        selected = next(item for item in payload["items"] if item["transfer_count"] > 0)
+        period = {"start": selected["bucket_start"], "end": selected["bucket_end"]}
+        summary = self.client.get("/api/v1/summary", params=period).json()
+        counterparties = self.client.get(
+            "/api/v1/counterparties",
+            params={**period, "limit": 100},
+        ).json()
+        events = self.client.get(
+            "/api/v1/events",
+            params={**period, "limit": 100},
+        ).json()
+
+        self.assertEqual(summary["transfer_count"], selected["transfer_count"])
+        self.assertEqual(events["complete_matching_count"], selected["transfer_count"])
+        self.assertEqual(
+            summary["counterparty_count"],
+            counterparties["complete_matching_count"],
+        )
+        self.assertEqual(summary["query"]["start_at"], f"{selected['bucket_start']}T00:00:00+00:00")
+        self.assertEqual(summary["query"]["end_before"], f"{selected['bucket_end']}T00:00:00+00:00")
+
+    def test_timeline_interval_and_half_open_date_range_are_validated(self) -> None:
+        self.assertEqual(
+            self.client.get("/api/v1/timeline", params={"interval": "quarter"}).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.get("/api/v1/summary", params={"start": "2023-11-14"}).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/summary",
+                params={"start": "2023-11-15", "end": "2023-11-15"},
+            ).status_code,
+            422,
+        )
+
+    def test_timeline_applies_recognition_before_bucketing(self) -> None:
+        recognized = self.client.get(
+            "/api/v1/timeline",
+            params={"recognition": "recognized", "interval": "month"},
+        ).json()
+        other = self.client.get(
+            "/api/v1/timeline",
+            params={"recognition": "other", "interval": "month"},
+        ).json()
+
+        self.assertEqual(recognized["complete_matching_count"], 5)
+        self.assertEqual(other["complete_matching_count"], 1)
+        self.assertEqual(other["query"]["recognition"], "other")
+
     def test_event_cursor_pages_complete_results_without_sampling(self) -> None:
         first = self.client.get(
             "/api/v1/events", params={"limit": 2}

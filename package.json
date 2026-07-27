@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.3",
-    "cytoscape": "^3.30.4",
     "lucide-react": "^0.468.0",
     "vite": "^8.1.4",
     "react": "^19.0.0",
@@ -38,7 +37,6 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/bun": "^1.1.14",
-    "@types/cytoscape": "^3.21.8",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "envio": "^3.2.1",

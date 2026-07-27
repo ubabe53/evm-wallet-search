@@ -11,8 +11,10 @@ const query: DashboardQuery = {
   recognition: "recognized",
   accountFilters: ["contract"],
   query: "usdc",
-  graphLimit: 25,
   counterpartyLimit: 10,
+  timelineInterval: "month",
+  startDate: "2026-07-01",
+  endDate: "2026-08-01",
 };
 
 function response(payload: unknown) {
@@ -39,20 +41,17 @@ describe("live dashboard API adapter", () => {
       if (input.startsWith("/api/v1/counterparties?")) {
         return response({ complete_matching_count: 2_000, returned_count: 0, items: [] });
       }
-      if (input.startsWith("/api/v1/graph?")) {
+      if (input.startsWith("/api/v1/timeline?")) {
         return response({
-          complete_matching_count: 750,
+          interval: "month",
+          complete_matching_count: 100_001,
           returned_count: 1,
           items: [{
-            wallet_id: "vitalik", ens: "vitalik.eth", wallet_address: "0xwallet",
-            counterparty_address: "0x1111111111111111111111111111111111111111",
-            account_type: "contract", code_state: "contract_code",
-            observation_block_timestamp: "2025-05-17T03:11:47+00:00",
-            observation_block_number: 22_500_000,
-            eip7702_delegation_target: null,
-            evidence_fetch_status: "complete", evidence_reason_codes: "code_observed",
-            transfer_count: 20, inbound_transfer_count: 5, outbound_transfer_count: 15,
-            token_count: 3,
+            bucket_start: "2026-07-01",
+            bucket_end: "2026-08-01",
+            transfer_count: 100_001,
+            inbound_transfer_count: 40_000,
+            outbound_transfer_count: 60_001,
           }],
         });
       }
@@ -66,23 +65,23 @@ describe("live dashboard API adapter", () => {
     expect(result.eventCount).toBe(100_001);
     expect(result.tokenCount).toBe(501);
     expect(result.counterpartyCount).toBe(2_000);
-    expect(result.graphCounterpartyCount).toBe(750);
-    expect(result.data.graph.nodes).toHaveLength(2);
-    expect(result.data.graph.edges[0].data).toMatchObject({
-      direction: "both",
-      source: "wallet:0xwallet",
-      target: "counterparty:0x1111111111111111111111111111111111111111",
-      transferCount: 20,
-      counterpartyTransferCount: 20,
-      inboundTransferCount: 5,
-      outboundTransferCount: 15,
-      tokenCount: 3,
+    expect(result.timelineBuckets[0]).toMatchObject({
+      bucket_start: "2026-07-01",
+      transfer_count: 100_001,
+      inbound_transfer_count: 40_000,
+      outbound_transfer_count: 60_001,
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("data/"))).toBe(false);
     const summaryUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/summary?"))?.[0]);
     expect(summaryUrl).toContain("recognition=recognized");
     expect(summaryUrl).toContain("account=contract");
     expect(summaryUrl).toContain("q=usdc");
+    expect(summaryUrl).toContain("start=2026-07-01");
+    expect(summaryUrl).toContain("end=2026-08-01");
+    const timelineUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/timeline?"))?.[0]);
+    expect(timelineUrl).toContain("interval=month");
+    expect(timelineUrl).not.toContain("start=");
+    expect(timelineUrl).not.toContain("end=");
   });
 
   it("continues event pagination with the opaque API cursor", async () => {

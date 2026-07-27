@@ -46,6 +46,8 @@ class DashboardFilters:
     account_filters: tuple[str, ...] = ACCOUNT_FILTERS
     query: str | None = None
     recognition: str = "all"
+    start_at: datetime | None = None
+    end_before: datetime | None = None
 
 
 def json_value(value: Any) -> Any:
@@ -99,6 +101,13 @@ def filter_sql(
             "events.metadata_availability, events.metadata_source)), ?)"
         )
         parameters.append(filters.query.strip().lower())
+
+    if filters.start_at is not None:
+        clauses.append("events.block_timestamp >= ?")
+        parameters.append(filters.start_at)
+    if filters.end_before is not None:
+        clauses.append("events.block_timestamp < ?")
+        parameters.append(filters.end_before)
 
     return " and ".join(clauses) if clauses else "true", parameters
 
@@ -364,6 +373,8 @@ class QueryService:
             "recognition": filters.recognition,
             "account_evidence": list(filters.account_filters),
             "query": filters.query,
+            "start_at": filters.start_at.isoformat() if filters.start_at else None,
+            "end_before": filters.end_before.isoformat() if filters.end_before else None,
         }
 
     @staticmethod
@@ -562,6 +573,62 @@ class QueryService:
             "returned_count": len(items),
             "limit": limit,
             "is_truncated": total > len(items),
+            "is_sampled": False,
+            "items": items,
+        }
+
+    def timeline(self, filters: DashboardFilters, *, interval: str) -> dict[str, Any]:
+        interval_steps = {
+            "day": "interval '1 day'",
+            "week": "interval '1 week'",
+            "month": "interval '1 month'",
+        }
+        if interval not in interval_steps:
+            raise ValueError("Timeline interval must be day, week, or month")
+        step = interval_steps[interval]
+        cte, parameters = filtered_cte(filters)
+        with self.connect() as connection:
+            items = rows(
+                connection,
+                f"""
+                {cte},
+                bucket_counts as (
+                  select
+                    date_trunc('{interval}', timezone('UTC', block_timestamp)) as bucket_start,
+                    count(*) as transfer_count,
+                    count(*) filter (where direction = 'in') as inbound_transfer_count,
+                    count(*) filter (where direction = 'out') as outbound_transfer_count
+                  from filtered_events
+                  group by bucket_start
+                ),
+                bucket_bounds as (
+                  select min(bucket_start) as first_bucket, max(bucket_start) as last_bucket
+                  from bucket_counts
+                ),
+                buckets as (
+                  select bucket_start
+                  from bucket_bounds,
+                    unnest(generate_series(first_bucket, last_bucket, {step})) as generated(bucket_start)
+                )
+                select
+                  cast(buckets.bucket_start as date) as bucket_start,
+                  cast(buckets.bucket_start + {step} as date) as bucket_end,
+                  coalesce(bucket_counts.transfer_count, 0) as transfer_count,
+                  coalesce(bucket_counts.inbound_transfer_count, 0) as inbound_transfer_count,
+                  coalesce(bucket_counts.outbound_transfer_count, 0) as outbound_transfer_count
+                from buckets
+                left join bucket_counts using (bucket_start)
+                order by buckets.bucket_start
+                """,
+                parameters,
+            )
+            provenance = self.provenance(connection)
+        return {
+            "provenance": provenance,
+            "query": self.query_contract(filters),
+            "interval": interval,
+            "complete_matching_count": sum(item["transfer_count"] for item in items),
+            "returned_count": len(items),
             "is_sampled": False,
             "items": items,
         }
