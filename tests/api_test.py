@@ -37,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v10")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v11")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 7)
@@ -258,7 +258,7 @@ class DashboardApiTest(unittest.TestCase):
         yearly_payload = yearly_timeline.json()
         self.assertEqual(yearly_payload["interval"], "year")
         self.assertIsNone(yearly_payload["year"])
-        self.assertEqual(yearly_payload["complete_matching_count"], 6)
+        self.assertEqual(yearly_payload["complete_matching_count"], 7)
 
         selected_year = next(
             item for item in yearly_payload["items"] if item["transfer_count"] > 0
@@ -272,16 +272,21 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(payload["interval"], "month")
         self.assertEqual(payload["year"], int(selected_year))
         self.assertEqual(payload["returned_count"], 11)
-        self.assertEqual(payload["complete_matching_count"], 6)
+        self.assertEqual(payload["complete_matching_count"], 7)
         self.assertEqual(
             sum(item["transfer_count"] for item in payload["items"]),
             payload["complete_matching_count"],
         )
         self.assertTrue(all(
             item["transfer_count"]
-            == item["inbound_transfer_count"] + item["outbound_transfer_count"]
+            == (
+                item["inbound_transfer_count"]
+                + item["outbound_transfer_count"]
+                + item["self_transfer_count"]
+            )
             for item in payload["items"]
         ))
+        self.assertEqual(sum(item["self_transfer_count"] for item in payload["items"]), 1)
 
         selected = next(item for item in payload["items"] if item["transfer_count"] > 0)
         period = {"start": selected["bucket_start"], "end": selected["bucket_end"]}
@@ -342,7 +347,7 @@ class DashboardApiTest(unittest.TestCase):
             params={"recognition": "other", "interval": "year"},
         ).json()
 
-        self.assertEqual(recognized["complete_matching_count"], 5)
+        self.assertEqual(recognized["complete_matching_count"], 6)
         self.assertEqual(other["complete_matching_count"], 1)
         self.assertEqual(recognized["returned_count"], other["returned_count"])
         self.assertEqual(other["query"]["recognition"], "other")

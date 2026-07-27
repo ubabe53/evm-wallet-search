@@ -559,6 +559,11 @@ h2 {
   background: var(--out);
 }
 
+.timelineSelfSwatch,
+.timelineSelfSegment {
+  background: var(--muted);
+}
+
 .timelineSelection {
   display: flex;
   align-items: center;
@@ -678,7 +683,11 @@ h2 {
 }
 
 .timelineOutSegment {
-  flex: 1;
+  height: var(--timeline-out-share);
+}
+
+.timelineSelfSegment {
+  height: var(--timeline-self-share);
 }
 
 .timelineBucket:hover .timelineBar,

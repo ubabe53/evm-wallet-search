@@ -452,6 +452,7 @@ describe("App", () => {
     const rows = [
       { block_date: "2023-11-14", direction: "in", transfer_count: 2 },
       { block_date: "2023-11-16", direction: "out", transfer_count: 3 },
+      { block_date: "2023-11-18", direction: "self", transfer_count: 1 },
     ] as const;
 
     const years = bucketTimelineRows(rows, "year", null, [2022, 2023, 2024]);
@@ -463,7 +464,8 @@ describe("App", () => {
     expect(years[1]).toMatchObject({
       bucket_start: "2023-01-01",
       bucket_end: "2024-01-01",
-      transfer_count: 5,
+      transfer_count: 6,
+      self_transfer_count: 1,
     });
 
     const months = bucketTimelineRows(rows, "month", 2023);
@@ -475,7 +477,8 @@ describe("App", () => {
     expect(months[10]).toMatchObject({
       bucket_start: "2023-11-01",
       bucket_end: "2023-12-01",
-      transfer_count: 5,
+      transfer_count: 6,
+      self_transfer_count: 1,
     });
     expect(timelineYears("2022-02-01T00:00:00Z", "2024-07-01T00:00:00Z"))
       .toEqual([2022, 2023, 2024]);
@@ -489,9 +492,10 @@ describe("App", () => {
     const bucket = {
       bucket_start: "2026-07-01",
       bucket_end: "2026-08-01",
-      transfer_count: 5,
+      transfer_count: 6,
       inbound_transfer_count: 3,
       outbound_transfer_count: 2,
+      self_transfer_count: 1,
     };
 
     const { rerender } = render(
@@ -508,14 +512,14 @@ describe("App", () => {
       />,
     );
     expect(screen.getByText("Captured events")).toBeInTheDocument();
-    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("5");
-    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("3.75");
-    fireEvent.mouseEnter(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }));
-    expect(screen.getByRole("tooltip")).toHaveTextContent("5 captured events");
-    expect(screen.getByRole("tooltip")).toHaveTextContent("3 inbound · 2 outbound");
-    fireEvent.mouseLeave(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }));
+    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("6");
+    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("4.5");
+    fireEvent.mouseEnter(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("6 captured events");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("3 inbound · 2 outbound · 1 self");
+    fireEvent.mouseLeave(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }));
+    fireEvent.click(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }));
     expect(onSelect).toHaveBeenCalledWith(bucket);
     expect(screen.getByText(/Current calendar period is partial/)).toBeInTheDocument();
 
@@ -565,7 +569,7 @@ describe("App", () => {
         partialThrough={null}
       />,
     );
-    expect(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }))
+    expect(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }))
       .toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText("Showing 2026 monthly activity")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "All years" }));

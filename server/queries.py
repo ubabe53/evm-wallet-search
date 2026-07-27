@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v10"
+API_SCHEMA_VERSION = "dashboard-api-v11"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -626,7 +626,8 @@ class QueryService:
                     date_trunc('{interval}', timezone('UTC', block_timestamp)) as bucket_start,
                     count(*) as transfer_count,
                     count(*) filter (where direction = 'in') as inbound_transfer_count,
-                    count(*) filter (where direction = 'out') as outbound_transfer_count
+                    count(*) filter (where direction = 'out') as outbound_transfer_count,
+                    count(*) filter (where direction = 'self') as self_transfer_count
                   from filtered_events
                   group by bucket_start
                 ),
@@ -643,7 +644,8 @@ class QueryService:
                   cast(buckets.bucket_start + {step} as date) as bucket_end,
                   coalesce(bucket_counts.transfer_count, 0) as transfer_count,
                   coalesce(bucket_counts.inbound_transfer_count, 0) as inbound_transfer_count,
-                  coalesce(bucket_counts.outbound_transfer_count, 0) as outbound_transfer_count
+                  coalesce(bucket_counts.outbound_transfer_count, 0) as outbound_transfer_count,
+                  coalesce(bucket_counts.self_transfer_count, 0) as self_transfer_count
                 from buckets
                 left join bucket_counts using (bucket_start)
                 order by buckets.bucket_start

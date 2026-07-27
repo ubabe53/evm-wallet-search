@@ -403,12 +403,15 @@ export function bucketTimelineRows(
       transfer_count: 0,
       inbound_transfer_count: 0,
       outbound_transfer_count: 0,
+      self_transfer_count: 0,
     };
     current.transfer_count += row.transfer_count;
     if (row.direction === "in") {
       current.inbound_transfer_count += row.transfer_count;
-    } else {
+    } else if (row.direction === "out") {
       current.outbound_transfer_count += row.transfer_count;
+    } else {
+      current.self_transfer_count += row.transfer_count;
     }
     counts.set(start, current);
   }
@@ -434,6 +437,7 @@ export function bucketTimelineRows(
       transfer_count: 0,
       inbound_transfer_count: 0,
       outbound_transfer_count: 0,
+      self_transfer_count: 0,
     });
   }
   return buckets;
@@ -517,6 +521,7 @@ export function ActivityTimeline({
         <div className="timelineLegend" aria-label="Timeline legend">
           <span><i className="timelineInSwatch" />Inbound</span>
           <span><i className="timelineOutSwatch" />Outbound</span>
+          <span><i className="timelineSelfSwatch" />Self</span>
         </div>
       </div>
       {selected && (
@@ -570,12 +575,20 @@ export function ActivityTimeline({
                 const inboundShare = bucket.transfer_count === 0
                   ? 0
                   : bucket.inbound_transfer_count / bucket.transfer_count * 100;
+                const outboundShare = bucket.transfer_count === 0
+                  ? 0
+                  : bucket.outbound_transfer_count / bucket.transfer_count * 100;
+                const selfShare = bucket.transfer_count === 0
+                  ? 0
+                  : bucket.self_transfer_count / bucket.transfer_count * 100;
                 const style = {
                   "--timeline-height": `${height}%`,
                   "--timeline-in-share": `${inboundShare}%`,
+                  "--timeline-out-share": `${outboundShare}%`,
+                  "--timeline-self-share": `${selfShare}%`,
                 } as CSSProperties;
                 const period = timelinePeriodLabel(bucket, interval);
-                const title = `${period} UTC: ${bucket.transfer_count.toLocaleString("en-US")} captured events (${bucket.inbound_transfer_count.toLocaleString("en-US")} inbound, ${bucket.outbound_transfer_count.toLocaleString("en-US")} outbound)${isPartial ? "; partial calendar period at data generation" : ""}`;
+                const title = `${period} UTC: ${bucket.transfer_count.toLocaleString("en-US")} captured events (${bucket.inbound_transfer_count.toLocaleString("en-US")} inbound, ${bucket.outbound_transfer_count.toLocaleString("en-US")} outbound, ${bucket.self_transfer_count.toLocaleString("en-US")} self)${isPartial ? "; partial calendar period at data generation" : ""}`;
                 return (
                   <button
                     key={bucket.bucket_start}
@@ -595,6 +608,7 @@ export function ActivityTimeline({
                     <span className="timelineBar" aria-hidden="true">
                       <i className="timelineInSegment" />
                       <i className="timelineOutSegment" />
+                      <i className="timelineSelfSegment" />
                     </span>
                     <span className="timelineTick" aria-hidden="true">
                       {timelineTickLabel(bucket, interval)}{isPartial ? "*" : ""}
@@ -618,6 +632,8 @@ export function ActivityTimeline({
                     {activeBucket.inbound_transfer_count.toLocaleString("en-US")} inbound
                     {" · "}
                     {activeBucket.outbound_transfer_count.toLocaleString("en-US")} outbound
+                    {" · "}
+                    {activeBucket.self_transfer_count.toLocaleString("en-US")} self
                   </span>
                 </div>
               )}

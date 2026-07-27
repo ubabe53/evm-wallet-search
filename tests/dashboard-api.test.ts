@@ -54,6 +54,7 @@ describe("live dashboard API adapter", () => {
             transfer_count: 100_001,
             inbound_transfer_count: 40_000,
             outbound_transfer_count: 60_001,
+            self_transfer_count: 0,
           }],
         });
       }
@@ -72,6 +73,7 @@ describe("live dashboard API adapter", () => {
       transfer_count: 100_001,
       inbound_transfer_count: 40_000,
       outbound_transfer_count: 60_001,
+      self_transfer_count: 0,
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("data/"))).toBe(false);
     const summaryUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/summary?"))?.[0]);

@@ -394,6 +394,7 @@ export type TimelineBucket = {
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
+  self_transfer_count: number;
 };
 
 export type DashboardSummary = {
