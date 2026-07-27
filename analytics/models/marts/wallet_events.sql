@@ -2,6 +2,7 @@ select
   transfer_id,
   chain_id,
   block_number,
+  block_hash,
   block_timestamp,
   block_date,
   transaction_hash,

@@ -1,12 +1,27 @@
 version: 2
 
 models:
-  - name: stg_erc20_transfers
-    description: Deduplicated wallet-relevant Transfer-signature logs normalized to lowercase addresses; downstream models are ERC20-oriented, but the signature alone does not disambiguate ERC721.
+  - name: stg_transfer_events
+    description: Deduplicated wallet-relevant Transfer-signature events normalized to lowercase addresses; the source signature does not establish token standard.
     columns:
-      - name: transfer_id
+      - name: chain_id
         tests:
-          - unique
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
+      - name: block_number
+        tests:
+          - not_null
+      - name: block_hash
+        description: Canonical block hash provided with the HyperIndex event and retained as lowercase event evidence.
+        tests:
+          - not_null
+      - name: transaction_hash
+        tests:
+          - not_null
+      - name: log_index
+        tests:
           - not_null
       - name: token_address
         tests:
@@ -200,6 +215,10 @@ models:
       - name: transfer_id
         tests:
           - unique
+          - not_null
+      - name: block_hash
+        description: Lowercase canonical block hash preserved from transfer-event staging.
+        tests:
           - not_null
       - name: wallet_address
         tests:

@@ -1,5 +1,5 @@
 with transfers as (
-  select * from {{ ref('stg_erc20_transfers') }}
+  select * from {{ ref('stg_transfer_events') }}
 ),
 
 wallets as (
@@ -16,9 +16,12 @@ counterparties as (
 
 matched as (
   select
-    transfers.transfer_id,
+    cast(transfers.chain_id as varchar)
+      || '-' || transfers.transaction_hash
+      || '-' || cast(transfers.log_index as varchar) as transfer_id,
     transfers.chain_id,
     transfers.block_number,
+    transfers.block_hash,
     transfers.block_timestamp,
     cast(transfers.block_timestamp as date) as block_date,
     transfers.transaction_hash,

@@ -4,11 +4,11 @@ The core grain is one row per wallet-relevant `Transfer(address,address,uint256)
 
 ## Staging
 
-### `stg_erc20_transfers`
+### `stg_transfer_events`
 
-Deduplicates raw Transfer-signature entities by `chain_id`, `transaction_hash`, and `log_index`. It normalizes all addresses to lowercase and standardizes block, transaction, emitting contract, emitted Transfer `from`/`to`, and raw third-value fields. Nullable `transaction_from_address` and `transaction_to_address` preserve selected top-level transaction envelope evidence. They remain null for legacy entities that predate this field selection; no directness is inferred from missing values.
+Deduplicates wallet-relevant Transfer-signature entities by the canonical `(chain_id, transaction_hash, log_index)` key. The neutral name does not claim that the emitting contract implements ERC-20. It normalizes all addresses and the captured block hash to lowercase and standardizes block, transaction, emitting contract, emitted Transfer `from`/`to`, and raw third-value fields. The redundant HyperIndex entity ID is not retained in staging; downstream compatibility identifiers, where still required, are derived from the canonical key. Nullable `transaction_from_address` and `transaction_to_address` preserve selected top-level transaction envelope evidence. They remain null for legacy entities that predate this field selection; no directness is inferred from missing values.
 
-In HyperIndex mode, `value_raw` is cast to text inside Postgres through `postgres_query` before DuckDB scans it. This avoids converting unconstrained Postgres numeric values to floating point or scientific notation and preserves the exact integer emitted as the event's third value. Its meaning is not guaranteed to be a fungible quantity until token standard is disambiguated.
+`block_hash` is provided with each HyperIndex event and retained as event-level canonical-block evidence. In HyperIndex mode, `value_raw` is cast to text inside Postgres through `postgres_query` before DuckDB scans it. This lossless transport cast avoids converting unconstrained Postgres numeric values to floating point or scientific notation and preserves the exact integer emitted as the event's third value. Both live and fixture inputs already expose text, so staging does not apply a second redundant cast. The value remains unscaled raw evidence; its meaning is not guaranteed to be a fungible quantity until token standard is disambiguated.
 
 ### `stg_wallets`
 
@@ -82,7 +82,7 @@ These four values are an internal classification contract, not user choices. Tok
 
 ### `wallet_events`
 
-Application-serving event table. This preserves the immutable one-transfer grain and event-time block fields while carrying emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, automatic recognition evidence, metadata availability, token quality evidence, effective internal status, both classification scores, reason codes, and classifier versions. Enrichment observation time never replaces event block number or timestamp. The local API queries this mart with explicit filters, ordering, and pagination; the fixture demo exports a bounded subset.
+Application-serving event table. This preserves the immutable one-transfer grain, event-time block number/timestamp, and captured canonical block hash while carrying emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, automatic recognition evidence, metadata availability, token quality evidence, effective internal status, both classification scores, reason codes, and classifier versions. Enrichment observation time never replaces event block evidence. The local API queries this mart with explicit filters, ordering, and pagination; the fixture demo exports a bounded subset.
 
 ### `graph_nodes`
 

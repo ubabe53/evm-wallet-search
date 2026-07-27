@@ -45,7 +45,7 @@ Fixture mode exists for deterministic tests and the eventual GitHub Pages portfo
 bun run analytics:build:fixture
 ```
 
-The six fixture transfer rows live in `analytics/seeds/raw_erc20_transfers_fixture.csv`. They cover direct, indirect, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields. There is no account-evidence fixture: the fixture build uses an empty typed relation, so it never invents address classifications. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge.
+The seven fixture transfer rows live in `analytics/seeds/raw_transfer_events_fixture.csv`. They cover direct, indirect, self-transfer, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields and canonical block hashes. There is no account-evidence fixture: the fixture build uses an empty typed relation, so it never invents address classifications. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge.
 
 `bun run analytics:build` remains an alias for `analytics:build:fixture` so existing CI and contributor commands stay deterministic. The exporter reads only the fixture database and may overwrite only the ignored files under `public/data/`.
 
@@ -128,9 +128,9 @@ Run the indexer locally:
 bun run indexer:dev
 ```
 
-Local HyperIndex requires Docker and an `ENVIO_API_TOKEN`. The indexer uses Envio wildcard indexing with topic filters for the configured wallet and writes `Erc20Transfer` entities to Postgres. Its event field selection includes top-level transaction `from` and `to`; the entity columns are nullable so existing rows can remain readable during migration. Raw event duplication is disabled.
+Local HyperIndex requires Docker and an `ENVIO_API_TOKEN`. The indexer uses Envio wildcard indexing with topic filters for the configured wallet and writes `Erc20Transfer` entities to Postgres. It persists the canonical block hash provided with each event, while its opt-in field selection includes top-level transaction `from` and `to`; the transaction-envelope columns are nullable so existing rows can remain readable during migration. Raw event duplication is disabled.
 
-Run `bun run indexer:codegen` after changing the Envio field selection or entity schema. Adding the nullable columns does not retroactively populate already-processed entities: use the appropriate Envio replay/reindex procedure for the intended block range before claiming complete transaction-initiation coverage. Until replay, dbt preserves missing senders/targets as null, relation evidence as `unknown`, and `is_indirect` as null. A normal fixture build, export, or dashboard run never starts that backfill.
+Run `bun run indexer:codegen` after changing the Envio field selection or entity schema. Adding the nullable transaction-envelope columns did not retroactively populate already-processed entities, and the newer non-null block-hash entity field requires rebuilding the historical entities. Before the next live DuckDB build on this contract, use Envio's restart/reindex operation for the intended range; do not point `stg_transfer_events` at an older `Erc20Transfer` table that lacks `block_hash`. Until replay, the existing artifact preserves missing senders/targets as null, relation evidence as `unknown`, and `is_indirect` as null. A normal fixture build, export, or dashboard run never starts that backfill.
 
 After the indexer has created and populated `public."Erc20Transfer"`, export its Postgres connection URI and build in live mode:
 

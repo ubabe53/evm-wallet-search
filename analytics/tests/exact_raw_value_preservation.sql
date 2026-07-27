@@ -2,7 +2,9 @@
 
 with expected as (
   select
-    '1-0xeee-0' as transfer_id,
+    1 as chain_id,
+    '0xeee' as transaction_hash,
+    0 as log_index,
     '0x9999999999999999999999999999999999999999' as token_address,
     '{{ max_uint256 }}' as value_raw
 ),
@@ -10,14 +12,16 @@ with expected as (
 violations as (
   select 'staging' as relation_name
   from expected
-  left join {{ ref('stg_erc20_transfers') }} as staged using (transfer_id)
+  left join {{ ref('stg_transfer_events') }} as staged
+    using (chain_id, transaction_hash, log_index)
   where staged.value_raw is distinct from expected.value_raw
 
   union all
 
   select 'events' as relation_name
   from expected
-  left join {{ ref('wallet_events') }} as events using (transfer_id)
+  left join {{ ref('wallet_events') }} as events
+    using (chain_id, transaction_hash, log_index)
   where events.value_raw is distinct from expected.value_raw
 
   union all

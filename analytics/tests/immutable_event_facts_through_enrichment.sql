@@ -1,11 +1,15 @@
 select
-  coalesce(events.transfer_id, source.transfer_id) as transfer_id
+  coalesce(events.chain_id, source.chain_id) as chain_id,
+  coalesce(events.transaction_hash, source.transaction_hash) as transaction_hash,
+  coalesce(events.log_index, source.log_index) as log_index
 from {{ ref('wallet_events') }} as events
-full outer join {{ ref('stg_erc20_transfers') }} as source using (transfer_id)
-where events.transfer_id is null
-  or source.transfer_id is null
+full outer join {{ ref('stg_transfer_events') }} as source
+  using (chain_id, transaction_hash, log_index)
+where events.chain_id is null
+  or source.chain_id is null
   or events.chain_id != source.chain_id
   or events.block_number != source.block_number
+  or events.block_hash != source.block_hash
   or events.block_timestamp != source.block_timestamp
   or events.transaction_hash != source.transaction_hash
   or events.transaction_index != source.transaction_index

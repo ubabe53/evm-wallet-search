@@ -1,5 +1,5 @@
 with token_addresses as (
-  select distinct token_address from {{ ref('stg_erc20_transfers') }}
+  select distinct token_address from {{ ref('stg_transfer_events') }}
   union
   select token_address from {{ ref('stg_token_metadata') }}
 ),

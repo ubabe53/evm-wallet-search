@@ -23,11 +23,11 @@ models:
 seeds:
   evm_wallet_search:
     +quote_columns: false
-    raw_erc20_transfers_fixture:
+    raw_transfer_events_fixture:
       +column_types:
-        id: varchar
         chain_id: integer
         block_number: bigint
+        block_hash: varchar
         block_timestamp: bigint
         transaction_hash: varchar
         transaction_index: integer
