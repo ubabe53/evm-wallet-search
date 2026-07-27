@@ -37,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v9")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v10")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 7)
@@ -250,13 +250,28 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(result["token_count"], 1)
 
     def test_timeline_buckets_reconcile_to_exact_date_filtered_queries(self) -> None:
+        yearly_timeline = self.client.get(
+            "/api/v1/timeline",
+            params={"interval": "year"},
+        )
+        self.assertEqual(yearly_timeline.status_code, 200, yearly_timeline.text)
+        yearly_payload = yearly_timeline.json()
+        self.assertEqual(yearly_payload["interval"], "year")
+        self.assertIsNone(yearly_payload["year"])
+        self.assertEqual(yearly_payload["complete_matching_count"], 6)
+
+        selected_year = next(
+            item for item in yearly_payload["items"] if item["transfer_count"] > 0
+        )["bucket_start"][:4]
         timeline = self.client.get(
             "/api/v1/timeline",
-            params={"interval": "day"},
+            params={"interval": "month", "year": selected_year},
         )
         self.assertEqual(timeline.status_code, 200, timeline.text)
         payload = timeline.json()
-        self.assertEqual(payload["interval"], "day")
+        self.assertEqual(payload["interval"], "month")
+        self.assertEqual(payload["year"], int(selected_year))
+        self.assertEqual(payload["returned_count"], 11)
         self.assertEqual(payload["complete_matching_count"], 6)
         self.assertEqual(
             sum(item["transfer_count"] for item in payload["items"]),
@@ -295,6 +310,17 @@ class DashboardApiTest(unittest.TestCase):
             422,
         )
         self.assertEqual(
+            self.client.get("/api/v1/timeline", params={"interval": "month"}).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/timeline",
+                params={"interval": "year", "year": 2023},
+            ).status_code,
+            422,
+        )
+        self.assertEqual(
             self.client.get("/api/v1/summary", params={"start": "2023-11-14"}).status_code,
             422,
         )
@@ -309,15 +335,16 @@ class DashboardApiTest(unittest.TestCase):
     def test_timeline_applies_recognition_before_bucketing(self) -> None:
         recognized = self.client.get(
             "/api/v1/timeline",
-            params={"recognition": "recognized", "interval": "month"},
+            params={"recognition": "recognized", "interval": "year"},
         ).json()
         other = self.client.get(
             "/api/v1/timeline",
-            params={"recognition": "other", "interval": "month"},
+            params={"recognition": "other", "interval": "year"},
         ).json()
 
         self.assertEqual(recognized["complete_matching_count"], 5)
         self.assertEqual(other["complete_matching_count"], 1)
+        self.assertEqual(recognized["returned_count"], other["returned_count"])
         self.assertEqual(other["query"]["recognition"], "other")
 
     def test_event_cursor_pages_complete_results_without_sampling(self) -> None:

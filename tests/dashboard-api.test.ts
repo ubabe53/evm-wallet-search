@@ -13,6 +13,7 @@ const query: DashboardQuery = {
   query: "usdc",
   counterpartyLimit: 10,
   timelineInterval: "month",
+  timelineYear: 2026,
   startDate: "2026-07-01",
   endDate: "2026-08-01",
 };
@@ -44,6 +45,7 @@ describe("live dashboard API adapter", () => {
       if (input.startsWith("/api/v1/timeline?")) {
         return response({
           interval: "month",
+          year: 2026,
           complete_matching_count: 100_001,
           returned_count: 1,
           items: [{
@@ -80,6 +82,7 @@ describe("live dashboard API adapter", () => {
     expect(summaryUrl).toContain("end=2026-08-01");
     const timelineUrl = String(fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/v1/timeline?"))?.[0]);
     expect(timelineUrl).toContain("interval=month");
+    expect(timelineUrl).toContain("year=2026");
     expect(timelineUrl).not.toContain("start=");
     expect(timelineUrl).not.toContain("end=");
   });

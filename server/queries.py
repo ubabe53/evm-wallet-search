@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v9"
+API_SCHEMA_VERSION = "dashboard-api-v10"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -577,16 +577,45 @@ class QueryService:
             "items": items,
         }
 
-    def timeline(self, filters: DashboardFilters, *, interval: str) -> dict[str, Any]:
+    def timeline(
+        self,
+        filters: DashboardFilters,
+        *,
+        interval: str,
+        year: int | None = None,
+    ) -> dict[str, Any]:
         interval_steps = {
-            "day": "interval '1 day'",
-            "week": "interval '1 week'",
             "month": "interval '1 month'",
+            "year": "interval '1 year'",
         }
         if interval not in interval_steps:
-            raise ValueError("Timeline interval must be day, week, or month")
+            raise ValueError("Timeline interval must be month or year")
+        if interval == "month" and year is None:
+            raise ValueError("Monthly timeline buckets require a year")
+        if interval == "year" and year is not None:
+            raise ValueError("Year is only valid for monthly timeline buckets")
         step = interval_steps[interval]
         cte, parameters = filtered_cte(filters)
+        domain_parameters: list[Any] = []
+        if interval == "year":
+            domain_sql = """
+              select
+                date_trunc('year', min(timezone('UTC', block_timestamp))) as first_bucket,
+                date_trunc('year', max(timezone('UTC', block_timestamp))) as last_bucket
+              from wallet_events
+            """
+        else:
+            domain_sql = """
+              select
+                cast(make_date(?, 1, 1) as timestamp) as first_bucket,
+                case
+                  when ? = year(max(timezone('UTC', block_timestamp)))
+                    then date_trunc('month', max(timezone('UTC', block_timestamp)))
+                  else cast(make_date(?, 12, 1) as timestamp)
+                end as last_bucket
+              from wallet_events
+            """
+            domain_parameters = [year, year, year]
         with self.connect() as connection:
             items = rows(
                 connection,
@@ -602,8 +631,7 @@ class QueryService:
                   group by bucket_start
                 ),
                 bucket_bounds as (
-                  select min(bucket_start) as first_bucket, max(bucket_start) as last_bucket
-                  from bucket_counts
+                  {domain_sql}
                 ),
                 buckets as (
                   select bucket_start
@@ -620,13 +648,14 @@ class QueryService:
                 left join bucket_counts using (bucket_start)
                 order by buckets.bucket_start
                 """,
-                parameters,
+                [*parameters, *domain_parameters],
             )
             provenance = self.provenance(connection)
         return {
             "provenance": provenance,
             "query": self.query_contract(filters),
             "interval": interval,
+            "year": year,
             "complete_matching_count": sum(item["transfer_count"] for item in items),
             "returned_count": len(items),
             "is_sampled": False,

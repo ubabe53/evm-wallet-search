@@ -517,40 +517,11 @@ h2 {
 .timelineToolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   padding: 12px 16px 0;
 }
 
-.timelineIntervals {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  overflow: hidden;
-}
-
-.timelineIntervals button {
-  border: 0;
-  background: var(--control-bg);
-  padding: 6px 10px;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.timelineIntervals button + button {
-  border-left: 1px solid var(--border);
-}
-
-.timelineIntervals button.active {
-  background: var(--accent);
-  color: #ffffff;
-}
-
-[data-theme="dark"] .timelineIntervals button.active {
-  color: #07110e;
-}
-
-.timelineIntervals button:focus-visible,
 .timelineBucket:focus-visible,
 .timelineSelection button:focus-visible {
   outline: 2px solid var(--accent);
@@ -615,6 +586,12 @@ h2 {
   margin: 10px 16px 0;
   color: var(--muted);
   font-size: 11px;
+}
+
+.timelinePartialNote {
+  margin: -4px 16px 12px;
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .timelineScroll {
@@ -690,6 +667,10 @@ h2 {
 .timelineBucket:hover .timelineBar,
 .timelineBucket.selected .timelineBar {
   box-shadow: 0 0 0 2px var(--accent);
+}
+
+.timelineBucket.partial .timelineBar {
+  border-top: 2px dashed var(--accent);
 }
 
 .timelineTick {

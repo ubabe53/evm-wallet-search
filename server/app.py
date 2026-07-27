@@ -35,9 +35,8 @@ class RecognitionFilter(str, Enum):
 
 
 class TimelineInterval(str, Enum):
-    day = "day"
-    week = "week"
     month = "month"
+    year = "year"
 
 
 class RecognitionOverrideRequest(BaseModel):
@@ -138,9 +137,14 @@ def create_app(service: QueryService | None = None) -> FastAPI:
     @application.get("/api/v1/timeline")
     def timeline(
         filters: Annotated[DashboardFilters, Depends(dashboard_filters)],
-        interval: TimelineInterval = TimelineInterval.month,
+        interval: TimelineInterval = TimelineInterval.year,
+        year: Annotated[int | None, Query(ge=1970, le=9999)] = None,
     ) -> dict:
-        return query_service.timeline(filters, interval=interval.value)
+        if interval is TimelineInterval.month and year is None:
+            raise HTTPException(status_code=422, detail="year is required for monthly timeline buckets")
+        if interval is TimelineInterval.year and year is not None:
+            raise HTTPException(status_code=422, detail="year is only valid for monthly timeline buckets")
+        return query_service.timeline(filters, interval=interval.value, year=year)
 
     @application.get("/api/v1/counterparties")
     def counterparties(

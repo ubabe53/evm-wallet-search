@@ -381,11 +381,12 @@ export type DashboardQuery = {
   query: string;
   counterpartyLimit: number;
   timelineInterval: TimelineInterval;
+  timelineYear: number | null;
   startDate: string | null;
   endDate: string | null;
 };
 
-export type TimelineInterval = "day" | "week" | "month";
+export type TimelineInterval = "month" | "year";
 
 export type TimelineBucket = {
   bucket_start: string;
@@ -480,10 +481,16 @@ export async function loadApiDashboardData(
     fetchJson<DashboardSummary>(`/api/v1/summary?${common}`, signal),
   ]);
   const timelineQuery = { ...query, startDate: null, endDate: null };
+  const timelineParameters: Record<string, string | number> = {
+    interval: query.timelineInterval,
+  };
+  if (query.timelineYear != null) {
+    timelineParameters.year = query.timelineYear;
+  }
   const [events, timeline] = await Promise.all([
     fetchJson<ApiCollection<WalletEvent>>(`/api/v1/events?${apiQuery(query, { limit: 10 })}`, signal),
-    fetchJson<ApiCollection<TimelineBucket> & { interval: TimelineInterval }>(
-      `/api/v1/timeline?${apiQuery(timelineQuery, { interval: query.timelineInterval })}`,
+    fetchJson<ApiCollection<TimelineBucket> & { interval: TimelineInterval; year: number | null }>(
+      `/api/v1/timeline?${apiQuery(timelineQuery, timelineParameters)}`,
       signal,
     ),
   ]);

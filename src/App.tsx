@@ -45,7 +45,6 @@ type Theme = "light" | "dark";
 const EVENT_PAGE_SIZE = 10;
 const DEFAULT_COUNTERPARTY_LIMIT = 10;
 const COUNTERPARTY_LIMITS = [10, 25, 50] as const;
-const TIMELINE_INTERVALS: TimelineInterval[] = ["day", "week", "month"];
 const ACCOUNT_FILTERS: AccountFilter[] = ["eoa_candidate", "contract"];
 const RECOGNITION_FILTERS: RecognitionFilter[] = ["all", "recognized", "other"];
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
@@ -367,9 +366,8 @@ function bucketStart(value: string, interval: TimelineInterval): string {
   const date = utcDate(value);
   if (interval === "month") {
     date.setUTCDate(1);
-  } else if (interval === "week") {
-    const daysSinceMonday = (date.getUTCDay() + 6) % 7;
-    date.setUTCDate(date.getUTCDate() - daysSinceMonday);
+  } else {
+    date.setUTCMonth(0, 1);
   }
   return isoDate(date);
 }
@@ -378,10 +376,8 @@ function nextBucket(value: string, interval: TimelineInterval): string {
   const date = utcDate(value);
   if (interval === "month") {
     date.setUTCMonth(date.getUTCMonth() + 1);
-  } else if (interval === "week") {
-    date.setUTCDate(date.getUTCDate() + 7);
   } else {
-    date.setUTCDate(date.getUTCDate() + 1);
+    date.setUTCFullYear(date.getUTCFullYear() + 1);
   }
   return isoDate(date);
 }
@@ -389,9 +385,17 @@ function nextBucket(value: string, interval: TimelineInterval): string {
 export function bucketTimelineRows(
   rows: readonly Pick<TimelineRow, "block_date" | "direction" | "transfer_count">[],
   interval: TimelineInterval,
+  selectedYear: number | null = null,
+  availableYears: readonly number[] = [],
 ): TimelineBucket[] {
+  if (interval === "month" && selectedYear == null) {
+    return [];
+  }
   const counts = new Map<string, TimelineBucket>();
   for (const row of rows) {
+    if (selectedYear != null && utcDate(row.block_date).getUTCFullYear() !== selectedYear) {
+      continue;
+    }
     const start = bucketStart(row.block_date, interval);
     const current = counts.get(start) ?? {
       bucket_start: start,
@@ -409,11 +413,21 @@ export function bucketTimelineRows(
     counts.set(start, current);
   }
   const starts = [...counts.keys()].sort();
-  if (starts.length === 0) {
+  const first = interval === "month"
+    ? `${selectedYear}-01-01`
+    : availableYears.length > 0
+      ? `${Math.min(...availableYears)}-01-01`
+      : starts[0];
+  const last = interval === "month"
+    ? `${selectedYear}-12-01`
+    : availableYears.length > 0
+      ? `${Math.max(...availableYears)}-01-01`
+      : starts[starts.length - 1];
+  if (!first || !last) {
     return [];
   }
   const buckets: TimelineBucket[] = [];
-  for (let start = starts[0]; start <= starts[starts.length - 1]; start = nextBucket(start, interval)) {
+  for (let start = first; start <= last; start = nextBucket(start, interval)) {
     buckets.push(counts.get(start) ?? {
       bucket_start: start,
       bucket_end: nextBucket(start, interval),
@@ -430,62 +444,57 @@ function timelinePeriodLabel(
   interval: TimelineInterval,
 ): string {
   const start = utcDate(bucket.bucket_start);
-  if (interval === "month") {
-    return new Intl.DateTimeFormat("en-US", {
+  return interval === "month"
+    ? new Intl.DateTimeFormat("en-US", {
       month: "long",
       year: "numeric",
       timeZone: "UTC",
-    }).format(start);
+    }).format(start)
+    : String(start.getUTCFullYear());
+}
+
+function timelineTickLabel(bucket: TimelineBucket, interval: TimelineInterval): string {
+  const start = utcDate(bucket.bucket_start);
+  return interval === "year"
+    ? String(start.getUTCFullYear())
+    : new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(start);
+}
+
+export function timelineYears(firstEventAt: string | null, lastEventAt: string | null): number[] {
+  if (!firstEventAt || !lastEventAt) {
+    return [];
   }
-  const end = utcDate(bucket.bucket_end);
-  end.setUTCDate(end.getUTCDate() - 1);
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-  return interval === "day"
-    ? formatter.format(start)
-    : `${formatter.format(start)}–${formatter.format(end)}`;
+  const firstYear = new Date(firstEventAt).getUTCFullYear();
+  const lastYear = new Date(lastEventAt).getUTCFullYear();
+  return Array.from({ length: lastYear - firstYear + 1 }, (_, index) => firstYear + index);
 }
 
 export function ActivityTimeline({
   buckets,
   interval,
   selected,
+  scopeYear,
   interactive,
-  onIntervalChange,
   onSelect,
   onClear,
+  onClearScope,
+  partialThrough,
 }: {
   buckets: TimelineBucket[];
   interval: TimelineInterval;
   selected: { start: string; end: string } | null;
+  scopeYear: number | null;
   interactive: boolean;
-  onIntervalChange: (value: TimelineInterval) => void;
   onSelect: (bucket: TimelineBucket) => void;
   onClear: () => void;
+  onClearScope: () => void;
+  partialThrough: string | null;
 }) {
   const maximum = Math.max(1, ...buckets.map((bucket) => bucket.transfer_count));
-  const labelStep = Math.max(1, Math.ceil(buckets.length / 7));
-  const minimumWidth = Math.max(600, buckets.length * (interval === "day" ? 5 : interval === "week" ? 8 : 11));
+  const partialDate = partialThrough ? new Date(partialThrough) : null;
   return (
     <>
       <div className="timelineToolbar">
-        <div className="timelineIntervals" role="group" aria-label="Timeline interval">
-          {TIMELINE_INTERVALS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={interval === value ? "active" : ""}
-              aria-pressed={interval === value}
-              onClick={() => onIntervalChange(value)}
-            >
-              {value[0].toUpperCase() + value.slice(1)}
-            </button>
-          ))}
-        </div>
         <div className="timelineLegend" aria-label="Timeline legend">
           <span><i className="timelineInSwatch" />Inbound</span>
           <span><i className="timelineOutSwatch" />Outbound</span>
@@ -500,7 +509,18 @@ export function ActivityTimeline({
               bucket_end: selected.end,
             }, interval)} UTC
           </span>
-          <button type="button" onClick={onClear}>Clear period</button>
+          <button type="button" onClick={onClear}>Clear month</button>
+        </div>
+      )}
+      {!selected && scopeYear != null && (
+        <div className="timelineSelection">
+          <span>
+            <CalendarDays size={15} aria-hidden="true" />
+            {interactive
+              ? `Filtering dashboard to ${scopeYear} UTC`
+              : `Showing ${scopeYear} monthly activity`}
+          </span>
+          <button type="button" onClick={onClearScope}>All years</button>
         </div>
       )}
       {!interactive && (
@@ -510,14 +530,19 @@ export function ActivityTimeline({
         {buckets.length === 0 ? (
           <div className="timelineEmpty">No timeline activity matches</div>
         ) : (
-          <div className="timelineChart" style={{ minWidth: `${minimumWidth}px` }}>
+          <div className="timelineChart">
             <div className="timelineScale">
               <span>{maximum.toLocaleString("en-US")}</span>
               <span>0</span>
             </div>
             <div className="timelinePlot">
-              {buckets.map((bucket, index) => {
+              {buckets.map((bucket) => {
                 const selectedPeriod = selected?.start === bucket.bucket_start && selected.end === bucket.bucket_end;
+                const bucketStartDate = utcDate(bucket.bucket_start);
+                const bucketEndDate = utcDate(bucket.bucket_end);
+                const isPartial = partialDate != null &&
+                  bucketStartDate <= partialDate &&
+                  partialDate < bucketEndDate;
                 const height = bucket.transfer_count === 0
                   ? 0
                   : Math.max(1.5, bucket.transfer_count / maximum * 100);
@@ -529,15 +554,15 @@ export function ActivityTimeline({
                   "--timeline-in-share": `${inboundShare}%`,
                 } as CSSProperties;
                 const period = timelinePeriodLabel(bucket, interval);
-                const title = `${period} UTC: ${bucket.transfer_count.toLocaleString("en-US")} captured events (${bucket.inbound_transfer_count.toLocaleString("en-US")} inbound, ${bucket.outbound_transfer_count.toLocaleString("en-US")} outbound)`;
+                const title = `${period} UTC: ${bucket.transfer_count.toLocaleString("en-US")} captured events (${bucket.inbound_transfer_count.toLocaleString("en-US")} inbound, ${bucket.outbound_transfer_count.toLocaleString("en-US")} outbound)${isPartial ? "; partial calendar period at data generation" : ""}`;
                 return (
                   <button
                     key={bucket.bucket_start}
                     type="button"
-                    className={`timelineBucket${selectedPeriod ? " selected" : ""}`}
+                    className={`timelineBucket${selectedPeriod ? " selected" : ""}${isPartial ? " partial" : ""}`}
                     style={style}
                     title={title}
-                    aria-label={`${title}${interactive ? ". Select this period." : ""}`}
+                    aria-label={`${title}${interactive ? interval === "year" ? ". Open this year." : ". Select this month." : ""}`}
                     aria-pressed={interactive ? selectedPeriod : undefined}
                     disabled={!interactive}
                     onClick={() => interactive && onSelect(bucket)}
@@ -547,7 +572,7 @@ export function ActivityTimeline({
                       <i className="timelineOutSegment" />
                     </span>
                     <span className="timelineTick" aria-hidden="true">
-                      {index % labelStep === 0 ? bucket.bucket_start : ""}
+                      {timelineTickLabel(bucket, interval)}{isPartial ? "*" : ""}
                     </span>
                   </button>
                 );
@@ -556,6 +581,10 @@ export function ActivityTimeline({
           </div>
         )}
       </div>
+      {partialDate && buckets.some((bucket) =>
+        utcDate(bucket.bucket_start) <= partialDate && partialDate < utcDate(bucket.bucket_end)) && (
+        <p className="timelinePartialNote">* Current calendar period is partial at data generation time.</p>
+      )}
     </>
   );
 }
@@ -820,8 +849,8 @@ export function App() {
   const [loadingMoreEvents, setLoadingMoreEvents] = useState(false);
   const apiMetadataRef = useRef<ApiDashboardData["data"]["metadata"] | undefined>(undefined);
   const [counterpartyLimit, setCounterpartyLimit] = useState(DEFAULT_COUNTERPARTY_LIMIT);
-  const [timelineInterval, setTimelineInterval] = useState<TimelineInterval>("month");
-  const [selectedPeriod, setSelectedPeriod] = useState<{ start: string; end: string } | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<{ start: string; end: string } | null>(null);
   const [recognitionFilter, setRecognitionFilter] = useState<RecognitionFilter>("all");
   const [dataRevision, setDataRevision] = useState(0);
   const [updatingToken, setUpdatingToken] = useState<string | null>(null);
@@ -860,15 +889,38 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [query]);
 
+  const timelineInterval: TimelineInterval = selectedYear == null ? "year" : "month";
+  const selectedPeriod = useMemo(() => {
+    if (selectedMonth) {
+      return selectedMonth;
+    }
+    if (selectedYear == null) {
+      return null;
+    }
+    return {
+      start: `${selectedYear}-01-01`,
+      end: `${selectedYear + 1}-01-01`,
+    };
+  }, [selectedMonth, selectedYear]);
+
   const dashboardQuery = useMemo((): DashboardQuery => ({
     recognition: recognitionFilter,
     accountFilters: selectedAccountFilters,
     query: debouncedQuery,
     counterpartyLimit,
     timelineInterval,
+    timelineYear: selectedYear,
     startDate: selectedPeriod?.start ?? null,
     endDate: selectedPeriod?.end ?? null,
-  }), [recognitionFilter, selectedAccountFilters, debouncedQuery, counterpartyLimit, timelineInterval, selectedPeriod]);
+  }), [
+    recognitionFilter,
+    selectedAccountFilters,
+    debouncedQuery,
+    counterpartyLimit,
+    timelineInterval,
+    selectedYear,
+    selectedPeriod,
+  ]);
   const dashboardQueryKey = JSON.stringify(dashboardQuery);
   const dashboardQueryKeyRef = useRef(dashboardQueryKey);
   const dashboardLoadGenerationRef = useRef(0);
@@ -1060,8 +1112,17 @@ export function App() {
   const timelineBuckets = useMemo(
     () => dashboardDataMode === "api"
       ? (apiResult?.timelineBuckets ?? [])
-      : bucketTimelineRows(filtered?.timeline ?? [], timelineInterval),
-    [apiResult, filtered, timelineInterval],
+      : bucketTimelineRows(
+        filtered?.timeline ?? [],
+        timelineInterval,
+        selectedYear,
+        timelineYears(data?.metadata.first_event_at ?? null, data?.metadata.last_event_at ?? null),
+      ),
+    [apiResult, data, filtered, selectedYear, timelineInterval],
+  );
+  const availableTimelineYears = useMemo(
+    () => timelineYears(data?.metadata.first_event_at ?? null, data?.metadata.last_event_at ?? null),
+    [data],
   );
 
   const eventCount = dashboardDataMode === "api"
@@ -1072,13 +1133,17 @@ export function App() {
     : (filtered?.summaries.tokens.length ?? 0);
   const apiResultIsCurrent = dashboardDataMode !== "api" || apiResultQueryKey === dashboardQueryKey;
 
-  function changeTimelineInterval(value: TimelineInterval) {
-    setTimelineInterval(value);
-    setSelectedPeriod(null);
+  function changeTimelineYear(value: number | null) {
+    setSelectedYear(value);
+    setSelectedMonth(null);
   }
 
   function selectTimelineBucket(bucket: TimelineBucket) {
-    setSelectedPeriod((current) =>
+    if (timelineInterval === "year") {
+      changeTimelineYear(utcDate(bucket.bucket_start).getUTCFullYear());
+      return;
+    }
+    setSelectedMonth((current) =>
       current?.start === bucket.bucket_start && current.end === bucket.bucket_end
         ? null
         : { start: bucket.bucket_start, end: bucket.bucket_end });
@@ -1320,18 +1385,37 @@ export function App() {
           <div className="panelHeader">
             <div className="panelTitle">
               <h2>Activity Timeline</h2>
-              <p>Captured Transfer-signature events, bucketed by block timestamp in UTC.</p>
+              <p>
+                {selectedYear == null
+                  ? "Yearly captured Transfer-signature event overview in UTC."
+                  : `Monthly captured Transfer-signature events for ${selectedYear} in UTC.`}
+              </p>
             </div>
-            <span>{timelineBuckets.length.toLocaleString("en-US")} {timelineInterval} buckets</span>
+            <label className="panelSelect">
+              <span>Year</span>
+              <select
+                aria-label="Timeline year"
+                value={selectedYear ?? ""}
+                onChange={(event) =>
+                  changeTimelineYear(event.target.value ? Number(event.target.value) : null)}
+              >
+                <option value="">All years</option>
+                {availableTimelineYears.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </label>
           </div>
           <ActivityTimeline
             buckets={timelineBuckets}
             interval={timelineInterval}
-            selected={selectedPeriod}
+            selected={selectedMonth}
+            scopeYear={selectedYear}
             interactive={dashboardDataMode === "api"}
-            onIntervalChange={changeTimelineInterval}
             onSelect={selectTimelineBucket}
-            onClear={() => setSelectedPeriod(null)}
+            onClear={() => setSelectedMonth(null)}
+            onClearScope={() => changeTimelineYear(null)}
+            partialThrough={dashboardDataMode === "api" ? data.metadata.generated_at : null}
           />
         </div>
 

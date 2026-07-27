@@ -16,6 +16,7 @@ import {
   etherscanTokenUrl,
   etherscanTransactionUrl,
   snapshotCoverageLabel,
+  timelineYears,
   INDIRECT_TRANSFER_EXPLANATION,
   SELF_TRANSFER_EXPLANATION,
 } from "../src/App";
@@ -446,51 +447,43 @@ describe("App", () => {
     expect(rows[0]).toMatchObject({ transfer_count: 5, value_raw_sum: "30" });
   });
 
-  it("buckets timeline rows by UTC day, week, or month and preserves empty periods", () => {
+  it("buckets timeline rows into fixed yearly overviews and selected-year months", () => {
     const rows = [
       { block_date: "2023-11-14", direction: "in", transfer_count: 2 },
       { block_date: "2023-11-16", direction: "out", transfer_count: 3 },
     ] as const;
 
-    expect(bucketTimelineRows(rows, "day")).toEqual([
-      {
-        bucket_start: "2023-11-14",
-        bucket_end: "2023-11-15",
-        transfer_count: 2,
-        inbound_transfer_count: 2,
-        outbound_transfer_count: 0,
-      },
-      {
-        bucket_start: "2023-11-15",
-        bucket_end: "2023-11-16",
-        transfer_count: 0,
-        inbound_transfer_count: 0,
-        outbound_transfer_count: 0,
-      },
-      {
-        bucket_start: "2023-11-16",
-        bucket_end: "2023-11-17",
-        transfer_count: 3,
-        inbound_transfer_count: 0,
-        outbound_transfer_count: 3,
-      },
-    ]);
-    expect(bucketTimelineRows(rows, "week")[0]).toMatchObject({
-      bucket_start: "2023-11-13",
-      bucket_end: "2023-11-20",
+    const years = bucketTimelineRows(rows, "year", null, [2022, 2023, 2024]);
+    expect(years).toHaveLength(3);
+    expect(years[0]).toMatchObject({
+      bucket_start: "2022-01-01",
+      transfer_count: 0,
+    });
+    expect(years[1]).toMatchObject({
+      bucket_start: "2023-01-01",
+      bucket_end: "2024-01-01",
       transfer_count: 5,
     });
-    expect(bucketTimelineRows(rows, "month")[0]).toMatchObject({
+
+    const months = bucketTimelineRows(rows, "month", 2023);
+    expect(months).toHaveLength(12);
+    expect(months[0]).toMatchObject({
+      bucket_start: "2023-01-01",
+      transfer_count: 0,
+    });
+    expect(months[10]).toMatchObject({
       bucket_start: "2023-11-01",
       bucket_end: "2023-12-01",
       transfer_count: 5,
     });
+    expect(timelineYears("2022-02-01T00:00:00Z", "2024-07-01T00:00:00Z"))
+      .toEqual([2022, 2023, 2024]);
   });
 
   it("selects an exact timeline bucket and exposes a clear action", () => {
     const onSelect = vi.fn();
     const onClear = vi.fn();
-    const onIntervalChange = vi.fn();
+    const onClearScope = vi.fn();
     const bucket = {
       bucket_start: "2026-07-01",
       bucket_end: "2026-08-01",
@@ -504,30 +497,33 @@ describe("App", () => {
         buckets={[bucket]}
         interval="month"
         selected={null}
+        scopeYear={2026}
         interactive
-        onIntervalChange={onIntervalChange}
         onSelect={onSelect}
         onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough="2026-07-15T00:00:00Z"
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ }));
     expect(onSelect).toHaveBeenCalledWith(bucket);
-    fireEvent.click(screen.getByRole("button", { name: "Week" }));
-    expect(onIntervalChange).toHaveBeenCalledWith("week");
+    expect(screen.getByText(/Current calendar period is partial/)).toBeInTheDocument();
 
     rerender(
       <ActivityTimeline
         buckets={[bucket]}
         interval="month"
         selected={{ start: bucket.bucket_start, end: bucket.bucket_end }}
+        scopeYear={2026}
         interactive
-        onIntervalChange={onIntervalChange}
         onSelect={onSelect}
         onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough={null}
       />,
     );
     expect(screen.getByText(/Filtering dashboard to July 2026 UTC/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Clear period" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear month" }));
     expect(onClear).toHaveBeenCalled();
 
     rerender(
@@ -535,27 +531,34 @@ describe("App", () => {
         buckets={[]}
         interval="month"
         selected={{ start: bucket.bucket_start, end: bucket.bucket_end }}
+        scopeYear={2026}
         interactive
-        onIntervalChange={onIntervalChange}
         onSelect={onSelect}
         onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough={null}
       />,
     );
     expect(screen.getByText(/Filtering dashboard to July 2026 UTC/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clear period" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear month" })).toBeInTheDocument();
 
     rerender(
       <ActivityTimeline
         buckets={[bucket]}
         interval="month"
         selected={null}
+        scopeYear={2026}
         interactive={false}
-        onIntervalChange={onIntervalChange}
         onSelect={onSelect}
         onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough={null}
       />,
     );
     expect(screen.getByRole("button", { name: /July 2026 UTC: 5 captured events/ })).toBeDisabled();
+    expect(screen.getByText("Showing 2026 monthly activity")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "All years" }));
+    expect(onClearScope).toHaveBeenCalled();
   });
 
   it("builds canonical Etherscan routes", () => {
@@ -621,8 +624,17 @@ describe("App", () => {
       "Data snapshotCoverage not recorded",
     );
     expect(screen.getByText("Activity Timeline")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("combobox", { name: "Timeline year" })).toHaveValue("");
+    expect(screen.getByRole("option", { name: "2023" })).toBeInTheDocument();
     expect(screen.getByText("Period cross-filtering is available in local live mode.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Timeline year" }), {
+      target: { value: "2023" },
+    });
+    expect(screen.getByRole("combobox", { name: "Timeline year" })).toHaveValue("2023");
+    expect(screen.getByText("Showing 2023 monthly activity")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Timeline year" }), {
+      target: { value: "" },
+    });
     expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Recognized" })).not.toBeChecked();
