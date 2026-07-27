@@ -73,9 +73,9 @@ describe("live token-recognition controls", () => {
           complete_matching_count: 0, returned_count: 0, next_cursor: null, items: [],
         }) });
       }
-      if (input.startsWith("/api/v1/graph?")) {
+      if (input.startsWith("/api/v1/timeline?")) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          complete_matching_count: 0, returned_count: 0, items: [],
+          interval: "month", complete_matching_count: 0, returned_count: 0, items: [],
         }) });
       }
       if (input.startsWith("/api/v1/tokens?")) {
@@ -186,7 +186,7 @@ describe("live token-recognition controls", () => {
       if (input.startsWith("/api/v1/summary?")) {
         return ok({ transfer_count: 1, token_count: 1, counterparty_count: 1 });
       }
-      if (input.startsWith("/api/v1/events?") || input.startsWith("/api/v1/graph?") ||
+      if (input.startsWith("/api/v1/events?") || input.startsWith("/api/v1/timeline?") ||
         input.startsWith("/api/v1/counterparties?")) {
         return ok(collection());
       }

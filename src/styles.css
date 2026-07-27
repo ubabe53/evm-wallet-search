@@ -9,14 +9,7 @@
   --control-bg: #ffffff;
   --code-bg: #f6f7f9;
   --code-text: #344054;
-  --graph-label: #111827;
-  --graph-edge: #4f756a;
-  --graph-counterparty: #4d7c70;
-  --graph-unknown: #98a2b3;
-  --graph-wallet: #16a34a;
-  --graph-node-border: #d8ebe4;
-  --graph-label-outline: #f4f9f7;
-  --graph-edge-label-bg: #f4f9f7;
+  --accent: #16a34a;
   --fixture-bg: #fff7ed;
   --fixture-text: #9a3412;
   --live-bg: #ecfdf3;
@@ -43,14 +36,7 @@
   --control-bg: #0f1621;
   --code-bg: #101722;
   --code-text: #cbd5e1;
-  --graph-label: #f8fafc;
-  --graph-edge: #5fa38d;
-  --graph-counterparty: #4f8f7c;
-  --graph-unknown: #667085;
-  --graph-wallet: #4ade80;
-  --graph-node-border: #a7f3d0;
-  --graph-label-outline: #07110e;
-  --graph-edge-label-bg: #07110e;
+  --accent: #4ade80;
   --fixture-bg: #3b2114;
   --fixture-text: #fdba74;
   --live-bg: #102b22;
@@ -232,7 +218,7 @@ h2 {
 }
 
 .recognitionFilter input:focus-visible + span {
-  outline: 2px solid var(--graph-wallet);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -257,7 +243,7 @@ h2 {
 
 .infoTooltipTrigger:hover,
 .infoTooltipTrigger:focus-visible {
-  border-color: var(--graph-wallet);
+  border-color: var(--accent);
   color: var(--text);
   outline: none;
 }
@@ -278,6 +264,7 @@ h2 {
   font-weight: 400;
   line-height: 1.45;
   text-align: left;
+  text-transform: none;
   white-space: normal;
   visibility: hidden;
   opacity: 0;
@@ -387,7 +374,7 @@ h2 {
   width: 15px;
   height: 15px;
   margin: 0;
-  accent-color: var(--graph-wallet);
+  accent-color: var(--accent);
 }
 
 .accountFilter summary {
@@ -512,49 +499,13 @@ h2 {
   font-size: 11px;
 }
 
-.graphHeaderControls,
-.graphLimit {
+.panelSelect {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.theaterToggle {
-  width: 30px;
-  height: 30px;
-}
-
-.graphPanel.theater {
-  position: fixed;
-  inset: 16px;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
-}
-
-.theaterBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-  background: rgba(3, 10, 8, 0.78);
-}
-
-.graphPanel.theater .graphShell {
-  flex: 1;
-  min-height: 0;
-}
-
-.graphPanel.theater .graph {
-  height: 100%;
-  min-height: 0;
-}
-
-.graphLimit {
   gap: 6px;
 }
 
-.graphLimit select {
+.panelSelect select {
   height: 30px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -564,107 +515,230 @@ h2 {
   cursor: pointer;
 }
 
-.graphShell {
-  position: relative;
-}
-
-.graphShell[data-graph-theme="light"] {
-  --graph-label: #153c31;
-  --graph-edge: #4f756a;
-  --graph-counterparty: #4d7c70;
-  --graph-wallet: #16a34a;
-  --graph-node-border: #d8ebe4;
-  --graph-label-outline: #f4f9f7;
-  --graph-edge-label-bg: #f4f9f7;
-}
-
-.graphShell[data-graph-theme="dark"] {
-  --graph-label: #d1fae5;
-  --graph-edge: #5fa38d;
-  --graph-counterparty: #4f8f7c;
-  --graph-wallet: #4ade80;
-  --graph-node-border: #a7f3d0;
-  --graph-label-outline: #07110e;
-  --graph-edge-label-bg: #07110e;
-}
-
-.graphReset {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-}
-
-.graph {
-  width: 100%;
-  height: 520px;
-  background-color: #f4f9f7;
-  background-image:
-    linear-gradient(rgba(21, 60, 49, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(21, 60, 49, 0.045) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-[data-theme="dark"] .graph {
-  background-color: #07110e;
-  background-image:
-    linear-gradient(rgba(74, 222, 128, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(74, 222, 128, 0.045) 1px, transparent 1px);
-}
-
-.graphEmpty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  pointer-events: none;
-}
-
-.graphLegend {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
+.timelineToolbar {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel-bg);
-  padding: 7px 9px;
+  padding: 12px 16px 0;
+}
+
+.timelineBucket:focus-visible,
+.timelineSelection button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.timelineLegend {
+  display: flex;
+  gap: 12px;
   color: var(--muted);
   font-size: 11px;
-  pointer-events: none;
 }
 
-.graphLegend span {
+.timelineLegend span,
+.timelineSelection span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
-.graphLegend i {
+.timelineLegend i {
   width: 9px;
   height: 9px;
-  border: 1px solid var(--graph-node-border);
-  border-radius: 50%;
-}
-
-.graphLegend .walletSwatch {
-  background: var(--graph-wallet);
-}
-
-.graphLegend .counterpartySwatch {
-  background: var(--graph-counterparty);
-}
-
-.graphLegend .contractSwatch {
   border-radius: 2px;
-  background: var(--graph-counterparty);
 }
 
-.graphLegend .unknownSwatch {
-  background: var(--graph-unknown);
+.timelineInSwatch,
+.timelineInSegment {
+  background: var(--in);
+}
+
+.timelineOutSwatch,
+.timelineOutSegment {
+  background: var(--out);
+}
+
+.timelineSelfSwatch,
+.timelineSelfSegment {
+  background: var(--muted);
+}
+
+.timelineSelection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--live-bg);
+  padding: 8px 10px;
+  color: var(--live-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.timelineSelection button {
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.timelineDemoNote {
+  margin: 10px 16px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.timelinePartialNote {
+  margin: -4px 16px 12px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.timelineScroll {
+  height: 428px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 14px 16px 10px;
+}
+
+.timelineChart {
+  display: grid;
+  grid-template-columns: 18px 64px minmax(0, 1fr);
+  height: 390px;
+}
+
+.timelineYAxisTitle {
+  align-self: center;
+  padding-bottom: 28px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.timelineScale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2px 8px 29px 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.timelineScale.empty {
+  justify-content: flex-end;
+}
+
+.timelinePlot {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  border-bottom: 1px solid var(--border);
+  background-image:
+    linear-gradient(to bottom, var(--subtle-border) 1px, transparent 1px);
+  background-size: 100% 25%;
+}
+
+.timelineBucket {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 28px;
+  align-items: end;
+  flex: 1 1 0;
+  min-width: 4px;
+  border: 0;
+  background: transparent;
+  padding: 0 1px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.timelineBucket[aria-disabled="true"] {
+  cursor: default;
+}
+
+.timelineBar {
+  display: flex;
+  align-self: end;
+  flex-direction: column;
+  width: 100%;
+  height: var(--timeline-height);
+  min-height: 1px;
+  overflow: hidden;
+  border-radius: 2px 2px 0 0;
+}
+
+.timelineInSegment {
+  height: var(--timeline-in-share);
+}
+
+.timelineOutSegment {
+  height: var(--timeline-out-share);
+}
+
+.timelineSelfSegment {
+  height: var(--timeline-self-share);
+}
+
+.timelineBucket:hover .timelineBar,
+.timelineBucket.selected .timelineBar {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.timelineBucket.partial .timelineBar {
+  border-top: 2px dashed var(--accent);
+}
+
+.timelineHoverTooltip {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: clamp(112px, var(--timeline-tooltip-position), calc(100% - 112px));
+  display: grid;
+  width: max-content;
+  max-width: min(220px, calc(100% - 16px));
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.3;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.timelineHoverTooltip span {
+  color: var(--muted);
+}
+
+.timelineTick {
+  align-self: center;
+  max-width: 64px;
+  overflow: hidden;
+  padding-top: 6px;
+  font-size: 9px;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.timelineEmpty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
 }
 
 
@@ -843,7 +917,7 @@ th {
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .recognitionStatus.recognized {
@@ -910,7 +984,7 @@ th {
 
 .etherscanLink:hover,
 .addressLink:hover {
-  color: var(--graph-wallet);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -927,13 +1001,13 @@ th {
 
 .transactionLink:hover {
   background: var(--unverified-bg);
-  color: var(--graph-wallet);
+  color: var(--accent);
 }
 
 .transactionLink:focus-visible,
 .etherscanLink:focus-visible,
 .addressLink:focus-visible {
-  outline: 2px solid var(--graph-wallet);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -1017,7 +1091,7 @@ code {
   border: 0;
   background: transparent;
   padding: 3px 5px;
-  color: var(--graph-wallet);
+  color: var(--accent);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1066,19 +1140,11 @@ code {
     left: 0;
   }
 
-  .graphHeaderControls {
+  .timelineToolbar,
+  .timelineSelection {
     width: 100%;
-    justify-content: space-between;
-  }
-
-  .graph {
-    height: 420px;
-  }
-
-  .graphPanel.theater {
-    inset: 0;
-    border: 0;
-    border-radius: 0;
+    align-items: flex-start;
+    flex-direction: column;
   }
 
 }

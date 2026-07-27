@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   App,
+  ActivityTimeline,
   accountEvidenceCoverageDescription,
   accountEvidenceCoverageLabel,
   accountEvidenceObservationBlockLabel,
@@ -10,19 +11,17 @@ import {
   aggregateCounterparties,
   aggregateTimelineRows,
   aggregateTokenSummaries,
-  buildCounterpartyGraph,
-  counterpartyNodeSize,
+  bucketTimelineRows,
   etherscanAddressUrl,
-  etherscanInteractionUrl,
   etherscanTokenUrl,
   etherscanTransactionUrl,
-  graphStyles,
-  interactionEdgeLabel,
   snapshotCoverageLabel,
+  timelineScaleTicks,
+  timelineYears,
   INDIRECT_TRANSFER_EXPLANATION,
   SELF_TRANSFER_EXPLANATION,
 } from "../src/App";
-import type { CounterpartySummary, DashboardGraph, TimelineRow, TokenSummary } from "../src/data";
+import type { CounterpartySummary, TimelineRow, TokenSummary } from "../src/data";
 
 const contractAccountEvidence = {
   account_type: "contract",
@@ -64,36 +63,6 @@ const eoaEventEvidence = {
   counterparty_evidence_reason_codes: "no_code_observed",
 } as const;
 
-const highQualityGraph = {
-  recognitionStatus: "recognized",
-  recognitionSource: "registry",
-  recognitionOverrideStatus: null,
-  metadataAvailability: "complete",
-  tokenQuality: "high_confidence",
-  tokenQualitySources: ["trustwallet", "uniswap", "coingecko"],
-  tokenQualitySourceCount: 3,
-  tokenQualityReason: "reviewed_manual_approval",
-  tokenQualityProvenance: "https://example.com/usdc",
-  tokenQualityVersion: "token-quality-v1",
-  tokenReputationVersion: "token-reputation-v2",
-  counterpartyAccountType: "contract",
-} as const;
-
-const unknownQualityGraph = {
-  recognitionStatus: "other",
-  recognitionSource: "automatic",
-  recognitionOverrideStatus: null,
-  metadataAvailability: "complete",
-  tokenQuality: "unknown",
-  tokenQualitySources: [],
-  tokenQualitySourceCount: 0,
-  tokenQualityReason: "no_registry_or_reviewed_approval",
-  tokenQualityProvenance: "https://example.com/spam",
-  tokenQualityVersion: "token-quality-v1",
-  tokenReputationVersion: "token-reputation-v2",
-  counterpartyAccountType: "eoa_candidate",
-} as const;
-
 const highQuality = {
   recognition_status: "recognized",
   recognition_reason: "registry_match",
@@ -127,22 +96,6 @@ const unknownQuality = {
   token_reputation_version: "token-reputation-v2",
   counterparty_account_type: "eoa_candidate",
 } as const;
-
-const graph = {
-  nodes: [
-    { data: { id: "wallet:0x1", label: "vitalik.eth", type: "wallet", address: "0x1", tokenAddress: null, symbol: null, accountType: null } },
-    { data: { id: "token:0x2", label: "USDC", type: "token", address: null, tokenAddress: "0x2", symbol: "USDC", accountType: null } },
-    { data: { id: "counterparty:0x1111111111111111111111111111111111111111", label: "0x1111...1111\nContract", type: "counterparty", address: "0x1111111111111111111111111111111111111111", tokenAddress: null, symbol: null, accountType: "contract" } },
-    { data: { id: "token:0x3", label: "SPAM", type: "token", address: null, tokenAddress: "0x3", symbol: "SPAM", accountType: null } },
-    { data: { id: "counterparty:0x2222222222222222222222222222222222222222", label: "0x2222...2222\nEOA", type: "counterparty", address: "0x2222222222222222222222222222222222222222", tokenAddress: null, symbol: null, accountType: "eoa_candidate" } },
-  ],
-  edges: [
-    { data: { ...highQualityGraph, id: "edge:1", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "token_counterparty", source: "counterparty:0x1111111111111111111111111111111111111111", target: "token:0x2", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1 } },
-    { data: { ...highQualityGraph, id: "edge:2", interactionId: "interaction:0x1:0x1111111111111111111111111111111111111111:0x2:in", edgeRole: "wallet_token", source: "token:0x2", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x1111111111111111111111111111111111111111", direction: "in", tokenAddress: "0x2", tokenSymbol: "USDC", tokenStatus: "trusted", metadataSource: "manual", metadataSourceUrl: "https://example.com/usdc", transferCount: 1, counterpartyTransferCount: 1 } },
-    { data: { ...unknownQualityGraph, id: "edge:3", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "token_counterparty", source: "counterparty:0x2222222222222222222222222222222222222222", target: "token:0x3", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1 } },
-    { data: { ...unknownQualityGraph, id: "edge:4", interactionId: "interaction:0x1:0x2222222222222222222222222222222222222222:0x3:in", edgeRole: "wallet_token", source: "token:0x3", target: "wallet:0x1", walletAddress: "0x1", counterpartyAddress: "0x2222222222222222222222222222222222222222", direction: "in", tokenAddress: "0x3", tokenSymbol: "SPAM", tokenStatus: "spam", metadataSource: "manual", metadataSourceUrl: "https://example.com/spam", transferCount: 1, counterpartyTransferCount: 1 } },
-  ],
-};
 
 const summaries = {
   tokens: [
@@ -383,6 +336,7 @@ const metadata = {
 };
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -424,86 +378,6 @@ describe("App", () => {
       snapshot_end_block: null,
       snapshot_finality_policy: null,
     })).toBe("Coverage not recorded");
-  });
-
-  it("does not expose removed Safe or ERC-4337 graph channels", () => {
-    const styles = graphStyles(document.createElement("div"));
-    const selectors = styles.map((rule) => rule.selector);
-    expect(selectors).not.toContain("node[?isSafe]");
-    expect(selectors).not.toContain("node[?isErc4337Account]");
-    expect(selectors).not.toContain('node[accountType = "eip7702_delegated"]');
-    const unknownStyle = styles.find((rule) => rule.selector === 'node[accountType = "unknown"]') as { style?: object };
-    const edgeStyle = styles.find((rule) => rule.selector === "edge") as { style?: object };
-    expect(unknownStyle.style)
-      .toMatchObject({ "border-style": "solid" });
-    expect(edgeStyle.style)
-      .toMatchObject({ "curve-style": "straight", "target-arrow-shape": "none" });
-  });
-
-  it("scales counterparty nodes gradually on a stable logarithmic range", () => {
-    expect([1, 10, 100, 1_000, 10_000, 100_000].map(counterpartyNodeSize)).toEqual([26, 37, 47, 58, 68, 68]);
-  });
-
-  it("labels graph edges with captured transfer counts", () => {
-    expect(interactionEdgeLabel(1)).toBe("1 transfer");
-    expect(interactionEdgeLabel(12_500)).toBe("12,500 transfers");
-  });
-
-  it("uses the same mixed-recognition aggregate for graph and counterparty ranking", () => {
-    const base = summaries.counterparties[0] as unknown as CounterpartySummary;
-    const counterpartyRows = [
-      base,
-      {
-        ...base,
-        token_status: "unverified" as const,
-        recognition_status: "other" as const,
-        token_quality: "listed" as const,
-        transfer_count: 2,
-        inbound_transfer_count: 0,
-        outbound_transfer_count: 2,
-        token_count: 1,
-      },
-    ];
-    const projected = buildCounterpartyGraph({
-      graph: {
-        ...graph,
-        edges: graph.edges.map((edge) => ({
-          data: { ...edge.data, counterpartyTransferCount: 99 },
-        })) as unknown as DashboardGraph["edges"],
-      } as unknown as DashboardGraph,
-      summaries: { counterparties: counterpartyRows },
-    }, 25);
-
-    expect(aggregateCounterparties(counterpartyRows)[0].transfer_count).toBe(5);
-    expect(projected.edges).toHaveLength(1);
-    expect(projected.edges[0].data).toMatchObject({
-      counterpartyAddress: base.counterparty_address,
-      transferCount: 5,
-      counterpartyTransferCount: 5,
-      label: "5 transfers",
-    });
-  });
-
-  it("preserves counterparty recency as the graph tie-breaker", () => {
-    const older = {
-      ...(summaries.counterparties[0] as unknown as CounterpartySummary),
-      transfer_count: 5,
-      last_seen_at: "2024-01-01T00:00:00+00:00",
-    };
-    const newer = {
-      ...(summaries.counterparties[1] as unknown as CounterpartySummary),
-      transfer_count: 5,
-      last_seen_at: "2024-02-01T00:00:00+00:00",
-    };
-    const projected = buildCounterpartyGraph({
-      graph: graph as unknown as DashboardGraph,
-      summaries: { counterparties: [older, newer] },
-    }, 2);
-
-    expect(projected.edges.map((edge) => edge.data.counterpartyAddress)).toEqual([
-      newer.counterparty_address,
-      older.counterparty_address,
-    ]);
   });
 
   it("aggregates token classification rows into one transfer-ranked counterparty", () => {
@@ -574,25 +448,145 @@ describe("App", () => {
     expect(rows[0]).toMatchObject({ transfer_count: 5, value_raw_sum: "30" });
   });
 
+  it("buckets timeline rows into fixed yearly overviews and selected-year months", () => {
+    const rows = [
+      { block_date: "2023-11-14", direction: "in", transfer_count: 2 },
+      { block_date: "2023-11-16", direction: "out", transfer_count: 3 },
+      { block_date: "2023-11-18", direction: "self", transfer_count: 1 },
+    ] as const;
+
+    const years = bucketTimelineRows(rows, "year", null, [2022, 2023, 2024]);
+    expect(years).toHaveLength(3);
+    expect(years[0]).toMatchObject({
+      bucket_start: "2022-01-01",
+      transfer_count: 0,
+    });
+    expect(years[1]).toMatchObject({
+      bucket_start: "2023-01-01",
+      bucket_end: "2024-01-01",
+      transfer_count: 6,
+      self_transfer_count: 1,
+    });
+
+    const months = bucketTimelineRows(rows, "month", 2023);
+    expect(months).toHaveLength(12);
+    expect(months[0]).toMatchObject({
+      bucket_start: "2023-01-01",
+      transfer_count: 0,
+    });
+    expect(months[10]).toMatchObject({
+      bucket_start: "2023-11-01",
+      bucket_end: "2023-12-01",
+      transfer_count: 6,
+      self_transfer_count: 1,
+    });
+    expect(timelineYears("2022-02-01T00:00:00Z", "2024-07-01T00:00:00Z"))
+      .toEqual([2022, 2023, 2024]);
+    expect(timelineScaleTicks(100)).toEqual([100, 75, 50, 25, 0]);
+  });
+
+  it("selects an exact timeline bucket and exposes a clear action", () => {
+    const onSelect = vi.fn();
+    const onClear = vi.fn();
+    const onClearScope = vi.fn();
+    const bucket = {
+      bucket_start: "2026-07-01",
+      bucket_end: "2026-08-01",
+      transfer_count: 6,
+      inbound_transfer_count: 3,
+      outbound_transfer_count: 2,
+      self_transfer_count: 1,
+    };
+
+    const { rerender } = render(
+      <ActivityTimeline
+        buckets={[bucket]}
+        interval="month"
+        selected={null}
+        scopeYear={2026}
+        interactive
+        onSelect={onSelect}
+        onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough="2026-07-15T00:00:00Z"
+      />,
+    );
+    expect(screen.getByText("Captured events")).toBeInTheDocument();
+    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("6");
+    expect(screen.getByLabelText("Captured event count scale")).toHaveTextContent("4.5");
+    fireEvent.mouseEnter(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("6 captured events");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("3 inbound · 2 outbound · 1 self");
+    fireEvent.mouseLeave(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }));
+    expect(onSelect).toHaveBeenCalledWith(bucket);
+    expect(screen.getByText(/Current calendar period is partial/)).toBeInTheDocument();
+
+    rerender(
+      <ActivityTimeline
+        buckets={[bucket]}
+        interval="month"
+        selected={{ start: bucket.bucket_start, end: bucket.bucket_end }}
+        scopeYear={2026}
+        interactive
+        onSelect={onSelect}
+        onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough={null}
+      />,
+    );
+    expect(screen.getByText(/Filtering dashboard to July 2026 UTC/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear month" }));
+    expect(onClear).toHaveBeenCalled();
+
+    rerender(
+      <ActivityTimeline
+        buckets={[]}
+        interval="month"
+        selected={{ start: bucket.bucket_start, end: bucket.bucket_end }}
+        scopeYear={2026}
+        interactive
+        onSelect={onSelect}
+        onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough={null}
+      />,
+    );
+    expect(screen.getByText(/Filtering dashboard to July 2026 UTC/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear month" })).toBeInTheDocument();
+
+    rerender(
+      <ActivityTimeline
+        buckets={[bucket]}
+        interval="month"
+        selected={null}
+        scopeYear={2026}
+        interactive={false}
+        onSelect={onSelect}
+        onClear={onClear}
+        onClearScope={onClearScope}
+        partialThrough={null}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /July 2026 UTC: 6 captured events/ }))
+      .toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("Showing 2026 monthly activity")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "All years" }));
+    expect(onClearScope).toHaveBeenCalled();
+  });
+
   it("builds canonical Etherscan routes", () => {
     expect(etherscanAddressUrl("0xabc")).toBe("https://etherscan.io/address/0xabc");
     expect(etherscanTokenUrl("0xdef")).toBe("https://etherscan.io/token/0xdef");
     expect(etherscanTransactionUrl("0x123")).toBe("https://etherscan.io/tx/0x123");
-    const interaction = new URL(etherscanInteractionUrl("0xwallet", "0xcounterparty"));
-    expect(interaction.pathname).toBe("/advanced-filter");
-    expect(interaction.searchParams.get("txntype")).toBe("2");
-    expect(interaction.searchParams.getAll("fadd")).toEqual(["0xwallet", "0xcounterparty"]);
-    expect(interaction.searchParams.getAll("tadd")).toEqual(["0xwallet", "0xcounterparty"]);
-    expect(interaction.searchParams.get("qt")).toBe("1");
   });
 
   it("renders exported dashboard data", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((path: string) => {
-        const payload = path.endsWith("graph.json")
-          ? graph
-          : path.endsWith("summaries.json")
+        const payload = path.endsWith("summaries.json")
             ? summaries
             : path.endsWith("timeline.json")
               ? timeline
@@ -644,7 +638,18 @@ describe("App", () => {
     expect(screen.getByText("Data snapshot").parentElement).toHaveTextContent(
       "Data snapshotCoverage not recorded",
     );
-    expect(screen.getByLabelText("Maximum graph counterparties")).toHaveValue("25");
+    expect(screen.getByText("Activity Timeline")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Timeline year" })).toHaveValue("");
+    expect(screen.getByRole("option", { name: "2023" })).toBeInTheDocument();
+    expect(screen.getByText("Period cross-filtering is available in local live mode.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Timeline year" }), {
+      target: { value: "2023" },
+    });
+    expect(screen.getByRole("combobox", { name: "Timeline year" })).toHaveValue("2023");
+    expect(screen.getByText("Showing 2023 monthly activity")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Timeline year" }), {
+      target: { value: "" },
+    });
     expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Recognized" })).not.toBeChecked();
@@ -672,11 +677,17 @@ describe("App", () => {
     expect(screen.getByText(/exact Ethereum contract address appears in Uniswap/)).toBeInTheDocument();
     expect(screen.getByRole("tooltip", { name: /Recognized tokens/ })).toBeInTheDocument();
     expect(screen.getByLabelText("How token recognition works")).toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByLabelText("How token recognition works"));
+    expect(screen.getByRole("tooltip", { name: /Recognition controls/ }))
+      .toHaveTextContent("Recognition controls");
     expect(screen.getAllByRole("combobox", { name: /Recognition for/ }).every((control) => control.hasAttribute("disabled"))).toBe(true);
 
     fireEvent.mouseEnter(screen.getByLabelText("How address type works"));
     expect(screen.getByRole("tooltip", { name: /Address type/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Address type (2)"));
+    const addressTypeSummary = screen.getByText("Address type (2)");
+    const addressTypeMenu = addressTypeSummary.closest("details");
+    fireEvent.click(addressTypeSummary);
+    expect(addressTypeMenu).toHaveAttribute("open");
     const contractAccount = screen.getByRole("checkbox", { name: "Contract" });
     const eoaCandidate = screen.getByRole("checkbox", { name: "EOA" });
     expect(contractAccount).toBeChecked();
@@ -684,6 +695,12 @@ describe("App", () => {
     fireEvent.click(contractAccount);
     expect(screen.queryByRole("link", { name: "0x111...111" })).not.toBeInTheDocument();
     fireEvent.click(contractAccount);
+    fireEvent.mouseLeave(addressTypeMenu!);
+    expect(addressTypeMenu).not.toHaveAttribute("open");
+
+    const recognizedStatus = screen.getAllByText("Recognized")
+      .find((element) => element.classList.contains("recognitionStatus"));
+    expect(recognizedStatus).toHaveTextContent(/^Recognized$/);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "contract" } });
     expect(screen.getAllByRole("link", { name: "0x1111...1111" }).length).toBeGreaterThan(0);
@@ -691,30 +708,11 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0x1111" } });
     expect(screen.getAllByText("0x1111...1111").length).toBeGreaterThan(0);
 
-    fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0xaaa" } });
-    expect(screen.getByText("2 nodes / 1 edges")).toBeInTheDocument();
-
-    const graphElement = screen.getByRole("img", { name: /wallet counterparty graph/i });
-    const graphShell = graphElement.parentElement;
-    expect(graphShell).toHaveAttribute("data-graph-theme", "light");
-
-    fireEvent.click(screen.getByLabelText("Open graph theater mode"));
-    expect(screen.getByRole("dialog", { name: "Counterparty Graph theater mode" })).toHaveClass("theater");
-    expect(document.body.style.overflow).toBe("hidden");
-    expect(screen.getByLabelText("Exit graph theater mode")).toBeInTheDocument();
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Counterparty Graph theater mode" })).not.toBeInTheDocument();
-    expect(document.body.style.overflow).toBe("");
-
     fireEvent.click(screen.getByLabelText("Switch to dark theme"));
     expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(graphElement).toBe(screen.getByRole("img", { name: /wallet counterparty graph/i }));
-    expect(graphShell).toHaveAttribute("data-graph-theme", "dark");
 
     fireEvent.click(screen.getByLabelText("Switch to light theme"));
     expect(document.documentElement.dataset.theme).toBe("light");
-    expect(graphElement).toBe(screen.getByRole("img", { name: /wallet counterparty graph/i }));
-    expect(graphShell).toHaveAttribute("data-graph-theme", "light");
   });
 
   it("shows an actionable error when generated data is unavailable", async () => {
@@ -725,7 +723,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/Could not load data\/graph\.json \(HTTP 404\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/Could not load data\/summaries\.json \(HTTP 404\)/)).toBeInTheDocument();
     expect(screen.getByText(/analytics:build/)).toBeInTheDocument();
   });
 });

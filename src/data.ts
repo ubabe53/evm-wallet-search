@@ -366,7 +366,6 @@ export type ApiMetadata = {
 export type DashboardMetadata = PipelineMetadata | ApiMetadata;
 
 export type DashboardData<Metadata extends DashboardMetadata = PipelineMetadata> = {
-  graph: DashboardGraph;
   summaries: {
     tokens: TokenSummary[];
     counterparties: CounterpartySummary[];
@@ -380,8 +379,22 @@ export type DashboardQuery = {
   recognition: RecognitionFilter;
   accountFilters: AccountFilter[];
   query: string;
-  graphLimit: number;
   counterpartyLimit: number;
+  timelineInterval: TimelineInterval;
+  timelineYear: number | null;
+  startDate: string | null;
+  endDate: string | null;
+};
+
+export type TimelineInterval = "month" | "year";
+
+export type TimelineBucket = {
+  bucket_start: string;
+  bucket_end: string;
+  transfer_count: number;
+  inbound_transfer_count: number;
+  outbound_transfer_count: number;
+  self_transfer_count: number;
 };
 
 export type DashboardSummary = {
@@ -400,30 +413,12 @@ export type ApiCollection<T> = {
 
 export type ApiDashboardData = {
   data: DashboardData<ApiMetadata>;
+  timelineBuckets: TimelineBucket[];
   summary: DashboardSummary;
   eventCount: number;
   eventNextCursor: string | null;
   tokenCount: number;
   counterpartyCount: number;
-  graphCounterpartyCount: number;
-};
-
-type ApiGraphCounterparty = {
-  wallet_id: string;
-  ens: string;
-  wallet_address: string;
-  counterparty_address: string;
-  account_type: AccountType;
-  code_state: CodeState;
-  observation_block_timestamp: string | null;
-  observation_block_number: number | null;
-  eip7702_delegation_target: string | null;
-  evidence_fetch_status: EvidenceFetchStatus;
-  evidence_reason_codes: string;
-  transfer_count: number;
-  inbound_transfer_count: number;
-  outbound_transfer_count: number;
-  token_count: number;
 };
 
 export const dashboardDataMode = import.meta.env.VITE_DATA_MODE === "api" ? "api" : "static";
@@ -441,59 +436,14 @@ function apiQuery(query: DashboardQuery, extra: Record<string, string | number> 
   if (query.query.trim()) {
     parameters.set("q", query.query.trim());
   }
+  if (query.startDate && query.endDate) {
+    parameters.set("start", query.startDate);
+    parameters.set("end", query.endDate);
+  }
   for (const [key, value] of Object.entries(extra)) {
     parameters.set(key, String(value));
   }
   return parameters.toString();
-}
-
-function apiGraph(items: ApiGraphCounterparty[]): DashboardGraph {
-  const nodes = new Map<string, GraphNode>();
-  const edges: GraphEdge[] = [];
-
-  for (const item of items) {
-    const walletNodeId = `wallet:${item.wallet_address}`;
-    const counterpartyNodeId = `counterparty:${item.counterparty_address}`;
-    const interactionId = `counterparty:${item.wallet_address}:${item.counterparty_address}`;
-    nodes.set(walletNodeId, {
-      data: {
-        id: walletNodeId, label: item.ens, type: "wallet", address: item.wallet_address,
-        tokenAddress: null, symbol: null, accountType: null, codeState: null,
-        observationBlockNumber: null, observationBlockTimestamp: null,
-        eip7702DelegationTarget: null, evidenceFetchStatus: null,
-        evidenceReasonCodes: null,
-      },
-    });
-    nodes.set(counterpartyNodeId, {
-      data: {
-        id: counterpartyNodeId,
-        label: `${item.counterparty_address.slice(0, 6)}...${item.counterparty_address.slice(-4)}`,
-        type: "counterparty",
-        address: item.counterparty_address, tokenAddress: null, symbol: null,
-        accountType: item.account_type, codeState: item.code_state,
-        observationBlockNumber: item.observation_block_number,
-        observationBlockTimestamp: item.observation_block_timestamp,
-        eip7702DelegationTarget: item.eip7702_delegation_target,
-        evidenceFetchStatus: item.evidence_fetch_status,
-        evidenceReasonCodes: item.evidence_reason_codes,
-      },
-    });
-    edges.push({
-      data: {
-        id: `${interactionId}:wallet-counterparty`, interactionId, edgeRole: "wallet_counterparty",
-        source: walletNodeId,
-        target: counterpartyNodeId,
-        walletAddress: item.wallet_address, counterpartyAddress: item.counterparty_address,
-        direction: "both", tokenAddress: null, tokenSymbol: null,
-        counterpartyAccountType: item.account_type, transferCount: item.transfer_count,
-        counterpartyTransferCount: item.transfer_count,
-        inboundTransferCount: item.inbound_transfer_count,
-        outboundTransferCount: item.outbound_transfer_count,
-        tokenCount: item.token_count,
-      },
-    });
-  }
-  return { nodes: [...nodes.values()], edges };
 }
 
 async function fetchJson<T>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
@@ -509,15 +459,14 @@ async function fetchJson<T>(path: string, signal?: AbortSignal, init?: RequestIn
 
 // The dashboard is static: all runtime data is loaded from generated JSON files.
 export async function loadDashboardData(signal?: AbortSignal): Promise<DashboardData> {
-  const [graph, summaries, timeline, events, metadata] = await Promise.all([
-    fetchJson<DashboardGraph>("data/graph.json", signal),
+  const [summaries, timeline, events, metadata] = await Promise.all([
     fetchJson<DashboardData["summaries"]>("data/summaries.json", signal),
     fetchJson<TimelineRow[]>("data/timeline.json", signal),
     fetchJson<WalletEvent[]>("data/events.json", signal),
     fetchJson<PipelineMetadata>("data/meta.json", signal),
   ]);
 
-  return { graph, summaries, timeline, events, metadata };
+  return { summaries, timeline, events, metadata };
 }
 
 export async function loadApiDashboardData(
@@ -532,35 +481,41 @@ export async function loadApiDashboardData(
     cachedMetadata ?? fetchJson<ApiMetadata>("/api/v1/metadata", signal),
     fetchJson<DashboardSummary>(`/api/v1/summary?${common}`, signal),
   ]);
-  const [events, graph] = await Promise.all([
+  const timelineQuery = { ...query, startDate: null, endDate: null };
+  const timelineParameters: Record<string, string | number> = {
+    interval: query.timelineInterval,
+  };
+  if (query.timelineYear != null) {
+    timelineParameters.year = query.timelineYear;
+  }
+  const [events, timeline] = await Promise.all([
     fetchJson<ApiCollection<WalletEvent>>(`/api/v1/events?${apiQuery(query, { limit: 10 })}`, signal),
-    fetchJson<ApiCollection<ApiGraphCounterparty>>(
-      `/api/v1/graph?${apiQuery(query, { limit: query.graphLimit })}`,
+    fetchJson<ApiCollection<TimelineBucket> & { interval: TimelineInterval; year: number | null }>(
+      `/api/v1/timeline?${apiQuery(timelineQuery, timelineParameters)}`,
       signal,
     ),
   ]);
   const [tokens, counterparties] = await Promise.all([
     fetchJson<ApiCollection<TokenSummary>>(`/api/v1/tokens?${apiQuery(query, { limit: 500 })}`, signal),
     fetchJson<ApiCollection<CounterpartySummary>>(
-      `/api/v1/counterparties?${apiQuery(query, { limit: Math.max(query.graphLimit, query.counterpartyLimit) })}`,
+      `/api/v1/counterparties?${apiQuery(query, { limit: query.counterpartyLimit })}`,
       signal,
     ),
   ]);
 
   return {
     data: {
-      graph: apiGraph(graph.items),
       summaries: { tokens: tokens.items, counterparties: counterparties.items },
       timeline: [],
       events: events.items,
       metadata,
     },
+    timelineBuckets: timeline.items,
     summary,
     eventCount: events.complete_matching_count,
     eventNextCursor: events.next_cursor ?? null,
     tokenCount: tokens.complete_matching_count,
     counterpartyCount: counterparties.complete_matching_count,
-    graphCounterpartyCount: graph.complete_matching_count,
   };
 }
 

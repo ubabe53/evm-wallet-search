@@ -43,7 +43,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
 | Fixture demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON only to the explicit fixture/static build | The complete-history local serving architecture |
-| Dashboard | `src/` | Present graph, summary, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
+| Dashboard | `src/` | Present activity timeline, summary, rankings, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
 | Tests | `tests/`, `analytics/tests/`, `analytics/models/unit_tests.yml` | Enforce UI, export, enrichment, grain, and semantic contracts | A substitute for documenting system intent and boundaries |
 | Context layer | `AGENTS.md`, this file, `README.md`, `docs/` | Make constraints, decisions, operations, and change routes legible | Stale narrative that contradicts executable behavior |
 
@@ -119,17 +119,17 @@ The loopback-only FastAPI service:
 
 - own DuckDB connections and limit writes to `app.token_recognition_overrides`;
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
-- compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
+- compute filters, counts, rankings, timeline buckets, graph compatibility pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
 - return event raw values and per-token raw totals as exact strings while retaining token-decimals metadata separately;
 - return self-transfers as the explicit `self` event direction while excluding the tracked wallet from counterparty counts and graph relationships;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
-- apply manual token-recognition overrides before every filter, count, ranking, graph page, and event page;
+- apply manual token-recognition overrides before every filter, count, ranking, timeline bucket, graph compatibility page, and event page;
 - expose only `recognition=all|recognized|other` as the public token-classification control while retaining detailed reputation evidence internally;
-- treat recognition as inclusive counterparty-cohort membership for counterparty and graph rankings, then rank eligible addresses by their complete activity inside the remaining account/search scope;
+- treat recognition as inclusive counterparty-cohort membership for counterparty and graph compatibility rankings, then rank eligible addresses by their complete activity inside the remaining account/search/time scope;
 - keep secrets and database paths server-side.
 
-The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Graph rows and counterparty rows share one address grain and ordering contract, so the same top-N selection cannot diverge by token or direction. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves the exact totals, requests bounded graph/token/counterparty results, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override.
+The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Graph compatibility rows and counterparty rows share one address grain and ordering contract. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves exact totals, requests a stable yearly overview or one selected year's monthly buckets plus bounded token/counterparty rows, applies selected year/month UTC periods through half-open API filters, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override. It no longer requests or renders the graph compatibility endpoint.
 
 ## Known implementation gaps
 
@@ -143,7 +143,7 @@ These are explicit gaps, not permissions to fill them opportunistically during u
 
 - `AGENTS.md`: concise durable workflow, invariants, validation, and routing instructions.
 - `ARCHITECTURE.md`: high-level component map, boundaries, dependency direction, and known gaps.
-- `docs/architecture.md`: detailed product behavior, semantic policy, graph behavior, classification, and export policy.
+- `docs/architecture.md`: detailed product behavior, semantic policy, timeline behavior, classification, and export policy.
 - `docs/data-model.md`: model grains, fields, keys, classifications, provenance, and tests.
 - `docs/operations.md`: setup, commands, credentials, enrichment, recovery, and delivery procedures.
 - `README.md`: user-facing overview, quickstart, and visible dashboard behavior.
