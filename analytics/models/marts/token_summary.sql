@@ -28,6 +28,7 @@ select
   count(*) as transfer_count,
   count(*) filter (where direction = 'in') as inbound_transfer_count,
   count(*) filter (where direction = 'out') as outbound_transfer_count,
+  count(*) filter (where direction = 'self') as self_transfer_count,
   count(*) filter (where direction = 'in' and is_indirect) as indirect_inbound_transfer_count,
   count(*) filter (where direction = 'out' and is_indirect) as indirect_outbound_transfer_count,
   count(distinct counterparty_address) filter (

@@ -32,6 +32,7 @@ with interaction_counts as (
     min(block_timestamp) as first_seen_at,
     max(block_timestamp) as last_seen_at
   from {{ ref('wallet_events') }}
+  where direction != 'self'
   group by wallet_address, counterparty_address, token_address, token_symbol,
     token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
     metadata_availability, token_quality, token_quality_sources,

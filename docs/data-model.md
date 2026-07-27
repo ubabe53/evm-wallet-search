@@ -55,8 +55,8 @@ Successful observations are immutable by default and therefore represent “obse
 
 Filters staged transfers to configured wallets and adds:
 
-- `direction`: `in` when the wallet is the recipient, `out` when it is the sender.
-- `counterparty_address`: the other side of the transfer.
+- `direction`: `self` when both emitted participants equal the wallet, otherwise `in` when the wallet is the recipient or `out` when it is the sender. The self branch is evaluated first.
+- `counterparty_address`: the other side of an inbound/outbound transfer; for a self-transfer it equals the tracked wallet so the immutable event remains self-contained and auditable.
 - `counterparty_account_type` plus the complete pinned observation, fetch status, reason codes, and evidence schema version; unenriched counterparties remain `unknown` / `not_fetched`.
 - `value_raw`: the exact base-10 string emitted in the log. Token `decimals` remain adjacent sourced metadata so a future consumer can derive an amount with an explicit precision and presentation policy; the current model does not cast the raw value to floating point.
 - automatic token recognition status, reason, source, and classifier version copied from token enrichment without changing the event grain.
@@ -70,7 +70,7 @@ One row per observed or labeled token contract. It produces `token_reputation`, 
 
 ### `int_wallet_token_interactions`
 
-One row per wallet and token. It records transfer and distinct-counterparty counts, direction counts, confirmed-indirect inbound/outbound counts, transaction-sender evidence coverage, first/last timestamps, active duration, a 0-100 `interaction_legitimacy_score`, reason codes, version, and `interaction_legitimacy` (`not_suspicious`, `uncertain`, or `suspicious`). It detects broad, bursty, one-direction transfer sprays. In `interaction-legitimacy-v2`, the outbound-initiator score and `mass_outbound_transaction_sender_matches_wallet` reason require complete outbound transaction-sender evidence matching the wallet; unknown or mismatched senders do not receive that component. A mismatch alone is not a spam classification signal.
+One row per wallet and token. It records total, inbound, outbound, and self-transfer counts, external distinct-counterparty counts, confirmed-indirect inbound/outbound counts, transaction-sender evidence coverage, first/last timestamps, active duration, a 0-100 `interaction_legitimacy_score`, reason codes, version, and `interaction_legitimacy` (`not_suspicious`, `uncertain`, or `suspicious`). It detects broad, bursty, one-direction external transfer sprays. In `interaction-legitimacy-v3`, self-transfers do not contribute counterparties, direction ratios, or the classification window. The outbound-initiator score and `mass_outbound_transaction_sender_matches_wallet` reason require complete outbound transaction-sender evidence matching the wallet; unknown or mismatched senders do not receive that component. A mismatch alone is not a spam classification signal.
 
 ### `int_classified_wallet_transfer_events`
 
@@ -86,13 +86,13 @@ Application-serving event table. This preserves the immutable one-transfer grain
 
 ### `graph_nodes`
 
-Nodes for tracked addresses, counterparties, and tokens. Counterparty nodes carry primary account type, code observation, fetch status, and reasons. Population coverage belongs to `pipeline_metadata`; tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
+Nodes for tracked addresses, external counterparties, and tokens participating in inbound/outbound interactions. Self-transfers do not create graph nodes or relationships. Counterparty nodes carry primary account type, code observation, fetch status, and reasons. Population coverage belongs to `pipeline_metadata`; tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
 
 The presentation layer shortens counterparty labels for readability while retaining full addresses in the API or demo payload. It exposes EOA and Contract labels; internal EIP-7702 evidence appears only in the EOA tooltip. Unresolved rows receive no type badge and use the graph's solid neutral `Unclassified` marker rather than suggesting another account type through an unexplained dashed shape.
 
 ### `graph_edges`
 
-Each wallet-counterparty-token-direction interaction produces two directed legs: `wallet_token` and `token_counterparty`. Inbound flow is counterparty to token to wallet; outbound flow is wallet to token to counterparty. This makes every exported token node part of the graph.
+Each external wallet-counterparty-token-direction interaction produces two directed legs: `wallet_token` and `token_counterparty`. Inbound flow is counterparty to token to wallet; outbound flow is wallet to token to counterparty. Self-transfers remain in event and token-flow marts but are excluded from the external interaction graph. This makes every exported token node part of the graph.
 
 Graph edges carry effective status, metadata provenance, and both evidence layers so the application query can exclude suspected and reviewed spam before projecting direct wallet-counterparty links.
 
@@ -100,7 +100,7 @@ Graph edges carry effective status, metadata provenance, and both evidence layer
 
 ### `token_summary`
 
-One row per wallet, emitting contract, effective status, quality, and exact counterparty account-evidence signature across inbound and outbound activity. This serving grain supports inclusive account filtering. The local API filters cell rows and aggregates them back to one row per wallet and emitting contract before ranking and returning a bounded page; the fixture demo performs the equivalent operation over its small static payload. It records total, inbound, and outbound captured Transfer-signature event counts; confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned-counterparty address counts; token reputation evidence; decimal-adjusted total when metadata exists; and exact raw-third-value total. Without token-standard disambiguation, those counts and totals are ERC-20-intended rather than proven fungible-token measures.
+One row per wallet, emitting contract, effective status, quality, and exact counterparty account-evidence signature across inbound, outbound, and self activity. This serving grain supports inclusive account filtering. The local API filters cell rows and aggregates them back to one row per wallet and emitting contract before ranking and returning a bounded page; the fixture demo performs the equivalent operation over its small static payload. It records total, inbound, outbound, and self captured Transfer-signature event counts; the total reconciles as inbound + outbound + self. It also records confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned external-counterparty address counts; token reputation evidence; token-decimals metadata; and the exact raw-third-value total. Without token-standard disambiguation, those counts and totals are ERC-20-intended rather than proven fungible-token measures.
 
 `indirect_inbound_transfer_count` and `indirect_outbound_transfer_count` count only `is_indirect = true`. Legacy nulls are excluded rather than treated as direct or indirect, so each indirect count is bounded by its corresponding direction total.
 
@@ -116,7 +116,7 @@ The ranking-serving mart excludes the zero address, the tracked wallet itself, a
 
 ### `timeline_daily`
 
-Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction. This mart remains available for the fixture demo and a future time-series endpoint; the current local dashboard API does not expose a timeline route. Token addresses remain part of the displayed grain because raw values from different assets cannot be meaningfully summed together. Raw totals use arbitrary-precision integers in DuckDB and exact strings at JSON boundaries.
+Daily transfer counts and token-flow aggregates by wallet, token, status, quality, exact counterparty account-evidence signature, and direction (`in`, `out`, or `self`). This mart remains available for the fixture demo and a future time-series endpoint; the current local dashboard API does not expose a timeline route. Token addresses remain part of the displayed grain because raw values from different assets cannot be meaningfully summed together. Raw totals use arbitrary-precision integers in DuckDB and exact strings at JSON boundaries.
 
 ### `pipeline_metadata`
 
@@ -140,7 +140,7 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 
 ## Local API contract
 
-The `/api/v1` service currently advertises response schema `dashboard-api-v8`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, or a metadata run ID that does not match one completed `ops.pipeline_runs` row. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. Event `value_raw` and token `value_raw_sum` fields cross the JSON boundary as exact strings; v8 removes the prior floating-point `amount_decimal` and `amount_decimal_sum` fields while retaining token-decimals metadata. The service exposes:
+The `/api/v1` service currently advertises response schema `dashboard-api-v9`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, or a metadata run ID that does not match one completed `ops.pipeline_runs` row. It left-joins the application-owned override table before recognition, repeated inclusive `account`, and optional literal `q` predicates are applied. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. Event `value_raw` and token `value_raw_sum` fields cross the JSON boundary as exact strings. Version 9 adds the `self` event direction and per-token `self_transfer_count`, while counterparty counts and graph relationships remain external-only; the prior version removed floating-point normalized amounts while retaining token-decimals metadata. The service exposes:
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, contiguous finalized snapshot bounds, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema remain separate from the indexer checkpoint;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;

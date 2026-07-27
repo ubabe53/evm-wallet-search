@@ -31,7 +31,11 @@ inner join expected using (
   token_quality,
   counterparty_account_type
 )
-where summaries.transfer_count != summaries.inbound_transfer_count + summaries.outbound_transfer_count
+where summaries.transfer_count != (
+    summaries.inbound_transfer_count
+    + summaries.outbound_transfer_count
+    + summaries.self_transfer_count
+  )
   or summaries.indirect_inbound_transfer_count > summaries.inbound_transfer_count
   or summaries.indirect_outbound_transfer_count > summaries.outbound_transfer_count
   or summaries.counterparty_count != expected.counterparty_count

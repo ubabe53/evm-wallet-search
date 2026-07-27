@@ -8,7 +8,7 @@ import scripts.export_dashboard as dashboard_export
 
 
 class DashboardExportTest(unittest.TestCase):
-    def test_export_schema_requires_transaction_initiation_evidence(self) -> None:
+    def test_export_schema_requires_event_and_direction_evidence(self) -> None:
         duckdb = dashboard_export.ensure_duckdb()
         connection = duckdb.connect(":memory:")
         try:
@@ -40,6 +40,9 @@ class DashboardExportTest(unittest.TestCase):
             )
             connection.execute(
                 "alter table token_summary add column indirect_outbound_transfer_count integer"
+            )
+            connection.execute(
+                "alter table token_summary add column self_transfer_count integer"
             )
             for column in (
                 "token_quality varchar",

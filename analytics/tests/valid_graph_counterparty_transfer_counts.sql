@@ -1,6 +1,7 @@
 with expected as (
   select wallet_address, counterparty_address, count(*) as transfer_count
   from {{ ref('wallet_events') }}
+  where direction != 'self'
   group by wallet_address, counterparty_address
 )
 

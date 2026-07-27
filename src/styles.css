@@ -815,6 +815,17 @@ th {
   color: var(--out);
 }
 
+.direction.self {
+  color: var(--muted);
+}
+
+.selfTransferCount {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .recognitionCell {
   display: inline-flex;
   align-items: center;

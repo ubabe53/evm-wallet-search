@@ -68,10 +68,14 @@ matched as (
       else transfers.transaction_from_address != transfers.from_address
     end as is_indirect,
     case
-      when transfers.from_address = wallets.wallet_address then 'out'
+      when transfers.from_address = wallets.wallet_address
+        and transfers.to_address = wallets.wallet_address then 'self'
       when transfers.to_address = wallets.wallet_address then 'in'
+      when transfers.from_address = wallets.wallet_address then 'out'
     end as direction,
     case
+      when transfers.from_address = wallets.wallet_address
+        and transfers.to_address = wallets.wallet_address then wallets.wallet_address
       when transfers.from_address = wallets.wallet_address then transfers.to_address
       else transfers.from_address
     end as counterparty_address,
@@ -93,7 +97,13 @@ matched as (
     on transfers.token_address = tokens.token_address
   left join counterparties
     on counterparties.chain_id = transfers.chain_id
+    and not (
+      transfers.from_address = wallets.wallet_address
+      and transfers.to_address = wallets.wallet_address
+    )
     and counterparties.address = case
+      when transfers.from_address = wallets.wallet_address
+        and transfers.to_address = wallets.wallet_address then wallets.wallet_address
       when transfers.from_address = wallets.wallet_address then transfers.to_address
       else transfers.from_address
     end

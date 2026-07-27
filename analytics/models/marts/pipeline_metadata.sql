@@ -3,14 +3,19 @@ with event_metrics as (
     wallet_id,
     count(*) as transfer_count,
     count(distinct token_address) as token_count,
-    count(distinct counterparty_address) as counterparty_count,
+    count(distinct counterparty_address) filter (
+      where counterparty_address != wallet_address
+    ) as counterparty_count,
     count(*) filter (where recognition_status = 'recognized') as recognized_transfer_count,
     count(distinct token_address) filter (where recognition_status = 'recognized') as recognized_token_count,
     count(*) filter (where recognition_status = 'other') as other_transfer_count,
     count(distinct token_address) filter (where recognition_status = 'other') as other_token_count,
     count(*) filter (where token_status in ('trusted', 'unverified')) as non_spam_transfer_count,
     count(distinct token_address) filter (where token_status in ('trusted', 'unverified')) as non_spam_token_count,
-    count(distinct counterparty_address) filter (where token_status in ('trusted', 'unverified')) as non_spam_counterparty_count,
+    count(distinct counterparty_address) filter (
+      where token_status in ('trusted', 'unverified')
+        and counterparty_address != wallet_address
+    ) as non_spam_counterparty_count,
     count(*) filter (where token_status in ('suspected_spam', 'spam')) as spam_transfer_count,
     count(distinct token_address) filter (where token_status in ('suspected_spam', 'spam')) as spam_token_count,
     count(*) filter (where token_status = 'suspected_spam') as suspected_spam_transfer_count,
@@ -26,6 +31,7 @@ interaction_metrics as (
   from (
     select distinct wallet_id, counterparty_address, token_address, direction
     from {{ ref('wallet_events') }}
+    where direction != 'self'
   )
   group by wallet_id
 ),
