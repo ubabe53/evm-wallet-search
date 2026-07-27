@@ -1370,7 +1370,10 @@ export function App() {
             </InfoTooltip>
           </div>
           <div className="addressTypeControls">
-            <details className="statusFilter accountFilter">
+            <details
+              className="statusFilter accountFilter"
+              onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}
+            >
               <summary title="Filter every view by the address type observed at the pinned block">
                 Address type ({selectedAccountFilters.length})
                 <ChevronDown size={14} aria-hidden="true" />

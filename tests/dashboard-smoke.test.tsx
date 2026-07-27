@@ -677,7 +677,10 @@ describe("App", () => {
 
     fireEvent.mouseEnter(screen.getByLabelText("How address type works"));
     expect(screen.getByRole("tooltip", { name: /Address type/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Address type (2)"));
+    const addressTypeSummary = screen.getByText("Address type (2)");
+    const addressTypeMenu = addressTypeSummary.closest("details");
+    fireEvent.click(addressTypeSummary);
+    expect(addressTypeMenu).toHaveAttribute("open");
     const contractAccount = screen.getByRole("checkbox", { name: "Contract" });
     const eoaCandidate = screen.getByRole("checkbox", { name: "EOA" });
     expect(contractAccount).toBeChecked();
@@ -685,6 +688,12 @@ describe("App", () => {
     fireEvent.click(contractAccount);
     expect(screen.queryByRole("link", { name: "0x111...111" })).not.toBeInTheDocument();
     fireEvent.click(contractAccount);
+    fireEvent.mouseLeave(addressTypeMenu!);
+    expect(addressTypeMenu).not.toHaveAttribute("open");
+
+    const recognizedStatus = screen.getAllByText("Recognized")
+      .find((element) => element.classList.contains("recognitionStatus"));
+    expect(recognizedStatus).toHaveTextContent(/^Recognized$/);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "contract" } });
     expect(screen.getAllByRole("link", { name: "0x1111...1111" }).length).toBeGreaterThan(0);
