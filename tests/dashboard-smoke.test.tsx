@@ -20,6 +20,7 @@ import {
   interactionEdgeLabel,
   snapshotCoverageLabel,
   INDIRECT_TRANSFER_EXPLANATION,
+  SELF_TRANSFER_EXPLANATION,
 } from "../src/App";
 import type { CounterpartySummary, DashboardGraph, TimelineRow, TokenSummary } from "../src/data";
 
@@ -163,6 +164,7 @@ const summaries = {
       transfer_count: 1,
       inbound_transfer_count: 1,
       outbound_transfer_count: 0,
+      self_transfer_count: 0,
       indirect_inbound_transfer_count: 1,
       indirect_outbound_transfer_count: 0,
       counterparty_count: 1,
@@ -177,6 +179,7 @@ const summaries = {
       ...unknownQuality,
       token_reputation: "spam", token_reputation_score: 100, token_reputation_reasons: "reviewed_spam",
       transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
+      self_transfer_count: 0,
       indirect_inbound_transfer_count: 0, indirect_outbound_transfer_count: 0,
       counterparty_count: 1, sender_account_count: 1, recipient_account_count: 0,
       value_raw_sum: "1000000000000000000",
@@ -262,6 +265,15 @@ const dashboardEvents = [
     transfer_id: `1-0xextra-${index}`,
     transaction_hash: `0xextra${index}`,
     log_index: index + 1,
+    ...(index === 8 ? {
+      transfer_id: "1-0xself-0",
+      transaction_hash: "0xself",
+      from_address: "0x1",
+      to_address: "0x1",
+      direction: "self",
+      is_indirect: false,
+      counterparty_address: "0x1",
+    } : {}),
   })),
   events[1],
 ];
@@ -623,6 +635,8 @@ describe("App", () => {
     expect(screen.getByRole("columnheader", { name: "Indirect In / Out" })).toBeInTheDocument();
     expect(screen.getAllByTitle(INDIRECT_TRANSFER_EXPLANATION).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("in*").length).toBeGreaterThan(0);
+    expect(screen.getByText("self")).toHaveAttribute("title", SELF_TRANSFER_EXPLANATION);
+    expect(screen.getByText("same wallet")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Amount In / Out" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();

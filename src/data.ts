@@ -73,6 +73,7 @@ export type AccountType = "eoa_candidate" | "contract" | "unknown";
 export type AccountFilter = Exclude<AccountType, "unknown">;
 export type CodeState = "no_code" | "eip7702_delegated" | "contract_code" | "unknown";
 export type EvidenceFetchStatus = "complete" | "failed" | "not_fetched";
+export type TransferDirection = "in" | "out" | "self";
 
 export type AccountEvidence = {
   account_type: AccountType;
@@ -144,6 +145,7 @@ export type TokenSummary = {
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
+  self_transfer_count: number;
   indirect_inbound_transfer_count: number;
   indirect_outbound_transfer_count: number;
   counterparty_count: number;
@@ -178,7 +180,7 @@ export type TimelineRow = ClassificationEvidence & {
   metadata_source: string | null;
   metadata_source_url: string | null;
   counterparty_account_type: AccountType;
-  direction: "in" | "out";
+  direction: TransferDirection;
   transfer_count: number;
   value_raw_sum: string;
 };
@@ -199,7 +201,7 @@ export type WalletEvent = ClassificationEvidence & {
   wallet_address: string;
   from_address: string;
   to_address: string;
-  direction: "in" | "out";
+  direction: TransferDirection;
   transaction_sender_relation: TransactionSenderRelation;
   transaction_target_relation: TransactionTargetRelation;
   is_indirect: boolean | null;

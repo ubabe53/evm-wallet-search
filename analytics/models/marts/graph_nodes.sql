@@ -13,6 +13,7 @@ select
   cast(null as varchar) as evidence_fetch_status,
   cast(null as varchar) as evidence_reason_codes
 from {{ ref('wallet_events') }}
+where direction != 'self'
 group by wallet_address, ens
 
 union all
@@ -32,6 +33,7 @@ select
   any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
   any_value(counterparty_evidence_reason_codes) as evidence_reason_codes
 from {{ ref('wallet_events') }}
+where direction != 'self'
 group by counterparty_address
 
 union all
@@ -51,4 +53,5 @@ select
   cast(null as varchar) as evidence_fetch_status,
   cast(null as varchar) as evidence_reason_codes
 from {{ ref('wallet_events') }}
+where direction != 'self'
 group by token_address, token_symbol

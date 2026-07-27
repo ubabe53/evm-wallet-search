@@ -52,6 +52,7 @@ REQUIRED_EXPORT_COLUMNS = {
     "token_summary": {
         "indirect_inbound_transfer_count",
         "indirect_outbound_transfer_count",
+        "self_transfer_count",
         "value_raw_sum",
         "token_quality",
         "counterparty_account_type",
@@ -474,6 +475,7 @@ def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
               transfer_id,
               token_address,
               counterparty_address,
+              wallet_address,
               case
                 when token_status = 'trusted' then 1
                 when token_status = 'unverified' then 2
@@ -504,7 +506,9 @@ def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
             selections.account_mask,
             count(classified.transfer_id) as transfer_count,
             count(distinct classified.token_address) as token_count,
-            count(distinct classified.counterparty_address) as counterparty_count
+            count(distinct classified.counterparty_address) filter (
+              where classified.counterparty_address != classified.wallet_address
+            ) as counterparty_count
           from selections
           left join classified
             on (classified.status_bit & selections.status_mask) != 0
@@ -601,7 +605,9 @@ def main() -> None:
                   select
                     count(*) as transfer_count,
                     count(distinct token_address) as token_count,
-                    count(distinct counterparty_address) as counterparty_count
+                    count(distinct counterparty_address) filter (
+                      where counterparty_address != wallet_address
+                    ) as counterparty_count
                   from wallet_events
                   where token_status in ({placeholders})
                 """,
@@ -618,7 +624,9 @@ def main() -> None:
                   select
                     count(*) as transfer_count,
                     count(distinct token_address) as token_count,
-                    count(distinct counterparty_address) as counterparty_count
+                    count(distinct counterparty_address) filter (
+                      where counterparty_address != wallet_address
+                    ) as counterparty_count
                   from wallet_events
                   where token_quality in ({placeholders})
                 """,
@@ -637,7 +645,9 @@ def main() -> None:
                       select
                         count(*) as transfer_count,
                         count(distinct token_address) as token_count,
-                        count(distinct counterparty_address) as counterparty_count
+                        count(distinct counterparty_address) filter (
+                          where counterparty_address != wallet_address
+                        ) as counterparty_count
                       from wallet_events
                       where token_status in ({status_placeholders})
                         and token_quality in ({quality_placeholders})

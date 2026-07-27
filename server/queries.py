@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v8"
+API_SCHEMA_VERSION = "dashboard-api-v9"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -441,7 +441,9 @@ class QueryService:
                 {cte}
                 select count(*) as transfer_count,
                   count(distinct token_address) as token_count,
-                  count(distinct counterparty_address) as counterparty_count,
+                  count(distinct counterparty_address) filter (
+                    where counterparty_address != wallet_address
+                  ) as counterparty_count,
                   min(block_number) as block_number_min,
                   max(block_number) as block_number_max,
                   min(block_timestamp) as first_event_at,
@@ -532,6 +534,7 @@ class QueryService:
                   count(*) as transfer_count,
                   count(*) filter (where direction = 'in') as inbound_transfer_count,
                   count(*) filter (where direction = 'out') as outbound_transfer_count,
+                  count(*) filter (where direction = 'self') as self_transfer_count,
                   count(*) filter (where direction = 'in' and is_indirect) as indirect_inbound_transfer_count,
                   count(*) filter (where direction = 'out' and is_indirect) as indirect_outbound_transfer_count,
                   count(distinct counterparty_address) filter (

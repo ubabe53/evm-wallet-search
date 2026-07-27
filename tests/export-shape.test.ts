@@ -84,6 +84,7 @@ describe("dashboard export shape", () => {
       transfer_count: number;
       inbound_transfer_count: number;
       outbound_transfer_count: number;
+      self_transfer_count: number;
       indirect_inbound_transfer_count: number;
       indirect_outbound_transfer_count: number;
       counterparty_count: number;
@@ -99,7 +100,8 @@ describe("dashboard export shape", () => {
       row.counterparty_count <= row.sender_account_count + row.recipient_account_count &&
       row.indirect_inbound_transfer_count <= row.inbound_transfer_count &&
       row.indirect_outbound_transfer_count <= row.outbound_transfer_count &&
-      row.transfer_count === row.inbound_transfer_count + row.outbound_transfer_count)).toBe(true);
+      row.transfer_count ===
+        row.inbound_transfer_count + row.outbound_transfer_count + row.self_transfer_count)).toBe(true);
     expect(summaries.counterparties.every((row: {
       counterparty_address: string;
       wallet_address: string;

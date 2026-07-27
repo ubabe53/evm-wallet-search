@@ -37,10 +37,10 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v8")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v9")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
-        self.assertEqual(metadata["transfer_count"], 6)
+        self.assertEqual(metadata["transfer_count"], 7)
         self.assertEqual(metadata["event_block_number_min"], 17000001)
         self.assertEqual(metadata["completeness_scope"], "duckdb_snapshot")
         self.assertFalse(metadata["indexer_checkpoint_recorded"])
@@ -83,7 +83,7 @@ class DashboardApiTest(unittest.TestCase):
                     """
                     insert into ops.pipeline_runs values (
                       'run-1', 1, '0xd8da6bf26964af9d7eed9e03e53415d37aa96045',
-                      'vitalik.eth', 0, 17000010, ?, 6, 'completed', current_timestamp,
+                      'vitalik.eth', 0, 17000010, ?, 7, 'completed', current_timestamp,
                       'wallet-transfer-signature-v1'
                     )
                     """,
@@ -141,7 +141,7 @@ class DashboardApiTest(unittest.TestCase):
     def test_summary_uses_every_matching_row(self) -> None:
         default = self.client.get("/api/v1/summary").json()
 
-        self.assertEqual(default["transfer_count"], 6)
+        self.assertEqual(default["transfer_count"], 7)
         self.assertEqual(default["token_count"], 5)
         self.assertFalse(default["provenance"]["is_sampled"])
 
@@ -151,7 +151,7 @@ class DashboardApiTest(unittest.TestCase):
             params=[("account", "eoa_candidate"), ("account", "contract")],
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["transfer_count"], 6)
+        self.assertEqual(response.json()["transfer_count"], 7)
 
         invalid = self.client.get("/api/v1/summary", params={"account": "human"})
         self.assertEqual(invalid.status_code, 422)
@@ -179,7 +179,7 @@ class DashboardApiTest(unittest.TestCase):
         )
 
         self.assertEqual(recognized.status_code, 200)
-        self.assertEqual(recognized.json()["transfer_count"], 5)
+        self.assertEqual(recognized.json()["transfer_count"], 6)
         self.assertEqual(other.json()["transfer_count"], 1)
         self.assertEqual(other.json()["query"]["recognition"], "other")
         self.assertEqual(
@@ -258,7 +258,7 @@ class DashboardApiTest(unittest.TestCase):
             params={"limit": 2, "cursor": first["next_cursor"]},
         ).json()
 
-        self.assertEqual(first["complete_matching_count"], 6)
+        self.assertEqual(first["complete_matching_count"], 7)
         self.assertEqual(first["returned_count"], 2)
         self.assertTrue(first["is_paginated"])
         self.assertFalse(first["is_sampled"])
@@ -267,6 +267,33 @@ class DashboardApiTest(unittest.TestCase):
         ))
         self.assertIsNotNone(second["next_cursor"])
         self.assertEqual(self.client.get("/api/v1/events", params={"cursor": "broken"}).status_code, 400)
+
+    def test_self_transfer_is_neither_directional_nor_a_counterparty(self) -> None:
+        event = self.client.get(
+            "/api/v1/events",
+            params={"q": "0xself", "limit": 1},
+        ).json()["items"][0]
+        token = self.client.get(
+            "/api/v1/tokens",
+            params={"q": "0xself", "limit": 1},
+        ).json()["items"][0]
+        summary = self.client.get(
+            "/api/v1/summary",
+            params={"q": "0xself"},
+        ).json()
+
+        self.assertEqual(event["direction"], "self")
+        self.assertEqual(event["from_address"], event["wallet_address"])
+        self.assertEqual(event["to_address"], event["wallet_address"])
+        self.assertEqual(token["self_transfer_count"], 1)
+        self.assertEqual(
+            token["transfer_count"],
+            token["inbound_transfer_count"]
+            + token["outbound_transfer_count"]
+            + token["self_transfer_count"],
+        )
+        self.assertEqual(summary["transfer_count"], 1)
+        self.assertEqual(summary["counterparty_count"], 0)
 
     def test_ranked_endpoints_disclose_complete_and_returned_counts(self) -> None:
         for endpoint in ("tokens", "counterparties", "graph"):

@@ -185,6 +185,15 @@ models:
       - name: indirect_outbound_transfer_count
         tests:
           - not_null
+      - name: self_transfer_count
+        tests:
+          - not_null
+      - name: interaction_legitimacy_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["interaction-legitimacy-v3"]
   - name: wallet_events
     description: Dashboard event table, one row per wallet-relevant Transfer-signature log interpreted by ERC20-oriented models; token standard is not proven by the source signature.
     columns:
@@ -215,7 +224,7 @@ models:
         tests:
           - accepted_values:
               arguments:
-                values: ["in", "out"]
+                values: ["in", "out", "self"]
       - name: transaction_sender_relation
         tests:
           - not_null
@@ -403,6 +412,9 @@ models:
       - name: indirect_outbound_transfer_count
         tests:
           - not_null
+      - name: self_transfer_count
+        tests:
+          - not_null
       - name: counterparty_count
         tests:
           - not_null
@@ -484,6 +496,12 @@ models:
           - accepted_values:
               arguments:
                 values: ["eoa_candidate", "contract", "unknown"]
+      - name: direction
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["in", "out", "self"]
   - name: pipeline_metadata
     description: Export provenance and complete mart counts for each configured wallet, including finalized contiguous snapshot coverage in live mode and population-reconciled account-evidence coverage. Fixture builds intentionally have no indexer checkpoint or account evidence.
     columns:

@@ -85,7 +85,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - Raw quantities remain arbitrary-precision integers or exact strings.
 - Token-decimals metadata remains separate from exact raw values; the current serving contract does not materialize floating-point normalized amounts.
 - Quantities from different token contracts are never summed as if fungible.
-- Zero-address mint/burn semantics and self-transfer policy remain explicit.
+- Zero-address mint/burn semantics and self-transfer policy remain explicit. A log whose emitted `from` and `to` both equal the tracked wallet has direction `self`; it remains one event but is neither inbound, outbound, nor an external counterparty interaction.
 - Token and account labels are evidence, not canonical identity.
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
 - Account-evidence coverage is measured against the current snapshot's distinct nonzero, nonself event counterparties. Classified, failed, and not-checked address and event counts must reconcile to that population; cached rows outside it do not count.
@@ -122,6 +122,7 @@ The loopback-only FastAPI service:
 - compute filters, counts, rankings, graph pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
 - return event raw values and per-token raw totals as exact strings while retaining token-decimals metadata separately;
+- return self-transfers as the explicit `self` event direction while excluding the tracked wallet from counterparty counts and graph relationships;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
 - apply manual token-recognition overrides before every filter, count, ranking, graph page, and event page;
 - expose only `recognition=all|recognized|other` as the public token-classification control while retaining detailed reputation evidence internally;

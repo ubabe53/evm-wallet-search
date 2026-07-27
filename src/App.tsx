@@ -13,6 +13,7 @@ import {
   Minimize2,
   Moon,
   Network,
+  Repeat2,
   RotateCcw,
   Search,
   Sun,
@@ -53,6 +54,7 @@ const RECOGNITION_FILTERS: RecognitionFilter[] = ["all", "recognized", "other"];
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
 export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic event emission; the mismatch alone does not prove intent or legitimacy.";
+export const SELF_TRANSFER_EXPLANATION = "Transfer.from and Transfer.to are both the tracked wallet. The event is preserved once, but it is neither inbound nor outbound and has no external counterparty.";
 
 export function etherscanAddressUrl(address: string): string {
   return `${ETHERSCAN_BASE_URL}/address/${address}`;
@@ -177,6 +179,7 @@ export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSum
     existing.transfer_count += row.transfer_count;
     existing.inbound_transfer_count += row.inbound_transfer_count;
     existing.outbound_transfer_count += row.outbound_transfer_count;
+    existing.self_transfer_count += row.self_transfer_count;
     existing.indirect_inbound_transfer_count += row.indirect_inbound_transfer_count;
     existing.indirect_outbound_transfer_count += row.indirect_outbound_transfer_count;
     existing.counterparty_count += row.counterparty_count;
@@ -795,7 +798,14 @@ export function TokenTable({
                 </select>
               </div>
             </td>
-            <td>{row.transfer_count.toLocaleString("en-US")}</td>
+            <td>
+              {row.transfer_count.toLocaleString("en-US")}
+              {row.self_transfer_count > 0 && (
+                <small className="selfTransferCount">
+                  {row.self_transfer_count.toLocaleString("en-US")} self
+                </small>
+              )}
+            </td>
             <td>
               <span className="flowIndicator" title={INDIRECT_TRANSFER_EXPLANATION}>
                 <span className="direction in"><ArrowDownLeft size={13} />in* {row.indirect_inbound_transfer_count.toLocaleString("en-US")}</span>
@@ -922,17 +932,27 @@ function EventList({
           <div>
             <span
               className={`direction ${event.direction}`}
-              title={event.is_indirect ? INDIRECT_TRANSFER_EXPLANATION : undefined}
+              title={
+                event.direction === "self"
+                  ? SELF_TRANSFER_EXPLANATION
+                  : event.is_indirect
+                    ? INDIRECT_TRANSFER_EXPLANATION
+                    : undefined
+              }
             >
-              {event.direction === "in" ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-              {event.direction}{event.is_indirect ? "*" : ""}
+              {event.direction === "in"
+                ? <ArrowDownLeft size={14} />
+                : event.direction === "out"
+                  ? <ArrowUpRight size={14} />
+                  : <Repeat2 size={14} />}
+              {event.direction}{event.direction !== "self" && event.is_indirect ? "*" : ""}
             </span>
             <EtherscanLink
               className="addressLink"
               href={etherscanAddressUrl(event.counterparty_address)}
               title={`View ${event.counterparty_address} on Etherscan`}
             >
-              <code>{shortAddress(event.counterparty_address)}</code>
+              <code>{event.direction === "self" ? "same wallet" : shortAddress(event.counterparty_address)}</code>
             </EtherscanLink>
             <AccountBadges evidence={eventBadgeEvidence(event)} />
           </div>
@@ -1245,7 +1265,11 @@ export function App() {
     }
     const transferCount = filtered.events.length;
     const tokenCount = new Set(filtered.events.map((event) => event.token_address)).size;
-    const counterpartyCount = new Set(filtered.events.map((event) => event.counterparty_address)).size;
+    const counterpartyCount = new Set(
+      filtered.events
+        .filter((event) => event.counterparty_address !== event.wallet_address)
+        .map((event) => event.counterparty_address),
+    ).size;
     return { transferCount, tokenCount, counterpartyCount };
   }, [apiResult, data, filtered]);
 
