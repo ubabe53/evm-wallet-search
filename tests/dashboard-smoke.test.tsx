@@ -673,6 +673,9 @@ describe("App", () => {
     expect(screen.getByText(/exact Ethereum contract address appears in Uniswap/)).toBeInTheDocument();
     expect(screen.getByRole("tooltip", { name: /Recognized tokens/ })).toBeInTheDocument();
     expect(screen.getByLabelText("How token recognition works")).toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByLabelText("How token recognition works"));
+    expect(screen.getByRole("tooltip", { name: /Recognition controls/ }))
+      .toHaveTextContent("Recognition controls");
     expect(screen.getAllByRole("combobox", { name: /Recognition for/ }).every((control) => control.hasAttribute("disabled"))).toBe(true);
 
     fireEvent.mouseEnter(screen.getByLabelText("How address type works"));
