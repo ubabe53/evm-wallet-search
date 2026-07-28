@@ -131,6 +131,157 @@ unit_tests:
           interaction_legitimacy_reasons,
           interaction_legitimacy_version
         )
+  - name: excludes_failed_rpc_attempts_from_token_enrichment
+    description: A failed RPC attempt remains in the observation relation and does not create a resolved token-enrichment row by itself.
+    model: int_token_enrichment
+    given:
+      - input: ref('token_metadata')
+        format: sql
+        rows: |
+          select
+            null::varchar as token_address,
+            null::varchar as symbol,
+            null::varchar as name,
+            null::integer as decimals,
+            null::varchar as token_status,
+            null::varchar as recognition_status,
+            null::varchar as metadata_source,
+            null::varchar as metadata_source_url
+          where false
+      - input: ref('token_label_overrides')
+        format: sql
+        rows: |
+          select
+            null::varchar as token_address,
+            null::varchar as symbol,
+            null::varchar as name,
+            null::integer as decimals,
+            null::varchar as token_status,
+            null::varchar as reason,
+            null::varchar as source_url
+          where false
+      - input: ref('token_rpc_metadata_fixture')
+        format: sql
+        rows: |
+          select
+            '0xfailed' as token_address,
+            null::varchar as symbol,
+            null::varchar as name,
+            null::integer as decimals,
+            20000000::bigint as rpc_block_number,
+            'failed' as fetch_status
+    expect:
+      format: sql
+      rows: |
+        select
+          null::integer as chain_id,
+          null::varchar as token_address,
+          null::varchar as symbol,
+          null::varchar as name,
+          null::integer as decimals,
+          null::varchar as token_status,
+          null::varchar as recognition_status,
+          null::varchar as recognition_reason,
+          null::varchar as recognition_source,
+          null::varchar as metadata_source,
+          null::varchar as metadata_source_url,
+          null::varchar as token_label_reason,
+          null::varchar[] as token_quality_sources,
+          null::integer as token_quality_source_count,
+          null::varchar as token_quality,
+          null::varchar as token_quality_reason,
+          null::varchar as token_quality_provenance,
+          null::varchar as metadata_availability,
+          null::varchar as token_quality_version,
+          null::varchar as recognition_version
+        where false
+  - name: preserves_partial_rpc_metadata_in_token_enrichment
+    description: Usable fields from a partial RPC observation remain eligible for resolved metadata while RPC execution fields stay in the observation relation.
+    model: int_token_enrichment
+    given:
+      - input: ref('token_metadata')
+        format: sql
+        rows: |
+          select
+            null::varchar as token_address,
+            null::varchar as symbol,
+            null::varchar as name,
+            null::integer as decimals,
+            null::varchar as token_status,
+            null::varchar as recognition_status,
+            null::varchar as metadata_source,
+            null::varchar as metadata_source_url
+          where false
+      - input: ref('token_label_overrides')
+        format: sql
+        rows: |
+          select
+            null::varchar as token_address,
+            null::varchar as symbol,
+            null::varchar as name,
+            null::integer as decimals,
+            null::varchar as token_status,
+            null::varchar as reason,
+            null::varchar as source_url
+          where false
+      - input: ref('token_rpc_metadata_fixture')
+        format: sql
+        rows: |
+          select
+            '0xpartial' as token_address,
+            'PART' as symbol,
+            null::varchar as name,
+            18 as decimals,
+            20000000::bigint as rpc_block_number,
+            'partial' as fetch_status
+    expect:
+      format: sql
+      rows: |
+        select * from (
+          values (
+            1,
+            '0xpartial',
+            'PART',
+            null::varchar,
+            18,
+            'unverified',
+            'other',
+            'no_registry_match',
+            'automatic',
+            'ethereum_rpc',
+            null::varchar,
+            null::varchar,
+            []::varchar[],
+            0,
+            'unknown',
+            'rpc_metadata_only',
+            'ethereum_rpc_block:20000000',
+            'partial',
+            'token-quality-v1',
+            'token-recognition-v1'
+          )
+        ) as expected(
+          chain_id,
+          token_address,
+          symbol,
+          name,
+          decimals,
+          token_status,
+          recognition_status,
+          recognition_reason,
+          recognition_source,
+          metadata_source,
+          metadata_source_url,
+          token_label_reason,
+          token_quality_sources,
+          token_quality_source_count,
+          token_quality,
+          token_quality_reason,
+          token_quality_provenance,
+          metadata_availability,
+          token_quality_version,
+          recognition_version
+        )
   - name: ignores_configured_wallet_text_in_token_reputation
     description: Token names or symbols matching the configured wallet's pinned ENS or person label do not contribute reputation evidence.
     model: int_token_reputation

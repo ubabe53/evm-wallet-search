@@ -47,9 +47,10 @@ The normalized fields are:
 - `token_quality_sources` and `token_quality_source_count`: exact-address registry evidence only; manual approval is recorded in the reason/provenance rather than inflated into a registry count.
 - `token_quality_reason`, `token_quality_provenance`, and `token_quality_version`: reproducible evidence with version `token-quality-v1`.
 - `token_label_reason`: required human context for manual classifications.
-- `rpc_block_number`, `rpc_fetch_status`, and `rpc_error_code`: audit fields for RPC enrichment attempts.
 
 Unknown tokens remain in event marts as internally `unverified` and publicly `other`. Sourced token `decimals` remain nullable metadata; they never alter the exact emitted raw value.
+
+Raw RPC observations remain separate in `token_rpc_metadata` (or `token_rpc_metadata_fixture` for deterministic fixture builds) at one row per attempted token address. That relation preserves the returned `name`, `symbol`, and `decimals` alongside `rpc_block_number`, `fetched_at`, `fetch_status`, and `error_code`. The resolved enrichment consumes complete or partial metadata, retains block provenance in `token_quality_provenance`, and excludes failed-only attempts, but it does not copy RPC execution fields into every resolved token row.
 
 ### `int_wallet_transfer_events`
 

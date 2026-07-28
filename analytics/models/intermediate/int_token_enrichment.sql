@@ -32,14 +32,13 @@ rpc_metadata as (
     nullif(trim(symbol), '') as symbol,
     nullif(trim(name), '') as name,
     try_cast(decimals as integer) as decimals,
-    cast(rpc_block_number as bigint) as rpc_block_number,
-    fetch_status as rpc_fetch_status,
-    nullif(trim(error_code), '') as rpc_error_code
+    cast(rpc_block_number as bigint) as rpc_block_number
   {% if var('use_fixture', true) %}
   from {{ ref('token_rpc_metadata_fixture') }}
   {% else %}
   from {{ ref('token_rpc_metadata') }}
   {% endif %}
+  where fetch_status in ('complete', 'partial')
 ),
 
 addresses as (
@@ -114,10 +113,7 @@ resolved as (
         then 'ethereum_rpc_block:' || cast(rpc_metadata.rpc_block_number as varchar)
       when rpc_metadata.token_address is not null then 'ethereum_rpc'
       else 'no_recorded_source'
-    end as token_quality_provenance,
-    rpc_metadata.rpc_block_number,
-    rpc_metadata.rpc_fetch_status,
-    rpc_metadata.rpc_error_code
+    end as token_quality_provenance
   from addresses
   left join registry using (chain_id, token_address)
   left join overrides using (chain_id, token_address)
