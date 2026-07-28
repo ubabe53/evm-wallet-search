@@ -40,6 +40,18 @@ models:
         description: Nullable top-level transaction sender; null for legacy rows without envelope evidence.
       - name: transaction_to_address
         description: Nullable top-level transaction target; null for legacy rows without envelope evidence or an unavailable target.
+  - name: stg_wallets
+    description: Configured wallet targets keyed by chain and normalized address; the configured ENS text remains presentation metadata rather than event identity.
+    columns:
+      - name: chain_id
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
+      - name: wallet_address
+        tests:
+          - not_null
   - name: stg_token_metadata
     description: Token display metadata, exact-address recognition evidence, metadata availability, and reviewed manual overrides.
     columns:
@@ -167,7 +179,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["token-reputation-v2"]
+                values: ["token-reputation-v3"]
       - name: token_quality
         tests:
           - not_null
@@ -291,7 +303,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["token-reputation-v2"]
+                values: ["token-reputation-v3"]
       - name: token_quality_version
         tests:
           - not_null
@@ -370,7 +382,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["token-reputation-v2"]
+                values: ["token-reputation-v3"]
       - name: counterparty_account_type
         tests:
           - not_null
@@ -412,7 +424,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["token-reputation-v2"]
+                values: ["token-reputation-v3"]
       - name: counterparty_account_type
         tests:
           - not_null
@@ -508,7 +520,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["token-reputation-v2"]
+                values: ["token-reputation-v3"]
       - name: counterparty_account_type
         tests:
           - not_null
@@ -522,11 +534,13 @@ models:
               arguments:
                 values: ["in", "out", "self"]
   - name: pipeline_metadata
-    description: Export provenance and complete mart counts for each configured wallet, including finalized contiguous snapshot coverage in live mode and population-reconciled account-evidence coverage. Fixture builds intentionally have no indexer checkpoint or account evidence.
+    description: Export provenance and complete mart counts for each configured chain-and-wallet key, including finalized contiguous snapshot coverage in live mode and population-reconciled account-evidence coverage. Fixture builds intentionally have no indexer checkpoint or account evidence.
     columns:
+      - name: chain_id
+        tests:
+          - not_null
       - name: wallet_address
         tests:
-          - unique
           - not_null
       - name: data_source
         tests:

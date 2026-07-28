@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const token = {
-  wallet_id: "vitalik",
+  chain_id: 1,
   wallet_address: "0x1",
   token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
   token_symbol: "USDC",

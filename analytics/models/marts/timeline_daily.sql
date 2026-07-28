@@ -1,5 +1,5 @@
 select
-  wallet_id,
+  chain_id,
   wallet_address,
   block_date,
   token_address,
@@ -30,7 +30,7 @@ select
   count(*) as transfer_count,
   sum(cast(value_raw as bignum)) as value_raw_sum
 from {{ ref('wallet_events') }}
-group by wallet_id, wallet_address, block_date, token_address, token_symbol,
+group by chain_id, wallet_address, block_date, token_address, token_symbol,
   token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
   metadata_availability, token_quality, token_quality_sources,
   token_quality_source_count, token_quality_reason, token_quality_provenance,

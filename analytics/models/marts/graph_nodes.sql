@@ -1,3 +1,14 @@
+with wallet_nodes as (
+  select
+    events.chain_id,
+    events.wallet_address,
+    any_value(wallets.ens) as ens
+  from {{ ref('wallet_events') }} as events
+  join {{ ref('stg_wallets') }} as wallets using (chain_id, wallet_address)
+  where events.direction != 'self'
+  group by events.chain_id, events.wallet_address
+)
+
 select
   'wallet:' || wallet_address as node_id,
   'wallet' as node_type,
@@ -12,9 +23,7 @@ select
   cast(null as varchar) as eip7702_delegation_target,
   cast(null as varchar) as evidence_fetch_status,
   cast(null as varchar) as evidence_reason_codes
-from {{ ref('wallet_events') }}
-where direction != 'self'
-group by wallet_address, ens
+from wallet_nodes
 
 union all
 

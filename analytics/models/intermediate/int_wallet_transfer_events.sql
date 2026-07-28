@@ -29,8 +29,6 @@ matched as (
     transfers.transaction_from_address,
     transfers.transaction_to_address,
     transfers.log_index,
-    wallets.wallet_id,
-    wallets.ens,
     wallets.wallet_address,
     transfers.token_address,
     tokens.symbol as token_symbol,
@@ -94,8 +92,11 @@ matched as (
     transfers.value_raw
   from transfers
   join wallets
-    on transfers.from_address = wallets.wallet_address
-    or transfers.to_address = wallets.wallet_address
+    on transfers.chain_id = wallets.chain_id
+    and (
+      transfers.from_address = wallets.wallet_address
+      or transfers.to_address = wallets.wallet_address
+    )
   left join tokens
     on transfers.token_address = tokens.token_address
   left join counterparties

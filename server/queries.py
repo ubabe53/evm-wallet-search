@@ -22,7 +22,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v11"
+API_SCHEMA_VERSION = "dashboard-api-v12"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -93,7 +93,10 @@ def filter_sql(
             "contains(lower(concat_ws('|', "
             "events.transfer_id, events.transaction_hash, events.transaction_from_address, "
             "events.transaction_to_address, cast(events.block_date as varchar), events.direction, "
-            "events.transaction_sender_relation, events.transaction_target_relation, events.ens, "
+            "events.transaction_sender_relation, events.transaction_target_relation, "
+            "(select metadata.ens from pipeline_metadata as metadata "
+            "where metadata.chain_id = events.chain_id "
+            "and metadata.wallet_address = events.wallet_address), "
             "events.wallet_address, events.from_address, events.to_address, events.counterparty_address, "
             "events.counterparty_account_type, events.counterparty_code_state, "
             "events.counterparty_evidence_reason_codes, events.token_address, events.token_symbol, "
@@ -173,14 +176,14 @@ def counterparty_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
         select * from effective_events as events where {predicate}
       ),
       eligible_counterparties as (
-        select distinct wallet_address, counterparty_address
+        select distinct chain_id, wallet_address, counterparty_address
         from scoped_events as events
         where {recognition_predicate}
       ),
       counterparty_events as (
         select events.*
         from scoped_events as events
-        join eligible_counterparties using (wallet_address, counterparty_address)
+        join eligible_counterparties using (chain_id, wallet_address, counterparty_address)
       )
     """, parameters
 
@@ -221,7 +224,10 @@ class QueryService:
         connection = None
         try:
             connection = duckdb.connect(str(self.database_path), read_only=False)
-            metadata = rows(connection, "select * from pipeline_metadata order by wallet_id")
+            metadata = rows(
+                connection,
+                "select * from pipeline_metadata order by chain_id, wallet_address",
+            )
         except Exception as error:
             if connection is not None:
                 connection.close()
@@ -327,7 +333,7 @@ class QueryService:
         metadata = rows(
             connection,
             """
-            select metadata.wallet_id, metadata.ens, metadata.wallet_address, metadata.chain_id,
+            select metadata.ens, metadata.wallet_address, metadata.chain_id,
               metadata.data_source, metadata.generated_at,
               metadata.snapshot_run_id, metadata.snapshot_start_block,
               metadata.snapshot_increment_start_block, metadata.snapshot_end_block,
@@ -353,7 +359,7 @@ class QueryService:
               min(events.block_number) as event_block_number_min,
               max(events.block_number) as event_block_number_max
             from pipeline_metadata as metadata
-            left join wallet_events as events using (wallet_id)
+            left join wallet_events as events using (chain_id, wallet_address)
             group by all
             """,
         )[0]
@@ -527,7 +533,7 @@ class QueryService:
                 f"""
                 {cte}
                 select
-                  any_value(wallet_id) as wallet_id,
+                  any_value(chain_id) as chain_id,
                   any_value(wallet_address) as wallet_address,
                   token_address,
                   coalesce(any_value(token_symbol), substr(token_address, 1, 10)) as token_symbol,
@@ -559,7 +565,7 @@ class QueryService:
                   ) as recipient_account_count,
                   cast(sum(cast(value_raw as bignum)) as varchar) as value_raw_sum
                 from filtered_events
-                group by token_address
+                group by chain_id, wallet_address, token_address
                 order by transfer_count desc, token_address
                 limit {limit}
                 """,
@@ -672,7 +678,8 @@ class QueryService:
             and events.counterparty_address != events.wallet_address
             and not exists (
               select 1 from wallet_events as token_events
-              where token_events.token_address = events.counterparty_address
+              where token_events.chain_id = events.chain_id
+                and token_events.token_address = events.counterparty_address
             )
         """
         with self.connect() as connection:
@@ -682,9 +689,8 @@ class QueryService:
                 f"""
                 {cte}
                 select
-                  any_value(wallet_id) as wallet_id,
-                  any_value(wallet_address) as wallet_address,
-                  any_value(chain_id) as chain_id,
+                  chain_id,
+                  wallet_address,
                   counterparty_address,
                   any_value(counterparty_account_type) as account_type,
                   any_value(counterparty_code_state) as code_state,
@@ -702,7 +708,7 @@ class QueryService:
                   min(block_timestamp) as first_seen_at,
                   max(block_timestamp) as last_seen_at
                 from ({eligible})
-                group by counterparty_address
+                group by chain_id, wallet_address, counterparty_address
                 order by transfer_count desc, last_seen_at desc, counterparty_address
                 limit {limit}
                 """,
@@ -728,13 +734,13 @@ class QueryService:
             and events.counterparty_address != events.wallet_address
             and not exists (
               select 1 from wallet_events as token_events
-              where token_events.token_address = events.counterparty_address
+              where token_events.chain_id = events.chain_id
+                and token_events.token_address = events.counterparty_address
             )
         """
         counterparty_sql = f"""
           select
-            any_value(wallet_id) as wallet_id,
-            any_value(ens) as ens,
+            chain_id,
             wallet_address,
             counterparty_address,
             any_value(counterparty_account_type) as account_type,
@@ -752,8 +758,8 @@ class QueryService:
             count(distinct token_address) as token_count,
             min(block_timestamp) as first_seen_at,
             max(block_timestamp) as last_seen_at
-          from ({eligible})
-          group by wallet_address, counterparty_address
+          from ({eligible}) as events
+          group by chain_id, wallet_address, counterparty_address
         """
         with self.connect() as connection:
             total = rows(

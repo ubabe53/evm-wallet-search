@@ -58,14 +58,7 @@ signal_flags as (
     coalesce(collisions.has_market_identity_collision, false) as has_market_identity_collision,
     coalesce(collisions.has_curated_identity_collision, false) as has_curated_identity_collision,
     lower(trim(coalesce(symbol, ''))) in ('btc', 'eth')
-      or lower(trim(coalesce(name, ''))) in ('bitcoin', 'ethereum') as impersonates_native_asset,
-    coalesce((
-      select bool_or(
-        (length(split_part(lower(wallets.ens), '.', 1)) >= 4 and contains(metadata_text, split_part(lower(wallets.ens), '.', 1)))
-        or (length(split_part(lower(wallets.label), ' ', 1)) >= 4 and contains(metadata_text, split_part(lower(wallets.label), ' ', 1)))
-      )
-      from {{ ref('stg_wallets') }} as wallets
-    ), false) as impersonates_configured_wallet
+      or lower(trim(coalesce(name, ''))) in ('bitcoin', 'ethereum') as impersonates_native_asset
   from tokens
   left join identity_collisions as collisions using (token_address)
 ),
@@ -82,7 +75,6 @@ scored as (
           else 0
         end
       + case when impersonates_native_asset then 65 else 0 end
-      + case when impersonates_configured_wallet then 60 else 0 end
     ) as automated_reputation_score,
     concat_ws('; ',
       case when has_url then 'url_in_name_or_symbol' end,
@@ -91,8 +83,7 @@ scored as (
         when has_curated_identity_collision then 'curated_token_identity_collision'
         when has_market_identity_collision then 'coingecko_token_identity_collision'
       end,
-      case when impersonates_native_asset then 'native_asset_impersonation' end,
-      case when impersonates_configured_wallet then 'configured_wallet_impersonation' end
+      case when impersonates_native_asset then 'native_asset_impersonation' end
     ) as automated_reputation_reasons
   from signal_flags
 )
@@ -116,7 +107,7 @@ select
     when token_quality = 'high_confidence' then token_quality_reason
     else 'no_reputation_signal'
   end as token_reputation_reasons,
-  'token-reputation-v2' as token_reputation_version,
+  'token-reputation-v3' as token_reputation_version,
   token_quality,
   token_quality_sources,
   token_quality_source_count,

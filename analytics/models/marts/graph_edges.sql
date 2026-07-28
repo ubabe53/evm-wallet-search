@@ -1,6 +1,7 @@
 with interaction_counts as (
   select
     'interaction:' || wallet_address || ':' || counterparty_address || ':' || token_address || ':' || direction as interaction_id,
+    chain_id,
     wallet_address,
     counterparty_address,
     token_address,
@@ -33,7 +34,7 @@ with interaction_counts as (
     max(block_timestamp) as last_seen_at
   from {{ ref('wallet_events') }}
   where direction != 'self'
-  group by wallet_address, counterparty_address, token_address, token_symbol,
+  group by chain_id, wallet_address, counterparty_address, token_address, token_symbol,
     token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
     metadata_availability, token_quality, token_quality_sources,
     token_quality_source_count, token_quality_reason, token_quality_provenance,
@@ -47,7 +48,7 @@ interactions as (
   select
     *,
     sum(transfer_count) over (
-      partition by wallet_address, counterparty_address
+      partition by chain_id, wallet_address, counterparty_address
     ) as counterparty_transfer_count
   from interaction_counts
 ),

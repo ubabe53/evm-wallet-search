@@ -76,7 +76,7 @@ const highQuality = {
   token_quality_reason: "reviewed_manual_approval",
   token_quality_provenance: "https://example.com/usdc",
   token_quality_version: "token-quality-v1",
-  token_reputation_version: "token-reputation-v2",
+  token_reputation_version: "token-reputation-v3",
   counterparty_account_type: "contract",
 } as const;
 
@@ -93,14 +93,14 @@ const unknownQuality = {
   token_quality_reason: "no_registry_or_reviewed_approval",
   token_quality_provenance: "https://example.com/spam",
   token_quality_version: "token-quality-v1",
-  token_reputation_version: "token-reputation-v2",
+  token_reputation_version: "token-reputation-v3",
   counterparty_account_type: "eoa_candidate",
 } as const;
 
 const summaries = {
   tokens: [
     {
-      wallet_id: "vitalik",
+      chain_id: 1,
       wallet_address: "0x1",
       token_address: "0x2",
       token_symbol: "USDC",
@@ -126,7 +126,7 @@ const summaries = {
       value_raw_sum: "125000000",
     },
     {
-      wallet_id: "vitalik", wallet_address: "0x1", token_address: "0x3", token_symbol: "SPAM",
+      chain_id: 1, wallet_address: "0x1", token_address: "0x3", token_symbol: "SPAM",
       token_name: "Spam Token", token_decimals: 18, token_status: "spam", metadata_source: "manual",
       metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
       ...unknownQuality,
@@ -141,7 +141,7 @@ const summaries = {
   counterparties: [
     {
       ...contractAccountEvidence,
-      wallet_id: "vitalik", wallet_address: "0x1",
+      chain_id: 1, wallet_address: "0x1",
       counterparty_address: "0x1111111111111111111111111111111111111111",
       token_status: "trusted", recognition_status: "recognized", token_quality: "high_confidence", transfer_count: 3,
       inbound_transfer_count: 2, outbound_transfer_count: 1, token_count: 2,
@@ -149,7 +149,7 @@ const summaries = {
     },
     {
       ...eoaAccountEvidence,
-      wallet_id: "vitalik", wallet_address: "0x1",
+      chain_id: 1, wallet_address: "0x1",
       counterparty_address: "0x2222222222222222222222222222222222222222",
       token_status: "spam", recognition_status: "other", token_quality: "unknown", transfer_count: 1,
       inbound_transfer_count: 1, outbound_transfer_count: 0, token_count: 1,
@@ -158,7 +158,7 @@ const summaries = {
   ],
 };
 
-const timeline = [{ ...highQuality, wallet_id: "vitalik", wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, value_raw_sum: "125000000" }];
+const timeline = [{ ...highQuality, chain_id: 1, wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, value_raw_sum: "125000000" }];
 
 const events = [
   {
@@ -173,8 +173,6 @@ const events = [
     transaction_from_address: "0x1",
     transaction_to_address: "0x2",
     log_index: 0,
-    wallet_id: "vitalik",
-    ens: "vitalik.eth",
     wallet_address: "0x1",
     from_address: "0x1111111111111111111111111111111111111111",
     to_address: "0x1",
@@ -198,9 +196,9 @@ const events = [
     ...eoaEventEvidence,
     transfer_id: "1-0xspam-0", chain_id: 1, block_number: 17_000_002,
     block_timestamp: "2023-11-14T22:16:00+00:00", block_date: "2023-11-14",
-    transaction_hash: "0xspam", transaction_index: 3, log_index: 0, wallet_id: "vitalik",
+    transaction_hash: "0xspam", transaction_index: 3, log_index: 0,
     transaction_from_address: null, transaction_to_address: null,
-    ens: "vitalik.eth", wallet_address: "0x1", direction: "in",
+    wallet_address: "0x1", direction: "in",
     from_address: "0x2222222222222222222222222222222222222222", to_address: "0x1",
     transaction_sender_relation: "unknown", transaction_target_relation: "unknown", is_indirect: null,
     counterparty_address: "0x2222222222222222222222222222222222222222", token_address: "0x3",
@@ -232,7 +230,6 @@ const dashboardEvents = [
 ];
 
 const metadata = {
-  wallet_id: "vitalik",
   ens: "vitalik.eth",
   wallet_address: "0x1",
   chain_id: 1,

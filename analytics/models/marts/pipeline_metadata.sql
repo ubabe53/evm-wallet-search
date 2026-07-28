@@ -1,6 +1,7 @@
 with event_metrics as (
   select
-    wallet_id,
+    chain_id,
+    wallet_address,
     count(*) as transfer_count,
     count(distinct token_address) as token_count,
     count(distinct counterparty_address) filter (
@@ -23,28 +24,29 @@ with event_metrics as (
     min(block_timestamp) as first_event_at,
     max(block_timestamp) as last_event_at
   from {{ ref('wallet_events') }}
-  group by wallet_id
+  group by chain_id, wallet_address
 ),
 
 interaction_metrics as (
-  select wallet_id, count(*) as interaction_count
+  select chain_id, wallet_address, count(*) as interaction_count
   from (
-    select distinct wallet_id, counterparty_address, token_address, direction
+    select distinct chain_id, wallet_address, counterparty_address, token_address, direction
     from {{ ref('wallet_events') }}
     where direction != 'self'
   )
-  group by wallet_id
+  group by chain_id, wallet_address
 ),
 
 timeline_metrics as (
-  select wallet_id, count(*) as timeline_row_count
+  select chain_id, wallet_address, count(*) as timeline_row_count
   from {{ ref('timeline_daily') }}
-  group by wallet_id
+  group by chain_id, wallet_address
 ),
 
 account_evidence_population as (
   select
-    wallet_id,
+    chain_id,
+    wallet_address,
     counterparty_address,
     count(*) as event_count,
     any_value(counterparty_evidence_fetch_status) as fetch_status,
@@ -54,12 +56,13 @@ account_evidence_population as (
   from {{ ref('wallet_events') }}
   where counterparty_address != '0x0000000000000000000000000000000000000000'
     and counterparty_address != wallet_address
-  group by wallet_id, counterparty_address
+  group by chain_id, wallet_address, counterparty_address
 ),
 
 account_evidence_metrics as (
   select
-    wallet_id,
+    chain_id,
+    wallet_address,
     count(*) as account_evidence_eligible_address_count,
     count(*) filter (where fetch_status = 'complete') as account_evidence_classified_address_count,
     count(*) filter (where fetch_status = 'failed') as account_evidence_failed_address_count,
@@ -86,14 +89,13 @@ account_evidence_metrics as (
     ) as account_evidence_observation_block_timestamp_max,
     any_value(evidence_schema_version) filter (where fetch_status = 'complete') as account_evidence_schema_version
   from account_evidence_population
-  group by wallet_id
+  group by chain_id, wallet_address
 )
 
 select
-  wallets.wallet_id,
   wallets.ens,
   wallets.wallet_address,
-  1 as chain_id,
+  wallets.chain_id,
   {% if var('use_fixture', true) %}'fixture'{% else %}'hyperindex'{% endif %} as data_source,
   current_timestamp as generated_at,
   {% if var('use_fixture', true) %}
@@ -148,7 +150,7 @@ select
   events.first_event_at,
   events.last_event_at
 from {{ ref('stg_wallets') }} as wallets
-left join event_metrics as events using (wallet_id)
-left join interaction_metrics as interactions using (wallet_id)
-left join timeline_metrics as timeline using (wallet_id)
-left join account_evidence_metrics as evidence using (wallet_id)
+left join event_metrics as events using (chain_id, wallet_address)
+left join interaction_metrics as interactions using (chain_id, wallet_address)
+left join timeline_metrics as timeline using (chain_id, wallet_address)
+left join account_evidence_metrics as evidence using (chain_id, wallet_address)

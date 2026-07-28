@@ -18,5 +18,6 @@ select
 from {{ ref('int_wallet_transfer_events') }} as events
 left join {{ ref('int_token_reputation') }} as reputation using (token_address)
 left join {{ ref('int_wallet_token_interactions') }} as interactions
-  on interactions.wallet_id = events.wallet_id
+  on interactions.chain_id = events.chain_id
+  and interactions.wallet_address = events.wallet_address
   and interactions.token_address = events.token_address

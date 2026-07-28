@@ -7,7 +7,7 @@ unit_tests:
         format: sql
         rows: |
           select
-            'wallet' as wallet_id,
+            1 as chain_id,
             '0xwallet' as wallet_address,
             evidence.token_address,
             concat('counterparty-', evidence.token_address, '-', event_number) as counterparty_address,
@@ -28,28 +28,28 @@ unit_tests:
         select * from (
           values
             (
-              'wallet', '0xwallet', 'matched', 100, 100, 0, 100, 0, 0, 0, 100, 100,
+              1, '0xwallet', 'matched', 100, 100, 0, 100, 0, 0, 0, 100, 100,
               timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
               100, 'suspicious',
               'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction; mass_outbound_transaction_sender_matches_wallet',
               'interaction-legitimacy-v3'
             ),
             (
-              'wallet', '0xwallet', 'unknown', 100, 100, 0, 100, 0, 0, 0, 0, 0,
+              1, '0xwallet', 'unknown', 100, 100, 0, 100, 0, 0, 0, 0, 0,
               timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
               80, 'suspicious',
               'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction',
               'interaction-legitimacy-v3'
             ),
             (
-              'wallet', '0xwallet', 'mismatched', 100, 100, 0, 100, 0, 0, 100, 100, 0,
+              1, '0xwallet', 'mismatched', 100, 100, 0, 100, 0, 0, 100, 100, 0,
               timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
               80, 'suspicious',
               'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction',
               'interaction-legitimacy-v3'
             )
         ) as expected(
-          wallet_id,
+          chain_id,
           wallet_address,
           token_address,
           transfer_count,
@@ -77,7 +77,7 @@ unit_tests:
         format: sql
         rows: |
           select
-            'wallet' as wallet_id,
+            1 as chain_id,
             '0xwallet' as wallet_address,
             'token' as token_address,
             concat('counterparty-', event_number) as counterparty_address,
@@ -90,7 +90,7 @@ unit_tests:
           union all
 
           select
-            'wallet' as wallet_id,
+            1 as chain_id,
             '0xwallet' as wallet_address,
             'token' as token_address,
             '0xwallet' as counterparty_address,
@@ -104,14 +104,14 @@ unit_tests:
       rows: |
         select * from (
           values (
-            'wallet', '0xwallet', 'token', 130, 100, 0, 100, 30, 0, 0, 100, 100,
+            1, '0xwallet', 'token', 130, 100, 0, 100, 30, 0, 0, 100, 100,
             timestamp '2024-01-01 00:00:00', timestamp '2024-02-01 00:29:00', 44669,
             100, 'suspicious',
             'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction; mass_outbound_transaction_sender_matches_wallet',
             'interaction-legitimacy-v3'
           )
         ) as expected(
-          wallet_id,
+          chain_id,
           wallet_address,
           token_address,
           transfer_count,
@@ -130,4 +130,79 @@ unit_tests:
           interaction_legitimacy,
           interaction_legitimacy_reasons,
           interaction_legitimacy_version
+        )
+  - name: ignores_configured_wallet_text_in_token_reputation
+    description: Token names or symbols matching the configured wallet's pinned ENS or person label do not contribute reputation evidence.
+    model: int_token_reputation
+    given:
+      - input: ref('stg_transfer_events')
+        format: sql
+        rows: |
+          select null::varchar as token_address
+          where false
+      - input: ref('stg_token_metadata')
+        format: sql
+        rows: |
+          select * from (
+            values
+              (
+                '0xens', 'VITALIK', 'vitalik.eth', 'unverified', null::varchar, null::varchar,
+                'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
+                'no_recorded_source', 'token-quality-v1'
+              ),
+              (
+                '0xlabel', 'VB', 'Vitalik Buterin', 'unverified', null::varchar, null::varchar,
+                'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
+                'no_recorded_source', 'token-quality-v1'
+              )
+          ) as metadata(
+            token_address,
+            symbol,
+            name,
+            token_status,
+            metadata_source,
+            token_label_reason,
+            token_quality,
+            token_quality_sources,
+            token_quality_source_count,
+            token_quality_reason,
+            token_quality_provenance,
+            token_quality_version
+          )
+      - input: ref('token_metadata')
+        format: sql
+        rows: |
+          select
+            null::varchar as token_address,
+            null::varchar as symbol,
+            null::varchar as name,
+            null::varchar as metadata_source
+          where false
+    expect:
+      format: sql
+      rows: |
+        select * from (
+          values
+            (
+              '0xens', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
+              'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
+              'no_recorded_source', 'token-quality-v1'
+            ),
+            (
+              '0xlabel', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
+              'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
+              'no_recorded_source', 'token-quality-v1'
+            )
+        ) as expected(
+          token_address,
+          token_reputation,
+          token_reputation_score,
+          token_reputation_reasons,
+          token_reputation_version,
+          token_quality,
+          token_quality_sources,
+          token_quality_source_count,
+          token_quality_reason,
+          token_quality_provenance,
+          token_quality_version
         )

@@ -1,20 +1,20 @@
 with token_contracts as (
-  select distinct token_address
+  select distinct chain_id, token_address
   from {{ ref('wallet_events') }}
 ),
 eligible_events as (
   select events.*
   from {{ ref('wallet_events') }} as events
   left join token_contracts
-    on events.counterparty_address = token_contracts.token_address
+    on events.chain_id = token_contracts.chain_id
+    and events.counterparty_address = token_contracts.token_address
   where events.counterparty_address != '0x0000000000000000000000000000000000000000'
     and events.counterparty_address != events.wallet_address
     and token_contracts.token_address is null
 )
 select
-  wallet_id,
-  wallet_address,
   chain_id,
+  wallet_address,
   counterparty_address,
   any_value(counterparty_account_type) as account_type,
   any_value(counterparty_code_state) as code_state,
@@ -35,4 +35,4 @@ select
   min(block_timestamp) as first_seen_at,
   max(block_timestamp) as last_seen_at
 from eligible_events
-group by wallet_id, wallet_address, chain_id, counterparty_address, token_status, recognition_status, token_quality
+group by chain_id, wallet_address, counterparty_address, token_status, recognition_status, token_quality
