@@ -1,5 +1,6 @@
 with registry as (
   select
+    1 as chain_id,
     lower(token_address) as token_address,
     symbol,
     name,
@@ -13,6 +14,7 @@ with registry as (
 
 overrides as (
   select
+    1 as chain_id,
     lower(token_address) as token_address,
     nullif(trim(symbol), '') as symbol,
     nullif(trim(name), '') as name,
@@ -25,30 +27,31 @@ overrides as (
 
 rpc_metadata as (
   select
+    1 as chain_id,
     lower(token_address) as token_address,
     nullif(trim(symbol), '') as symbol,
     nullif(trim(name), '') as name,
     try_cast(decimals as integer) as decimals,
-    cast(rpc_block_number as bigint) as rpc_block_number,
-    fetch_status as rpc_fetch_status,
-    nullif(trim(error_code), '') as rpc_error_code
+    cast(rpc_block_number as bigint) as rpc_block_number
   {% if var('use_fixture', true) %}
   from {{ ref('token_rpc_metadata_fixture') }}
   {% else %}
   from {{ ref('token_rpc_metadata') }}
   {% endif %}
+  where fetch_status in ('complete', 'partial')
 ),
 
 addresses as (
-  select token_address from registry
+  select chain_id, token_address from registry
   union
-  select token_address from overrides
+  select chain_id, token_address from overrides
   union
-  select token_address from rpc_metadata
+  select chain_id, token_address from rpc_metadata
 ),
 
 resolved as (
   select
+    addresses.chain_id,
     addresses.token_address,
     coalesce(overrides.symbol, registry.symbol, rpc_metadata.symbol) as symbol,
     coalesce(overrides.name, registry.name, rpc_metadata.name) as name,
@@ -110,14 +113,11 @@ resolved as (
         then 'ethereum_rpc_block:' || cast(rpc_metadata.rpc_block_number as varchar)
       when rpc_metadata.token_address is not null then 'ethereum_rpc'
       else 'no_recorded_source'
-    end as token_quality_provenance,
-    rpc_metadata.rpc_block_number,
-    rpc_metadata.rpc_fetch_status,
-    rpc_metadata.rpc_error_code
+    end as token_quality_provenance
   from addresses
-  left join registry using (token_address)
-  left join overrides using (token_address)
-  left join rpc_metadata using (token_address)
+  left join registry using (chain_id, token_address)
+  left join overrides using (chain_id, token_address)
+  left join rpc_metadata using (chain_id, token_address)
 )
 
 select

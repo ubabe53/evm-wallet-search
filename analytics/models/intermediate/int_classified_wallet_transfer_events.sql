@@ -16,7 +16,7 @@ select
   coalesce(interactions.interaction_legitimacy_reasons, 'no_interaction_anomaly') as interaction_legitimacy_reasons,
   interactions.interaction_legitimacy_version
 from {{ ref('int_wallet_transfer_events') }} as events
-left join {{ ref('int_token_reputation') }} as reputation using (token_address)
+left join {{ ref('int_token_reputation') }} as reputation using (chain_id, token_address)
 left join {{ ref('int_wallet_token_interactions') }} as interactions
   on interactions.chain_id = events.chain_id
   and interactions.wallet_address = events.wallet_address

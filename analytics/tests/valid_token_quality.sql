@@ -1,5 +1,5 @@
 select token_address
-from {{ ref('stg_token_metadata') }}
+from {{ ref('int_token_enrichment') }}
 where token_quality_source_count != len(token_quality_sources)
   or token_quality_source_count < 0
   or (token_quality = 'high_confidence'

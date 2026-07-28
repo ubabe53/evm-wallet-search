@@ -7,7 +7,7 @@ wallets as (
 ),
 
 tokens as (
-  select * from {{ ref('stg_token_metadata') }}
+  select * from {{ ref('int_token_enrichment') }}
 ),
 
 counterparties as (
@@ -98,7 +98,8 @@ matched as (
       or transfers.to_address = wallets.wallet_address
     )
   left join tokens
-    on transfers.token_address = tokens.token_address
+    on transfers.chain_id = tokens.chain_id
+    and transfers.token_address = tokens.token_address
   left join counterparties
     on counterparties.chain_id = transfers.chain_id
     and not (

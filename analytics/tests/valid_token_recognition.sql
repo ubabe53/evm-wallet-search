@@ -1,5 +1,5 @@
 select *
-from {{ ref('stg_token_metadata') }}
+from {{ ref('int_token_enrichment') }}
 where recognition_version != 'token-recognition-v1'
   or recognition_status not in ('recognized', 'other')
   or (
