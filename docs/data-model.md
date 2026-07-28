@@ -17,9 +17,21 @@ Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is 
 - `vitalik.eth`
 - `0xd8da6bf26964af9d7eed9e03e53415d37aa96045`
 
-### `stg_token_metadata`
+### `stg_counterparty_metadata`
 
-Combines the generated Trust Wallet/Uniswap/CoinGecko/Coinbase Exchange registry with reviewed manual overrides. Overrides take precedence for symbol, name, decimals, base status, reason, and source URL, while exact-address registry membership remains separately available to recognition and quality classification. Coinbase-only rows intentionally leave decimals null because exchange trading precision is not ERC-20 decimal metadata.
+In live mode, reads `analytics/artifacts/account_evidence.duckdb` at one row per `(chain_id, address)` historical observation. Fixture mode returns an empty typed relation and does not ship an account-evidence CSV. The current scope fixes `chain_id = 1`. Each row preserves:
+
+- `account_type`: `eoa_candidate`, `contract`, or retryable `unknown`.
+- `code_state`: `no_code`, internal `eip7702_delegated`, `contract_code`, or `unknown`, plus exact byte length and delegation target when applicable.
+- Concrete observation block number/hash/timestamp, the `safe` or confirmed-head fallback policy, fetch status/reason, schema version, and fetch time.
+
+Successful observations are immutable by default and therefore represent “observed at block,” not permanent identity. Failed calls are checkpointed but remain eligible on the next run. Safe and ERC-4337-specific evidence are not collected.
+
+## Intermediate
+
+### `int_token_enrichment`
+
+Combines the generated Trust Wallet/Uniswap/CoinGecko/Coinbase Exchange registry, reviewed manual overrides, and pinned-block Ethereum RPC metadata into one resolved token-enrichment row. This is an intermediate model rather than staging because it applies cross-source precedence and derives recognition, availability, and quality classifications. Overrides take precedence for symbol, name, decimals, base status, reason, and source URL, while exact-address registry membership remains separately available to recognition and quality classification. Coinbase-only rows intentionally leave decimals null because exchange trading precision is not ERC-20 decimal metadata.
 
 The final metadata precedence is manual override, curated registry, then pinned-block Ethereum RPC metadata. RPC-derived fields may supply labels and decimals, but their status remains `unverified` because contracts self-declare these values.
 
@@ -38,18 +50,6 @@ The normalized fields are:
 - `rpc_block_number`, `rpc_fetch_status`, and `rpc_error_code`: audit fields for RPC enrichment attempts.
 
 Unknown tokens remain in event marts as internally `unverified` and publicly `other`. Sourced token `decimals` remain nullable metadata; they never alter the exact emitted raw value.
-
-### `stg_counterparty_metadata`
-
-In live mode, reads `analytics/artifacts/account_evidence.duckdb` at one row per `(chain_id, address)` historical observation. Fixture mode returns an empty typed relation and does not ship an account-evidence CSV. The current scope fixes `chain_id = 1`. Each row preserves:
-
-- `account_type`: `eoa_candidate`, `contract`, or retryable `unknown`.
-- `code_state`: `no_code`, internal `eip7702_delegated`, `contract_code`, or `unknown`, plus exact byte length and delegation target when applicable.
-- Concrete observation block number/hash/timestamp, the `safe` or confirmed-head fallback policy, fetch status/reason, schema version, and fetch time.
-
-Successful observations are immutable by default and therefore represent “observed at block,” not permanent identity. Failed calls are checkpointed but remain eligible on the next run. Safe and ERC-4337-specific evidence are not collected.
-
-## Intermediate
 
 ### `int_wallet_transfer_events`
 

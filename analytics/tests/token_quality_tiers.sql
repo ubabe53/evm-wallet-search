@@ -5,7 +5,7 @@ select
   quality.token_quality_reason,
   reputation.token_reputation,
   reputation.token_reputation_version
-from {{ ref('stg_token_metadata') }} as quality
+from {{ ref('int_token_enrichment') }} as quality
 inner join {{ ref('int_token_reputation') }} as reputation using (token_address)
 where quality.token_address in (
     '0xebb66a88cedd12bfe3a289df6dfee377f2963f12',
@@ -30,7 +30,7 @@ select
   quality.token_quality_reason,
   reputation.token_reputation,
   reputation.token_reputation_version
-from {{ ref('stg_token_metadata') }} as quality
+from {{ ref('int_token_enrichment') }} as quality
 inner join {{ ref('int_token_reputation') }} as reputation using (token_address)
 where quality.token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
   and (

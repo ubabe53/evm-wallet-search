@@ -1,7 +1,7 @@
 with token_addresses as (
   select distinct token_address from {{ ref('stg_transfer_events') }}
   union
-  select token_address from {{ ref('stg_token_metadata') }}
+  select token_address from {{ ref('int_token_enrichment') }}
 ),
 
 tokens as (
@@ -20,7 +20,7 @@ tokens as (
     coalesce(metadata.token_quality_version, 'token-quality-v1') as token_quality_version,
     lower(coalesce(metadata.name, '') || ' ' || coalesce(metadata.symbol, '')) as metadata_text
   from token_addresses as addresses
-  left join {{ ref('stg_token_metadata') }} as metadata using (token_address)
+  left join {{ ref('int_token_enrichment') }} as metadata using (token_address)
 ),
 
 trusted_identities as (

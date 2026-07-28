@@ -7,7 +7,7 @@ wallets as (
 ),
 
 tokens as (
-  select * from {{ ref('stg_token_metadata') }}
+  select * from {{ ref('int_token_enrichment') }}
 ),
 
 counterparties as (

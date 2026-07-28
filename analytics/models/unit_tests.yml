@@ -140,7 +140,7 @@ unit_tests:
         rows: |
           select null::varchar as token_address
           where false
-      - input: ref('stg_token_metadata')
+      - input: ref('int_token_enrichment')
         format: sql
         rows: |
           select * from (
