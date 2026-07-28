@@ -132,7 +132,22 @@ function shortAddress(address: string): string {
 }
 
 function compactAddress(address: string): string {
+  if (address.length <= 12) {
+    return address;
+  }
   return `${address.slice(0, 5)}...${address.slice(-3)}`;
+}
+
+function generatedAtLabel(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  }).format(new Date(value));
 }
 
 type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality" | "recognition_status">;
@@ -1351,26 +1366,12 @@ export function App() {
   return (
     <main className="shell">
       <header className="topbar">
-        <div>
+        <div className="productIdentity">
           <h1>EVM Wallet Search</h1>
           <p>
-            Transfer Event Analytics for {data.metadata.ens}, based on emitted
+            Transfer Event Analytics based on emitted
             {" Transfer(address,address,uint256) "}events.
           </p>
-          <div className="snapshotSummary">
-            <span>Data snapshot</span>
-            <strong>{snapshotCoverageLabel(data.metadata)}</strong>
-          </div>
-          <div className={`provenance ${data.metadata.data_source}`} title={`Generated ${new Date(data.metadata.generated_at).toLocaleString()}`}>
-            <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
-            <span>{data.metadata.transfer_count.toLocaleString()} indexed transfers</span>
-            <span title={accountEvidenceCoverageDescription(data.metadata)}>
-              {accountEvidenceCoverageLabel(data.metadata)} · {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
-            </span>
-            {data.metadata.is_sampled && (
-              <span>{data.metadata.exported_event_count.toLocaleString()} recent events shown</span>
-            )}
-          </div>
         </div>
         <div className="toolbar">
           <div className="recognitionControls">
@@ -1448,7 +1449,47 @@ export function App() {
         </div>
       </header>
 
-      <section className="stats" aria-label="Wallet summary">
+      <section className="overviewContext" aria-label="Analysis context">
+        <div className="analysisSubject">
+          <span className="contextLabel">Analyzing</span>
+          <div className="subjectIdentity">
+            <EtherscanLink
+              className="subjectAddress"
+              href={etherscanAddressUrl(data.metadata.wallet_address)}
+              title="View analyzed address on Etherscan"
+            >
+              <code>{compactAddress(data.metadata.wallet_address)}</code>
+              <ExternalLink size={13} aria-hidden="true" />
+            </EtherscanLink>
+            <span
+              className="subjectLabel"
+              title="Configured project label; not a live ENS resolution."
+            >
+              {data.metadata.ens}
+            </span>
+          </div>
+          <div className="subjectMeta">
+            <span>Ethereum mainnet</span>
+            <span className={`sourceBadge ${data.metadata.data_source}`}>
+              {data.metadata.data_source === "fixture" ? "Example wallet" : "Configured wallet"}
+            </span>
+          </div>
+        </div>
+        <div className={`selectionContext ${data.metadata.data_source}`}>
+          <strong>Current selection</strong>
+          <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
+          <span>{snapshotCoverageLabel(data.metadata)}</span>
+          <span>Generated {generatedAtLabel(data.metadata.generated_at)}</span>
+          <span title={accountEvidenceCoverageDescription(data.metadata)}>
+            {accountEvidenceCoverageLabel(data.metadata)} · {accountEvidenceObservationBlockLabel(data.metadata.account_evidence_observation_block_number_min, data.metadata.account_evidence_observation_block_number_max)}
+          </span>
+          {data.metadata.is_sampled && "exported_event_count" in data.metadata && (
+            <span>{data.metadata.exported_event_count.toLocaleString()} recent events shown</span>
+          )}
+        </div>
+      </section>
+
+      <section className="stats" aria-label="Current selection summary">
         <Stat icon={Activity} label="Transfers" value={stats.transferCount.toString()} />
         <Stat icon={Database} label="Tokens" value={stats.tokenCount.toString()} />
         <Stat icon={Network} label="Counterparties" value={stats.counterpartyCount.toString()} />
