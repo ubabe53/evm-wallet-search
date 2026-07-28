@@ -766,7 +766,9 @@ function CounterpartyTable({ rows }: { rows: RankedCounterparty[] }) {
           <th>#</th>
           <th>Account</th>
           <th>Activity</th>
-          <th title="ERC-20 transfer-event counts relative to the tracked wallet">Amount In / Out</th>
+          <th title="Captured Transfer-signature event counts relative to the tracked wallet">
+            Inbound / Outbound Events
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -798,7 +800,7 @@ function CounterpartyTable({ rows }: { rows: RankedCounterparty[] }) {
             <td>
               <span
                 className="flowIndicator"
-                title={`${row.inbound_transfer_count.toLocaleString("en-US")} inbound, ${row.outbound_transfer_count.toLocaleString("en-US")} outbound transfers`}
+                title={`${row.inbound_transfer_count.toLocaleString("en-US")} inbound, ${row.outbound_transfer_count.toLocaleString("en-US")} outbound Transfer events`}
               >
                 <span className="direction in"><ArrowDownLeft size={13} />{row.inbound_transfer_count.toLocaleString("en-US")}</span>
                 <i aria-hidden="true">|</i>
@@ -1351,7 +1353,10 @@ export function App() {
       <header className="topbar">
         <div>
           <h1>EVM Wallet Search</h1>
-          <p>ERC20 token flow analytics for {data.metadata.ens}</p>
+          <p>
+            Transfer Event Analytics for {data.metadata.ens}, based on emitted
+            {" Transfer(address,address,uint256) "}events.
+          </p>
           <div className="snapshotSummary">
             <span>Data snapshot</span>
             <strong>{snapshotCoverageLabel(data.metadata)}</strong>
@@ -1491,8 +1496,8 @@ export function App() {
         <div className="panel counterpartyPanel">
           <div className="panelHeader">
             <div className="panelTitle">
-              <h2>Top ERC-20 Counterparties</h2>
-              <p>Direct transfers; mint/burn, self, and token contracts excluded.</p>
+              <h2>Top Counterparties</h2>
+              <p>Addresses opposite the tracked wallet in Transfer events; mint/burn, self, and token contracts excluded.</p>
             </div>
             <label className="panelSelect">
               <span>Top</span>
