@@ -1,4 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   App,
@@ -338,6 +340,12 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("keeps table column headings in normal title case", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+
+    expect(styles).toMatch(/th\s*\{[^}]*text-transform:\s*none;/s);
+  });
+
   it("exposes binary account filters while retaining unresolved rows in the all selection", () => {
     expect(accountMatches("eoa_candidate", ["eoa_candidate"])).toBe(true);
     expect(accountMatches("contract", ["eoa_candidate"])).toBe(false);
@@ -597,7 +605,9 @@ describe("App", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText("ERC20 token flow analytics for vitalik.eth")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(
+      "Transfer Event Analytics for vitalik.eth, based on emitted Transfer(address,address,uint256) events.",
+    )).toBeInTheDocument());
     expect(screen.getAllByText("USDC").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "USDC" })[0]).toHaveAttribute(
       "href",
@@ -616,7 +626,10 @@ describe("App", () => {
       "https://etherscan.io/tx/0xaaa",
     );
     expect(screen.getByText("Recent Events")).toBeInTheDocument();
-    expect(screen.getByText("Top ERC-20 Counterparties")).toBeInTheDocument();
+    expect(screen.getByText("Top Counterparties")).toBeInTheDocument();
+    expect(screen.getByText(
+      "Addresses opposite the tracked wallet in Transfer events; mint/burn, self, and token contracts excluded.",
+    )).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "0x111...111" })).toHaveAttribute(
       "href",
       "https://etherscan.io/address/0x1111111111111111111111111111111111111111",
@@ -628,7 +641,7 @@ describe("App", () => {
     expect(screen.getAllByText("in*").length).toBeGreaterThan(0);
     expect(screen.getByText("self")).toHaveAttribute("title", SELF_TRANSFER_EXPLANATION);
     expect(screen.getByText("same wallet")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Amount In / Out" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Inbound / Outbound Events" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
