@@ -1,11 +1,12 @@
 with token_addresses as (
-  select distinct token_address from {{ ref('stg_transfer_events') }}
+  select distinct chain_id, token_address from {{ ref('stg_transfer_events') }}
   union
-  select token_address from {{ ref('int_token_enrichment') }}
+  select chain_id, token_address from {{ ref('int_token_enrichment') }}
 ),
 
 tokens as (
   select
+    addresses.chain_id,
     addresses.token_address,
     metadata.symbol,
     metadata.name,
@@ -20,11 +21,12 @@ tokens as (
     coalesce(metadata.token_quality_version, 'token-quality-v1') as token_quality_version,
     lower(coalesce(metadata.name, '') || ' ' || coalesce(metadata.symbol, '')) as metadata_text
   from token_addresses as addresses
-  left join {{ ref('int_token_enrichment') }} as metadata using (token_address)
+  left join {{ ref('int_token_enrichment') }} as metadata using (chain_id, token_address)
 ),
 
 trusted_identities as (
   select
+    1 as chain_id,
     lower(token_address) as token_address,
     lower(symbol) as symbol,
     lower(name) as name,
@@ -34,6 +36,7 @@ trusted_identities as (
 
 identity_collisions as (
   select
+    tokens.chain_id,
     tokens.token_address,
     count(trusted.token_address) > 0 as has_market_identity_collision,
     count(trusted.token_address) filter (
@@ -42,12 +45,13 @@ identity_collisions as (
     ) > 0 as has_curated_identity_collision
   from tokens
   left join trusted_identities as trusted
-    on trusted.token_address != tokens.token_address
+    on trusted.chain_id = tokens.chain_id
+    and trusted.token_address != tokens.token_address
     and (
       (length(trim(coalesce(tokens.symbol, ''))) >= 2 and lower(tokens.symbol) = trusted.symbol)
       or (length(trim(coalesce(tokens.name, ''))) >= 4 and lower(tokens.name) = trusted.name)
     )
-  group by tokens.token_address
+  group by tokens.chain_id, tokens.token_address
 ),
 
 signal_flags as (
@@ -60,7 +64,7 @@ signal_flags as (
     lower(trim(coalesce(symbol, ''))) in ('btc', 'eth')
       or lower(trim(coalesce(name, ''))) in ('bitcoin', 'ethereum') as impersonates_native_asset
   from tokens
-  left join identity_collisions as collisions using (token_address)
+  left join identity_collisions as collisions using (chain_id, token_address)
 ),
 
 scored as (
@@ -89,6 +93,7 @@ scored as (
 )
 
 select
+  chain_id,
   token_address,
   case
     when metadata_source = 'manual' and base_token_status = 'spam' then 'spam'

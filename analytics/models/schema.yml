@@ -53,11 +53,16 @@ models:
         tests:
           - not_null
   - name: int_token_enrichment
-    description: Resolved token display metadata, exact-address recognition evidence, metadata availability, and reviewed manual overrides.
+    description: Resolved token display metadata, exact-address recognition evidence, metadata availability, and reviewed manual overrides at (chain_id, token_address) grain.
     columns:
+      - name: chain_id
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
       - name: token_address
         tests:
-          - unique
           - not_null
       - name: token_status
         tests:
@@ -159,11 +164,16 @@ models:
         tests:
           - not_null
   - name: int_token_reputation
-    description: One explainable contract-level reputation result per observed emitting address; classification is ERC20-oriented, but the source signature does not prove token standard.
+    description: One explainable contract-level reputation result per (chain_id, observed or labeled token contract); classification is ERC20-oriented, but the source signature does not prove token standard.
     columns:
+      - name: chain_id
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
       - name: token_address
         tests:
-          - unique
           - not_null
       - name: token_reputation
         tests:

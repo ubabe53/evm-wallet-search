@@ -138,7 +138,7 @@ unit_tests:
       - input: ref('stg_transfer_events')
         format: sql
         rows: |
-          select null::varchar as token_address
+          select null::integer as chain_id, null::varchar as token_address
           where false
       - input: ref('int_token_enrichment')
         format: sql
@@ -146,16 +146,17 @@ unit_tests:
           select * from (
             values
               (
-                '0xens', 'VITALIK', 'vitalik.eth', 'unverified', null::varchar, null::varchar,
+                1, '0xens', 'VITALIK', 'vitalik.eth', 'unverified', null::varchar, null::varchar,
                 'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
                 'no_recorded_source', 'token-quality-v1'
               ),
               (
-                '0xlabel', 'VB', 'Vitalik Buterin', 'unverified', null::varchar, null::varchar,
+                1, '0xlabel', 'VB', 'Vitalik Buterin', 'unverified', null::varchar, null::varchar,
                 'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
                 'no_recorded_source', 'token-quality-v1'
               )
           ) as metadata(
+            chain_id,
             token_address,
             symbol,
             name,
@@ -184,16 +185,17 @@ unit_tests:
         select * from (
           values
             (
-              '0xens', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
+              1, '0xens', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
               'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
               'no_recorded_source', 'token-quality-v1'
             ),
             (
-              '0xlabel', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
+              1, '0xlabel', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
               'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
               'no_recorded_source', 'token-quality-v1'
             )
         ) as expected(
+          chain_id,
           token_address,
           token_reputation,
           token_reputation_score,

@@ -31,7 +31,7 @@ Successful observations are immutable by default and therefore represent “obse
 
 ### `int_token_enrichment`
 
-Combines the generated Trust Wallet/Uniswap/CoinGecko/Coinbase Exchange registry, reviewed manual overrides, and pinned-block Ethereum RPC metadata into one resolved token-enrichment row. This is an intermediate model rather than staging because it applies cross-source precedence and derives recognition, availability, and quality classifications. Overrides take precedence for symbol, name, decimals, base status, reason, and source URL, while exact-address registry membership remains separately available to recognition and quality classification. Coinbase-only rows intentionally leave decimals null because exchange trading precision is not ERC-20 decimal metadata.
+Combines the generated Trust Wallet/Uniswap/CoinGecko/Coinbase Exchange registry, reviewed manual overrides, and pinned-block Ethereum RPC metadata into one resolved token-enrichment row at `(chain_id, token_address)` grain. This is an intermediate model rather than staging because it applies cross-source precedence and derives recognition, availability, and quality classifications. The current sources are Ethereum-only and therefore set `chain_id = 1`; the chain key remains explicit so a contract address is never treated as globally unique. Overrides take precedence for symbol, name, decimals, base status, reason, and source URL, while exact-address registry membership remains separately available to recognition and quality classification. Coinbase-only rows intentionally leave decimals null because exchange trading precision is not ERC-20 decimal metadata.
 
 The final metadata precedence is manual override, curated registry, then pinned-block Ethereum RPC metadata. RPC-derived fields may supply labels and decimals, but their status remains `unverified` because contracts self-declare these values.
 
@@ -66,7 +66,7 @@ Filters staged transfers to configured wallets using `(chain_id, wallet_address)
 
 ### `int_token_reputation`
 
-One row per observed or labeled token contract. It produces `token_reputation`, a 0-100 `token_reputation_score`, semicolon-delimited `token_reputation_reasons`, and `token_reputation_version`, while carrying the separate quality evidence. `token-reputation-v3` removes configured-wallet name and ENS matching while preserving the quality-aware precedence introduced in version 2. Reviewed spam takes precedence over deterministic metadata heuristics; automated suspicion precedes high-confidence trust. Missing registry membership contributes no score. Token metadata is not compared with configured-wallet ENS or person labels; a future ENS enrichment must not silently reintroduce that coupling.
+One row per `(chain_id, observed or labeled token contract)`. It produces `token_reputation`, a 0-100 `token_reputation_score`, semicolon-delimited `token_reputation_reasons`, and `token_reputation_version`, while carrying the separate quality evidence. `token-reputation-v3` removes configured-wallet name and ENS matching while preserving the quality-aware precedence introduced in version 2. Reviewed spam takes precedence over deterministic metadata heuristics; automated suspicion precedes high-confidence trust. Missing registry membership contributes no score. Token metadata is not compared with configured-wallet ENS or person labels; a future ENS enrichment must not silently reintroduce that coupling.
 
 ### `int_wallet_token_interactions`
 

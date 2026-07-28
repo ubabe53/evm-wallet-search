@@ -6,7 +6,7 @@ select
   reputation.token_reputation,
   reputation.token_reputation_version
 from {{ ref('int_token_enrichment') }} as quality
-inner join {{ ref('int_token_reputation') }} as reputation using (token_address)
+inner join {{ ref('int_token_reputation') }} as reputation using (chain_id, token_address)
 where quality.token_address in (
     '0xebb66a88cedd12bfe3a289df6dfee377f2963f12',
     '0xcf91b70017eabde82c9671e30e5502d312ea6eb2'
@@ -31,7 +31,7 @@ select
   reputation.token_reputation,
   reputation.token_reputation_version
 from {{ ref('int_token_enrichment') }} as quality
-inner join {{ ref('int_token_reputation') }} as reputation using (token_address)
+inner join {{ ref('int_token_reputation') }} as reputation using (chain_id, token_address)
 where quality.token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
   and (
     quality.token_quality != 'high_confidence'
