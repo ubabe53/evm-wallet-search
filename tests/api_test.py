@@ -37,7 +37,10 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v11")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v12")
+        self.assertNotIn("wallet_id", metadata)
+        self.assertEqual(metadata["chain_id"], 1)
+        self.assertEqual(metadata["ens"], "vitalik.eth")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 7)
@@ -133,8 +136,11 @@ class DashboardApiTest(unittest.TestCase):
             params={"q": "0x9999999999999999999999999999999999999999", "limit": 1},
         ).json()
 
-        self.assertEqual(event_payload["items"][0]["value_raw"], expected)
-        self.assertNotIn("amount_decimal", event_payload["items"][0])
+        event = event_payload["items"][0]
+        self.assertEqual(event["value_raw"], expected)
+        self.assertNotIn("wallet_id", event)
+        self.assertNotIn("ens", event)
+        self.assertNotIn("amount_decimal", event)
         self.assertEqual(token_payload["items"][0]["value_raw_sum"], expected)
         self.assertNotIn("amount_decimal_sum", token_payload["items"][0])
 

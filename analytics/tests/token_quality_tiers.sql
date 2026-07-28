@@ -18,7 +18,7 @@ where quality.token_address in (
     or quality.token_quality_reason != 'single_registry_match'
     or quality.token_quality_version != 'token-quality-v1'
     or reputation.token_reputation != 'unverified'
-    or reputation.token_reputation_version != 'token-reputation-v2'
+    or reputation.token_reputation_version != 'token-reputation-v3'
   )
 
 union all
@@ -37,5 +37,5 @@ where quality.token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
     quality.token_quality != 'high_confidence'
     or quality.token_quality_reason != 'reviewed_manual_approval'
     or reputation.token_reputation != 'trusted'
-    or reputation.token_reputation_version != 'token-reputation-v2'
+    or reputation.token_reputation_version != 'token-reputation-v3'
   )

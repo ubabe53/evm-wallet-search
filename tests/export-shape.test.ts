@@ -21,6 +21,20 @@ describe("dashboard export shape", () => {
     expect(Array.isArray(summaries.tokens)).toBe(true);
     expect(Array.isArray(summaries.counterparties)).toBe(true);
     expect(Array.isArray(timeline)).toBe(true);
+    expect("wallet_id" in metadata).toBe(false);
+    expect(typeof metadata.ens).toBe("string");
+    expect(events.every((event: Record<string, unknown>) =>
+      !("wallet_id" in event) && !("ens" in event) &&
+      typeof event.chain_id === "number" && typeof event.wallet_address === "string")).toBe(true);
+    expect(summaries.tokens.every((row: Record<string, unknown>) =>
+      !("wallet_id" in row) &&
+      typeof row.chain_id === "number" && typeof row.wallet_address === "string")).toBe(true);
+    expect(summaries.counterparties.every((row: Record<string, unknown>) =>
+      !("wallet_id" in row) &&
+      typeof row.chain_id === "number" && typeof row.wallet_address === "string")).toBe(true);
+    expect(timeline.every((row: Record<string, unknown>) =>
+      !("wallet_id" in row) &&
+      typeof row.chain_id === "number" && typeof row.wallet_address === "string")).toBe(true);
     expect(["fixture", "hyperindex"]).toContain(metadata.data_source);
     expect(typeof metadata.is_sampled).toBe("boolean");
     expect(metadata.account_evidence_schema_version).toBeNull();
@@ -78,7 +92,7 @@ describe("dashboard export shape", () => {
     expect(["high_confidence", "listed", "unknown"]).toContain(summaries.tokens[0].token_quality);
     expect(summaries.tokens[0].token_quality_version).toBe("token-quality-v1");
     expect(summaries.tokens[0].token_quality_source_count).toBe(summaries.tokens[0].token_quality_sources.length);
-    expect(summaries.tokens[0].token_reputation_version).toBe("token-reputation-v2");
+    expect(summaries.tokens[0].token_reputation_version).toBe("token-reputation-v3");
     expect(summaries.tokens.every((row: {
       token_reputation_score: number;
       transfer_count: number;
@@ -120,7 +134,7 @@ describe("dashboard export shape", () => {
       ["trusted", "unverified", "suspected_spam", "spam"].includes(edge.data.tokenStatus) &&
       ["high_confidence", "listed", "unknown"].includes(edge.data.tokenQuality) &&
       edge.data.tokenQualityVersion === "token-quality-v1" &&
-      edge.data.tokenReputationVersion === "token-reputation-v2")).toBe(true);
+      edge.data.tokenReputationVersion === "token-reputation-v3")).toBe(true);
     expect(metadata.non_spam_transfer_count + metadata.spam_transfer_count).toBe(metadata.transfer_count);
     expect(metadata.spam_token_count).toBeLessThanOrEqual(metadata.token_count);
     expect(metadata.status_counts["trusted+unverified+suspected_spam+spam"].transfer_count).toBe(metadata.transfer_count);

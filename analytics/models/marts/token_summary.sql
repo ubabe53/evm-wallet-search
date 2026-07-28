@@ -1,5 +1,5 @@
 select
-  wallet_id,
+  chain_id,
   wallet_address,
   token_address,
   coalesce(token_symbol, substr(token_address, 1, 10)) as token_symbol,
@@ -47,7 +47,7 @@ select
   ) as recipient_account_count,
   sum(cast(value_raw as bignum)) as value_raw_sum
 from {{ ref('wallet_events') }}
-group by wallet_id, wallet_address, token_address, token_symbol, token_name, token_decimals,
+group by chain_id, wallet_address, token_address, token_symbol, token_name, token_decimals,
   token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
   metadata_source, metadata_source_url, token_label_reason,
   metadata_availability, token_quality, token_quality_sources, token_quality_source_count,

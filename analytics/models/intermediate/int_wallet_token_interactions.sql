@@ -1,6 +1,6 @@
 with metrics as (
   select
-    wallet_id,
+    chain_id,
     wallet_address,
     token_address,
     count(*) as transfer_count,
@@ -27,7 +27,7 @@ with metrics as (
       max(block_timestamp) filter (where direction in ('in', 'out'))
     ) as external_active_minutes
   from {{ ref('int_wallet_transfer_events') }}
-  group by wallet_id, wallet_address, token_address
+  group by chain_id, wallet_address, token_address
 ),
 
 signal_flags as (

@@ -47,7 +47,7 @@ export type GraphEdge = {
     tokenReputation?: TokenReputation;
     tokenReputationScore?: number;
     tokenReputationReasons?: string;
-    tokenReputationVersion?: "token-reputation-v2";
+    tokenReputationVersion?: "token-reputation-v3";
     interactionLegitimacy?: InteractionLegitimacy;
     interactionLegitimacyScore?: number;
     interactionLegitimacyReasons?: string;
@@ -103,7 +103,7 @@ export type ClassificationEvidence = {
   token_reputation: TokenReputation;
   token_reputation_score: number;
   token_reputation_reasons: string;
-  token_reputation_version: "token-reputation-v2";
+  token_reputation_version: "token-reputation-v3";
   interaction_legitimacy: InteractionLegitimacy;
   interaction_legitimacy_score: number;
   interaction_legitimacy_reasons: string;
@@ -115,7 +115,7 @@ export type DashboardGraph = {
 };
 
 export type TokenSummary = {
-  wallet_id: string;
+  chain_id: number;
   wallet_address: string;
   token_address: string;
   token_symbol: string;
@@ -140,7 +140,7 @@ export type TokenSummary = {
   token_reputation: TokenReputation;
   token_reputation_score: number;
   token_reputation_reasons: string;
-  token_reputation_version: "token-reputation-v2";
+  token_reputation_version: "token-reputation-v3";
   counterparty_account_type: AccountType;
   transfer_count: number;
   inbound_transfer_count: number;
@@ -156,7 +156,6 @@ export type TokenSummary = {
 
 export type CounterpartySummary = AccountEvidence & {
   chain_id: number;
-  wallet_id: string;
   wallet_address: string;
   counterparty_address: string;
   token_status: TokenStatus;
@@ -171,7 +170,7 @@ export type CounterpartySummary = AccountEvidence & {
 };
 
 export type TimelineRow = ClassificationEvidence & {
-  wallet_id: string;
+  chain_id: number;
   wallet_address: string;
   block_date: string;
   token_address: string;
@@ -196,8 +195,6 @@ export type WalletEvent = ClassificationEvidence & {
   transaction_from_address: string | null;
   transaction_to_address: string | null;
   log_index: number;
-  wallet_id: string;
-  ens: string;
   wallet_address: string;
   from_address: string;
   to_address: string;
@@ -227,7 +224,6 @@ export type WalletEvent = ClassificationEvidence & {
 };
 
 export type PipelineMetadata = {
-  wallet_id: string;
   ens: string;
   wallet_address: string;
   chain_id: number;
@@ -320,7 +316,6 @@ export type PipelineMetadata = {
 };
 
 export type ApiMetadata = {
-  wallet_id: string;
   ens: string;
   wallet_address: string;
   chain_id: number;

@@ -576,7 +576,7 @@ def main() -> None:
               order by block_date, token_symbol, direction
             """,
         )
-        metadata = rows(connection, "pipeline_metadata", "wallet_id")
+        metadata = rows(connection, "pipeline_metadata", "chain_id, wallet_address")
 
         if len(metadata) != 1:
             raise RuntimeError(f"Expected one configured wallet, found {len(metadata)}")

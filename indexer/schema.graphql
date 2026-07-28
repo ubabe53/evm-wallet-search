@@ -2,6 +2,7 @@ type Erc20Transfer {
   id: ID!
   chainId: Int!
   blockNumber: BigInt!
+  blockHash: String!
   blockTimestamp: Int!
   transactionHash: String!
   transactionIndex: Int!

@@ -81,7 +81,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 ## Stable invariants
 
 - Ethereum mainnet only; identity always includes `chain_id`.
-- Stable event key: `(chain_id, transaction_hash, log_index)`.
+- Stable event key: `(chain_id, transaction_hash, log_index)`; captured block hashes remain adjacent canonical-block evidence rather than becoming identity.
 - Raw quantities remain arbitrary-precision integers or exact strings.
 - Token-decimals metadata remains separate from exact raw values; the current serving contract does not materialize floating-point normalized amounts.
 - Quantities from different token contracts are never summed as if fungible.

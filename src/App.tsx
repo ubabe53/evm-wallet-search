@@ -175,7 +175,14 @@ export function aggregateTimelineRows(rows: TimelineRow[]): DisplayedTimelineRow
   const grouped = new Map<string, DisplayedTimelineRow>();
 
   for (const row of rows) {
-    const key = [row.wallet_id, row.block_date, row.token_address, row.recognition_status, row.direction].join("|");
+    const key = [
+      row.chain_id,
+      row.wallet_address,
+      row.block_date,
+      row.token_address,
+      row.recognition_status,
+      row.direction,
+    ].join("|");
     const existing = grouped.get(key);
     if (!existing) {
       const {
@@ -1085,7 +1092,6 @@ export function App() {
         event.direction,
         event.transaction_sender_relation,
         event.transaction_target_relation,
-        event.ens,
         event.wallet_address,
         event.counterparty_address,
         event.counterparty_account_type,

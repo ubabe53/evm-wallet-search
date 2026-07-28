@@ -1,6 +1,7 @@
 with expected as (
   select
-    wallet_id,
+    chain_id,
+    wallet_address,
     count(distinct counterparty_address) as eligible_address_count,
     count(distinct counterparty_address) filter (
       where counterparty_evidence_fetch_status = 'complete'
@@ -24,12 +25,12 @@ with expected as (
   from {{ ref('wallet_events') }}
   where counterparty_address != '0x0000000000000000000000000000000000000000'
     and counterparty_address != wallet_address
-  group by wallet_id
+  group by chain_id, wallet_address
 )
 
 select metadata.wallet_address
 from {{ ref('pipeline_metadata') }} as metadata
-left join expected using (wallet_id)
+left join expected using (chain_id, wallet_address)
 where metadata.account_evidence_population_scope != 'distinct_nonzero_nonself_event_counterparties'
   or metadata.account_evidence_eligible_address_count != coalesce(expected.eligible_address_count, 0)
   or metadata.account_evidence_classified_address_count != coalesce(expected.classified_address_count, 0)

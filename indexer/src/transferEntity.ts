@@ -2,11 +2,12 @@ export type Erc20TransferEventLike = {
   chainId: number;
   block: {
     number: bigint | number;
+    hash: string;
     timestamp: number;
   };
   transaction: {
     hash: string;
-    transactionIndex?: number | null;
+    transactionIndex: number;
     from?: string | null;
     to?: string | null;
   };
@@ -23,6 +24,7 @@ export type Erc20TransferEntity = {
   id: string;
   chainId: number;
   blockNumber: bigint;
+  blockHash: string;
   blockTimestamp: number;
   transactionHash: string;
   transactionIndex: number;
@@ -45,9 +47,10 @@ export function toErc20TransferEntity(event: Erc20TransferEventLike): Erc20Trans
     id: `${event.chainId}-${event.transaction.hash.toLowerCase()}-${event.logIndex}`,
     chainId: event.chainId,
     blockNumber,
+    blockHash: lower(event.block.hash),
     blockTimestamp: event.block.timestamp,
     transactionHash: lower(event.transaction.hash),
-    transactionIndex: event.transaction.transactionIndex ?? 0,
+    transactionIndex: event.transaction.transactionIndex,
     transactionFromAddress: lowerOptional(event.transaction.from),
     transactionToAddress: lowerOptional(event.transaction.to),
     logIndex: event.logIndex,
