@@ -1,4 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   App,
@@ -338,6 +340,12 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("keeps table column headings in normal title case", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+
+    expect(styles).toMatch(/th\s*\{[^}]*text-transform:\s*none;/s);
+  });
+
   it("exposes binary account filters while retaining unresolved rows in the all selection", () => {
     expect(accountMatches("eoa_candidate", ["eoa_candidate"])).toBe(true);
     expect(accountMatches("contract", ["eoa_candidate"])).toBe(false);
