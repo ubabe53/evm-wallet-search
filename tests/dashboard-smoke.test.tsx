@@ -346,6 +346,12 @@ describe("App", () => {
     expect(styles).toMatch(/th\s*\{[^}]*text-transform:\s*none;/s);
   });
 
+  it("gives the activity timeline the full dashboard width", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+
+    expect(styles).toMatch(/\.workspace\s*\{[^}]*grid-template-columns:\s*1fr;/s);
+  });
+
   it("exposes binary account filters while retaining unresolved rows in the all selection", () => {
     expect(accountMatches("eoa_candidate", ["eoa_candidate"])).toBe(true);
     expect(accountMatches("contract", ["eoa_candidate"])).toBe(false);
