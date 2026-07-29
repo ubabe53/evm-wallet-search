@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -663,8 +663,27 @@ describe("App", () => {
     expect(screen.getByText(
       "One row per emitting contract across captured Transfer-signature events.",
     )).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Senders | Recipients" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Indirect In / Out" })).toBeInTheDocument();
+    const tokenActivityPanel = tokenActivityHeading.closest(".panel") as HTMLElement;
+    const tokenActivity = within(tokenActivityPanel);
+    expect(tokenActivity.getByRole("columnheader", { name: "Activity" })).toBeInTheDocument();
+    expect(tokenActivity.getByRole("columnheader", { name: "Direction" })).toBeInTheDocument();
+    expect(tokenActivity.getByRole("columnheader", { name: "Counterparties" })).toBeInTheDocument();
+    expect(tokenActivity.getByRole("columnheader", { name: "Recognition" })).toBeInTheDocument();
+    expect(tokenActivity.queryByRole("columnheader", { name: "Senders | Recipients" })).not.toBeInTheDocument();
+    expect(tokenActivity.queryByRole("columnheader", { name: "Indirect In / Out" })).not.toBeInTheDocument();
+    expect(tokenActivity.getByText("USD Coin")).toBeInTheDocument();
+    expect(tokenActivity.getByRole("link", { name: "0x2" })).toHaveAttribute(
+      "href",
+      "https://etherscan.io/token/0x2",
+    );
+    expect(tokenActivityPanel.querySelectorAll(".rankCell")[0]).toHaveTextContent("1");
+    expect(tokenActivityPanel.querySelector(".tokenActivityBar span")).toHaveStyle({ width: "100%" });
+    expect(tokenActivity.getAllByText("In 1").length).toBeGreaterThan(0);
+    expect(tokenActivity.getByText("Indirect 1 in · 0 out")).toHaveAttribute(
+      "title",
+      INDIRECT_TRANSFER_EXPLANATION,
+    );
+    expect(tokenActivity.getAllByText("1 senders · 0 recipients").length).toBeGreaterThan(0);
     expect(screen.getAllByTitle(INDIRECT_TRANSFER_EXPLANATION).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("in*").length).toBeGreaterThan(0);
     expect(screen.getByText("self")).toHaveAttribute("title", SELF_TRANSFER_EXPLANATION);

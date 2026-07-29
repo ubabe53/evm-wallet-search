@@ -840,6 +840,93 @@ table {
   max-height: 420px;
 }
 
+.tokenActivityTable {
+  min-width: 940px;
+}
+
+.tokenActivityTable td {
+  height: 58px;
+}
+
+.tokenIdentityCell {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  min-width: 250px;
+}
+
+.tokenIdentityPrimary {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.tokenIdentityPrimary > span {
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.tokenContractLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.tokenContractLink:hover {
+  color: var(--accent);
+}
+
+.tokenActivityCell {
+  width: 170px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tokenActivityCell strong,
+.tokenCounterpartyCell strong {
+  font-weight: 700;
+}
+
+.tokenActivityBar {
+  width: 132px;
+  height: 5px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--subtle-border);
+}
+
+.tokenActivityBar span {
+  display: block;
+  min-width: 2px;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.tokenDirectionCell {
+  min-width: 290px;
+}
+
+.tokenDirectionCell small,
+.tokenCounterpartyCell small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.tokenCounterpartyCell {
+  min-width: 145px;
+  font-variant-numeric: tabular-nums;
+}
+
 .counterpartyTableScroll {
   height: 520px;
   overflow: auto;

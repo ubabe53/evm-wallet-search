@@ -127,6 +127,9 @@ function InfoTooltip({
 }
 
 function shortAddress(address: string): string {
+  if (address.length <= 14) {
+    return address;
+  }
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
@@ -681,11 +684,25 @@ export function TokenTable({
   updatingToken: string | null;
   onRecognitionChange: (row: DisplayedTokenSummary, value: RecognitionStatus | "automatic") => void;
 }) {
+  const rankedRows = [...rows].sort((left, right) =>
+    right.transfer_count - left.transfer_count ||
+    left.token_address.localeCompare(right.token_address),
+  );
+  const maximumTransferCount = Math.max(
+    ...rankedRows.map((row) => row.transfer_count),
+    0,
+  );
+
   return (
-    <table>
+    <table className="tokenActivityTable">
       <thead>
         <tr>
           <th>Token</th>
+          <th title="Captured Transfer-signature event count">Activity</th>
+          <th title="Captured Transfer-signature event counts relative to the tracked wallet">
+            Direction
+          </th>
+          <th>Counterparties</th>
           <th aria-label="Recognition">
             <span className="tableHeaderInfo">
               Recognition
@@ -695,28 +712,76 @@ export function TokenTable({
               </InfoTooltip>
             </span>
           </th>
-          <th>Transfers</th>
-          <th>Indirect In / Out</th>
-          <th>Senders | Recipients</th>
-          <th>Counterparties</th>
         </tr>
       </thead>
       <tbody>
-        {rows.length === 0 && (
+        {rankedRows.length === 0 && (
           <tr>
-            <td className="tableEmpty" colSpan={6}>No token activity matches</td>
+            <td className="tableEmpty" colSpan={5}>No token activity matches</td>
           </tr>
         )}
-        {rows.map((row) => (
+        {rankedRows.map((row, index) => (
           <tr key={row.token_address}>
             <td>
-              <EtherscanLink
-                className="etherscanLink"
-                href={etherscanTokenUrl(row.token_address)}
-                title={`View ${row.token_symbol} on Etherscan`}
+              <div className="tokenIdentityCell">
+                <span className="rankCell">{index + 1}</span>
+                <div>
+                  <div className="tokenIdentityPrimary">
+                    <EtherscanLink
+                      className="etherscanLink"
+                      href={etherscanTokenUrl(row.token_address)}
+                      title={`View ${row.token_symbol} on Etherscan`}
+                    >
+                      {row.token_symbol}
+                    </EtherscanLink>
+                    {row.token_name && <span title={row.token_name}>{row.token_name}</span>}
+                  </div>
+                  <EtherscanLink
+                    className="tokenContractLink"
+                    href={etherscanTokenUrl(row.token_address)}
+                    title={`View contract ${row.token_address} on Etherscan`}
+                  >
+                    <code>{shortAddress(row.token_address)}</code>
+                    <ExternalLink size={11} aria-hidden="true" />
+                  </EtherscanLink>
+                </div>
+              </div>
+            </td>
+            <td className="tokenActivityCell">
+              <strong>{row.transfer_count.toLocaleString("en-US")}</strong>
+              <div
+                className="tokenActivityBar"
+                title={`${row.transfer_count.toLocaleString("en-US")} captured Transfer-signature events`}
               >
-                {row.token_symbol}
-              </EtherscanLink>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: maximumTransferCount === 0
+                      ? "0%"
+                      : `${row.transfer_count / maximumTransferCount * 100}%`,
+                  }}
+                />
+              </div>
+            </td>
+            <td className="tokenDirectionCell">
+              <span className="flowIndicator">
+                <span className="direction in"><ArrowDownLeft size={13} />In {row.inbound_transfer_count.toLocaleString("en-US")}</span>
+                <i aria-hidden="true">|</i>
+                <span className="direction out"><ArrowUpRight size={13} />Out {row.outbound_transfer_count.toLocaleString("en-US")}</span>
+                <i aria-hidden="true">|</i>
+                <span className="direction self"><Repeat2 size={13} />Self {(row.self_transfer_count ?? 0).toLocaleString("en-US")}</span>
+              </span>
+              <small title={INDIRECT_TRANSFER_EXPLANATION}>
+                Indirect {row.indirect_inbound_transfer_count.toLocaleString("en-US")} in · {row.indirect_outbound_transfer_count.toLocaleString("en-US")} out
+              </small>
+            </td>
+            <td className="tokenCounterpartyCell">
+              <strong>{row.counterparty_count.toLocaleString("en-US")}</strong>
+              <small
+                title={`${row.sender_account_count.toLocaleString("en-US")} distinct non-zero sender accounts, ${row.recipient_account_count.toLocaleString("en-US")} distinct non-zero recipient accounts`}
+              >
+                {row.sender_account_count.toLocaleString("en-US")} senders · {row.recipient_account_count.toLocaleString("en-US")} recipients
+              </small>
             </td>
             <td>
               <div className="recognitionCell">
@@ -739,32 +804,6 @@ export function TokenTable({
                 </select>
               </div>
             </td>
-            <td>
-              {row.transfer_count.toLocaleString("en-US")}
-              {row.self_transfer_count > 0 && (
-                <small className="selfTransferCount">
-                  {row.self_transfer_count.toLocaleString("en-US")} self
-                </small>
-              )}
-            </td>
-            <td>
-              <span className="flowIndicator" title={INDIRECT_TRANSFER_EXPLANATION}>
-                <span className="direction in"><ArrowDownLeft size={13} />in* {row.indirect_inbound_transfer_count.toLocaleString("en-US")}</span>
-                <i aria-hidden="true">|</i>
-                <span className="direction out"><ArrowUpRight size={13} />out* {row.indirect_outbound_transfer_count.toLocaleString("en-US")}</span>
-              </span>
-            </td>
-            <td>
-              <span
-                className="flowIndicator"
-                title={`${row.sender_account_count.toLocaleString("en-US")} distinct non-zero sender accounts, ${row.recipient_account_count.toLocaleString("en-US")} distinct non-zero recipient accounts`}
-              >
-                <span className="direction in"><ArrowDownLeft size={13} />{row.sender_account_count.toLocaleString("en-US")}</span>
-                <i aria-hidden="true">|</i>
-                <span className="direction out"><ArrowUpRight size={13} />{row.recipient_account_count.toLocaleString("en-US")}</span>
-              </span>
-            </td>
-            <td>{row.counterparty_count.toLocaleString("en-US")}</td>
           </tr>
         ))}
       </tbody>
