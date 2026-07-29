@@ -57,7 +57,7 @@ Generate the deterministic field-level catalog after building the fixture artifa
 bun run analytics:docs:generate
 ```
 
-This runs `dbt docs generate`, then fails if any project model, seed, source, or catalog column lacks a description, or if a resource omits its grain, primary key, provenance, or consumers. The generated catalog under `analytics/target/` is ignored build output; the reviewed source of truth is the layer-owned YAML in `analytics/models/`, `analytics/seeds/_seeds.yml`, and the reusable semantic definitions in `analytics/docs/data_contracts.md`.
+This runs `dbt docs generate`, then fails if any project model, seed, source, or catalog column lacks a description, or if a resource omits its grain, primary key, provenance, or consumers. The generated catalog under `analytics/target/` is ignored build output; the reviewed source of truth is the layer-owned YAML in `analytics/models/`, `analytics/seeds/_seeds.yml`, and the reusable semantic definitions in `analytics/docs/data_contracts.md`. The Python-owned account-evidence, snapshot-run, and recognition-override tables sit outside dbt's manifest; their structured contracts live in `docs/data-model.md` and their exact physical schemas are enforced by the owning Python tests.
 
 Inspect the catalog locally at `http://127.0.0.1:8081`:
 
@@ -77,11 +77,11 @@ bun run tokens:refresh
 
 `labels:sync` remains an alias. The command downloads Trust Wallet, Uniswap, CoinGecko, and online Coinbase Exchange Ethereum contract entries; validates exact Ethereum addresses and available token decimals; fails on cross-source decimal conflicts; and rewrites `analytics/seeds/token_metadata.csv` plus `token_metadata_manifest.json`. Naming precedence is Trust Wallet, Uniswap, CoinGecko, then Coinbase. Coinbase trading precision is not used as token decimals, so a Coinbase-only row may have unknown decimals. Manual entries in `token_label_overrides.csv` override every generated source.
 
-Each reviewed manual `recognized` or `other` entry must include a reason and evidence URL. Any exact-address source match is automatically `recognized`; unmatched tokens are `other`. After a seed schema change, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
+Each reviewed manual `recognized` or `other` entry must include a reason and evidence URL. Any exact-address source match is automatically `recognized`; unmatched tokens are `other`. The tiny `wallets` configuration seed is always recreated by a normal build. After changing another seed's column schema, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
 
 ## Token Recognition
 
-Recognition resolution runs during every dbt build and makes no network calls. Builds idempotently remove the retired reputation, interaction-legitimacy, and classified-event views from existing DuckDB artifacts.
+Recognition resolution runs during every dbt build and makes no network calls. Before building, dbt idempotently removes every known retired `main`-schema analytics relation. The completed build then validates the exact current 16-relation inventory and each relation's table/view materialization, so legacy graph, reputation, and superseded staging objects cannot survive unnoticed in an existing artifact. The cleanup never targets the separately owned `ops`, `app`, or account-evidence schemas.
 
 The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only.
 

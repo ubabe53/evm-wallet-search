@@ -51,6 +51,33 @@ class SnapshotRunsTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
+    def test_pipeline_run_table_has_exact_contract(self) -> None:
+        with duckdb.connect(str(self.database_path)) as connection:
+            ensure_run_table(connection)
+            actual = [
+                (row[1], row[2], bool(row[3]), bool(row[5]))
+                for row in connection.execute(
+                    "pragma table_info('ops.pipeline_runs')"
+                ).fetchall()
+            ]
+
+        self.assertEqual(
+            actual,
+            [
+                ("run_id", "VARCHAR", True, True),
+                ("chain_id", "INTEGER", True, False),
+                ("wallet_address", "VARCHAR", True, False),
+                ("wallet_label", "VARCHAR", True, False),
+                ("from_block", "BIGINT", True, False),
+                ("to_block", "BIGINT", True, False),
+                ("to_block_hash", "VARCHAR", True, False),
+                ("events_found", "BIGINT", False, False),
+                ("status", "VARCHAR", True, False),
+                ("completed_at", "TIMESTAMP WITH TIME ZONE", False, False),
+                ("scope_version", "VARCHAR", True, False),
+            ],
+        )
+
     def test_reads_transactional_hyperindex_progress_and_finalized_rpc_block(self) -> None:
         def transport(_url, payload):
             self.assertEqual(payload["variables"], {"chainId": 1})

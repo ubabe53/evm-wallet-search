@@ -31,6 +31,31 @@ class DashboardApiTest(unittest.TestCase):
         with self.service.connect() as connection:
             connection.execute("delete from app.token_recognition_overrides")
 
+    def test_token_recognition_override_table_has_exact_contract(self) -> None:
+        with self.service.connect() as connection:
+            actual = [
+                (row[1], row[2], bool(row[3]), row[4], bool(row[5]))
+                for row in connection.execute(
+                    "pragma table_info('app.token_recognition_overrides')"
+                ).fetchall()
+            ]
+
+        self.assertEqual(
+            actual,
+            [
+                ("chain_id", "INTEGER", True, None, True),
+                ("token_address", "VARCHAR", True, None, True),
+                ("status", "VARCHAR", True, None, False),
+                (
+                    "updated_at",
+                    "TIMESTAMP WITH TIME ZONE",
+                    True,
+                    "current_timestamp",
+                    False,
+                ),
+            ],
+        )
+
     def test_health_and_metadata_disclose_fixture_test_source(self) -> None:
         health = self.client.get("/api/v1/health")
         self.assertEqual(health.status_code, 200)
