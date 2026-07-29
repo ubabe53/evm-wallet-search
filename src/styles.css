@@ -542,9 +542,13 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1.55fr) minmax(450px, 1fr);
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.tokenActivityPanel {
+  grid-column: 1 / -1;
 }
 
 .panel {
@@ -841,7 +845,33 @@ table {
 }
 
 .tokenActivityTable {
-  min-width: 940px;
+  table-layout: fixed;
+}
+
+.tokenActivityTable th,
+.tokenActivityTable td {
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.tokenActivityTable th:nth-child(1) {
+  width: 24%;
+}
+
+.tokenActivityTable th:nth-child(2) {
+  width: 14%;
+}
+
+.tokenActivityTable th:nth-child(3) {
+  width: 25%;
+}
+
+.tokenActivityTable th:nth-child(4) {
+  width: 15%;
+}
+
+.tokenActivityTable th:nth-child(5) {
+  width: 22%;
 }
 
 .tokenActivityTable td {
@@ -852,7 +882,7 @@ table {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
-  min-width: 250px;
+  min-width: 0;
 }
 
 .tokenIdentityPrimary {
@@ -862,7 +892,7 @@ table {
 }
 
 .tokenIdentityPrimary > span {
-  max-width: 160px;
+  max-width: 120px;
   overflow: hidden;
   color: var(--muted);
   font-size: 11px;
@@ -884,7 +914,6 @@ table {
 }
 
 .tokenActivityCell {
-  width: 170px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -894,7 +923,8 @@ table {
 }
 
 .tokenActivityBar {
-  width: 132px;
+  width: 100%;
+  max-width: 132px;
   height: 5px;
   margin-top: 7px;
   overflow: hidden;
@@ -911,7 +941,7 @@ table {
 }
 
 .tokenDirectionCell {
-  min-width: 290px;
+  min-width: 0;
 }
 
 .tokenDirectionCell small,
@@ -923,7 +953,7 @@ table {
 }
 
 .tokenCounterpartyCell {
-  min-width: 145px;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1069,6 +1099,7 @@ th {
 .recognitionCell {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
 }
 
@@ -1274,6 +1305,16 @@ code {
   max-width: 560px;
 }
 
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .tokenActivityPanel {
+    grid-column: auto;
+  }
+}
+
 @media (max-width: 860px) {
   .topbar,
   .analysisSubject,
@@ -1295,6 +1336,27 @@ code {
   .stats,
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .tokenActivityTable {
+    min-width: 820px;
+    table-layout: auto;
+  }
+
+  .tokenIdentityCell {
+    min-width: 210px;
+  }
+
+  .tokenActivityCell {
+    width: 130px;
+  }
+
+  .tokenDirectionCell {
+    min-width: 250px;
+  }
+
+  .tokenCounterpartyCell {
+    min-width: 130px;
   }
 
   .searchbox {

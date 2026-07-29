@@ -346,10 +346,22 @@ describe("App", () => {
     expect(styles).toMatch(/th\s*\{[^}]*text-transform:\s*none;/s);
   });
 
-  it("gives the activity timeline the full dashboard width", () => {
+  it("pairs the activity timeline with counterparties and keeps token activity full width", () => {
     const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
 
-    expect(styles).toMatch(/\.workspace\s*\{[^}]*grid-template-columns:\s*1fr;/s);
+    expect(styles).toMatch(
+      /\.workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.55fr\)\s*minmax\(450px,\s*1fr\);/s,
+    );
+    expect(styles).toMatch(/\.tokenActivityPanel\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
+  });
+
+  it("fits every token-activity column on normal desktop widths", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+
+    expect(styles).toMatch(/\.tokenActivityTable\s*\{[^}]*table-layout:\s*fixed;/s);
+    expect(styles).toMatch(
+      /@media \(max-width:\s*860px\)[\s\S]*?\.tokenActivityTable\s*\{[^}]*min-width:\s*820px;/s,
+    );
   });
 
   it("exposes binary account filters while retaining unresolved rows in the all selection", () => {
@@ -655,9 +667,9 @@ describe("App", () => {
     const timelineHeading = screen.getByText("Activity Timeline");
     const tokenActivityHeading = screen.getByText("Token Activity");
     const counterpartyHeading = screen.getByText("Top Counterparties");
-    expect(timelineHeading.compareDocumentPosition(tokenActivityHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(timelineHeading.compareDocumentPosition(counterpartyHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
-    expect(tokenActivityHeading.compareDocumentPosition(counterpartyHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(counterpartyHeading.compareDocumentPosition(tokenActivityHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
     expect(screen.queryByText("Token Flow")).not.toBeInTheDocument();
     expect(screen.getByText(
