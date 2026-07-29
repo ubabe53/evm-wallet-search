@@ -46,9 +46,5 @@ select
   token_quality_reason,
   token_quality_provenance,
   token_quality_version,
-  interaction_legitimacy,
-  interaction_legitimacy_score,
-  interaction_legitimacy_reasons,
-  interaction_legitimacy_version,
   value_raw
 from {{ ref('int_classified_wallet_transfer_events') }}

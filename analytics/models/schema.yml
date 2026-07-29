@@ -186,33 +186,6 @@ models:
       - name: fetched_at
         tests:
           - not_null
-  - name: int_wallet_token_interactions
-    description: Behavioral legitimacy evidence at wallet and token grain.
-    columns:
-      - name: interaction_legitimacy
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["not_suspicious", "uncertain", "suspicious"]
-      - name: interaction_legitimacy_score
-        tests:
-          - not_null
-      - name: indirect_inbound_transfer_count
-        tests:
-          - not_null
-      - name: indirect_outbound_transfer_count
-        tests:
-          - not_null
-      - name: self_transfer_count
-        tests:
-          - not_null
-      - name: interaction_legitimacy_version
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["interaction-legitimacy-v3"]
   - name: wallet_events
     description: Dashboard event table, one row per wallet-relevant Transfer-signature log interpreted by ERC20-oriented models; token standard is not proven by the source signature.
     columns:

@@ -44,9 +44,6 @@ export type GraphEdge = {
     tokenQualityVersion?: "token-quality-v1";
     metadataSource?: string | null;
     metadataSourceUrl?: string | null;
-    interactionLegitimacy?: InteractionLegitimacy;
-    interactionLegitimacyScore?: number;
-    interactionLegitimacyReasons?: string;
     counterpartyAccountType: AccountType;
     transferCount: number;
     counterpartyTransferCount: number;
@@ -61,7 +58,6 @@ export type RecognitionStatus = "recognized" | "other";
 export type RecognitionFilter = "all" | RecognitionStatus;
 export type TokenQuality = "high_confidence" | "listed" | "unknown";
 export type MetadataAvailability = "complete" | "partial" | "unavailable";
-export type InteractionLegitimacy = "not_suspicious" | "uncertain" | "suspicious";
 export type TransactionSenderRelation = "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 export type TransactionTargetRelation = "token_contract" | "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 export type AccountType = "eoa_candidate" | "contract" | "unknown";
@@ -95,9 +91,6 @@ export type ClassificationEvidence = {
   token_quality_reason: string;
   token_quality_provenance: string;
   token_quality_version: "token-quality-v1";
-  interaction_legitimacy: InteractionLegitimacy;
-  interaction_legitimacy_score: number;
-  interaction_legitimacy_reasons: string;
 };
 
 export type DashboardGraph = {

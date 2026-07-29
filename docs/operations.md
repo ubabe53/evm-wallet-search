@@ -63,9 +63,9 @@ Each reviewed manual `trusted` approval or `spam` entry must include a reason an
 
 ## Spam Classification
 
-Interaction classification runs during every dbt build and makes no network calls. Inspect wallet-token behavior in `int_wallet_token_interactions` and the effective event status in `wallet_events`. Scores, reason codes, provenance, and classifier versions remain available internally in DuckDB and the typed transitional payload; the dashboard does not expose that evidence. Builds idempotently remove the retired `int_token_reputation` view from existing DuckDB artifacts.
+Token-quality classification runs during every dbt build and makes no network calls. Inspect the effective internal event status in `wallet_events`; the dashboard does not expose that evidence. Builds idempotently remove the retired `int_token_reputation` and `int_wallet_token_interactions` views from existing DuckDB artifacts.
 
-The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only. Internal interaction and quality evidence are not shown. To change a classifier rule, update the corresponding model, its version string, dbt tests, and `docs/architecture.md` in the same change.
+The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only. Internal quality evidence is not shown.
 
 ## RPC Metadata Enrichment
 

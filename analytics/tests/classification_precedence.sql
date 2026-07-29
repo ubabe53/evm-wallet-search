@@ -7,17 +7,11 @@ where (
   )
   or (
     source.token_status != 'spam'
-    and classified.interaction_legitimacy = 'suspicious'
-    and classified.token_status != 'suspected_spam'
-  )
-  or (
-    source.token_status != 'spam'
     and classified.token_quality = 'high_confidence'
-    and classified.interaction_legitimacy != 'suspicious'
     and classified.token_status != 'trusted'
   )
   or (
     source.token_status != 'spam'
     and classified.token_quality != 'high_confidence'
-    and classified.token_status = 'trusted'
+    and classified.token_status != 'unverified'
   )

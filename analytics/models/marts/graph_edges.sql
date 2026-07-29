@@ -20,9 +20,6 @@ with interaction_counts as (
     token_quality_version,
     metadata_source,
     metadata_source_url,
-    interaction_legitimacy,
-    interaction_legitimacy_score,
-    interaction_legitimacy_reasons,
     counterparty_account_type,
     direction,
     count(*) as transfer_count,
@@ -34,8 +31,7 @@ with interaction_counts as (
     token_status, recognition_status, recognition_reason, recognition_source, recognition_version,
     metadata_availability, token_quality, token_quality_sources,
     token_quality_source_count, token_quality_reason, token_quality_provenance,
-    token_quality_version, metadata_source, metadata_source_url, interaction_legitimacy,
-    interaction_legitimacy_score, interaction_legitimacy_reasons,
+    token_quality_version, metadata_source, metadata_source_url,
     counterparty_account_type, direction
 ),
 

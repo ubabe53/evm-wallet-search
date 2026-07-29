@@ -65,21 +65,17 @@ Filters staged transfers to configured wallets using `(chain_id, wallet_address)
 - `transaction_target_relation`: `token_contract`, `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `to`, the emitting token, and Transfer participants.
 - `is_indirect`: true for an observed `transaction_from_address != from_address`, false for an observed match, and null when transaction-sender evidence is unavailable.
 
-### `int_wallet_token_interactions`
-
-One row per `(chain_id, wallet_address, token_address)`. It records total, inbound, outbound, and self-transfer counts, external distinct-counterparty counts, confirmed-indirect inbound/outbound counts, transaction-sender evidence coverage, first/last timestamps, active duration, a 0-100 `interaction_legitimacy_score`, reason codes, version, and `interaction_legitimacy` (`not_suspicious`, `uncertain`, or `suspicious`). It detects broad, bursty, one-direction external transfer sprays. In `interaction-legitimacy-v3`, self-transfers do not contribute counterparties, direction ratios, or the classification window. The outbound-initiator score and `mass_outbound_transaction_sender_matches_wallet` reason require complete outbound transaction-sender evidence matching the wallet; unknown or mismatched senders do not receive that component. A mismatch alone is not a spam classification signal.
-
 ### `int_classified_wallet_transfer_events`
 
-Joins wallet-token interaction evidence back to one-row-per-transfer events. Reviewed manual spam retains precedence, suspicious interaction behavior maps to `suspected_spam`, `high_confidence` quality maps to `trusted`, and every other case is `unverified`.
+Maps the remaining token-quality evidence back to one-row-per-transfer events. Reviewed manual spam retains precedence, `high_confidence` quality maps to `trusted`, and every other case is `unverified`.
 
-These four values are an internal classification contract, not user choices. Token quality, scores, reason codes, provenance, and versions remain stored for audit and future product decisions. The dashboard exposes only the independent `recognized`/`other` classification.
+These three emitted values are a transitional internal classification contract, not user choices. Token quality, reason codes, provenance, and versions remain stored for audit and future product decisions. Wallet-interaction activity is not used to infer token legitimacy. The dashboard exposes only the independent `recognized`/`other` classification.
 
 ## Marts
 
 ### `wallet_events`
 
-Application-serving event table. This preserves the immutable one-transfer grain, event-time block number/timestamp, and captured canonical block hash while carrying the canonical `(chain_id, wallet_address)` target key, emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, automatic recognition evidence, metadata availability, token quality evidence, effective internal status, both classification scores, reason codes, and classifier versions. Configured ENS and person-label text are not repeated on each event. Enrichment observation time never replaces event block evidence. The local API queries this mart with explicit filters, ordering, and pagination; the fixture demo exports a bounded subset.
+Application-serving event table. This preserves the immutable one-transfer grain, event-time block number/timestamp, and captured canonical block hash while carrying the canonical `(chain_id, wallet_address)` target key, emitted Transfer `from_address`/`to_address`, wallet-relative direction, nullable top-level transaction sender/target, sender/target relation codes, nullable indirect evidence, observed-at counterparty account evidence, automatic recognition evidence, metadata availability, token quality evidence, effective internal status, and token-quality provenance. Configured ENS and person-label text are not repeated on each event. Enrichment observation time never replaces event block evidence. The local API queries this mart with explicit filters, ordering, and pagination; the fixture demo exports a bounded subset.
 
 ### `graph_nodes`
 
@@ -91,7 +87,7 @@ The legacy fixture graph export shortens counterparty labels for readability whi
 
 Each external wallet-counterparty-token-direction interaction produces two directed legs: `wallet_token` and `token_counterparty`. Inbound flow is counterparty to token to wallet; outbound flow is wallet to token to counterparty. Self-transfers remain in event and token-flow marts but are excluded from the external interaction graph. This makes every exported token node part of the graph.
 
-Graph edges carry effective status, metadata provenance, and both evidence layers so the application query can exclude suspected and reviewed spam before projecting direct wallet-counterparty links.
+Graph edges carry the transitional effective status, token-quality evidence, and metadata provenance. They do not carry or derive wallet-activity legitimacy evidence.
 
 `counterparty_transfer_count` is the complete number of captured wallet-relevant Transfer-signature events for the wallet-counterparty pair across all emitting contracts and both directions. It is not a proven ERC-20-only count. It is repeated on each interaction edge for legacy bounded graph-export compatibility.
 
@@ -175,13 +171,10 @@ dbt tests enforce:
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.
 - Exact graph counterparty transfer counts across tokens and directions.
 - Counterparty-summary totals that reconcile with inbound plus outbound counts, with ranking exclusions enforced.
-- Classification scores constrained to 0-100 with non-empty reasons.
-- Exact transaction sender/target relation derivation, nullable legacy behavior, indirect direction aggregates, and evidence-backed interaction-legitimacy reasons.
-- Synthetic broad-outbound classifier cases proving the initiator component is added for complete sender matches and withheld for unknown or mismatched senders.
-- Manual-spam, automated-suspicion, and trusted-status precedence.
+- Exact transaction sender/target relation derivation, nullable legacy behavior, and indirect direction aggregates.
+- Manual-spam, high-confidence-trust, and unverified fallback precedence.
 - Valid account-type/code-state precedence, exact 23-byte EIP-7702 evidence, and pinned observation/coverage consistency.
 - Exact EIP-7702 code remains internal code state under an EOA-candidate primary type.
 - Successful cached observations cannot be overwritten automatically, while failed code reads remain retryable.
 - Fixture builds contain no account-evidence rows and keep their provenance bounds null.
-- Reviewed-spam, automated-suspicion, high-confidence-trust, and unverified fallback precedence.
 - The fixture export's legacy 315-selection token/counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains. This is deterministic demo compatibility coverage, not the live serving contract, and should be simplified rather than expanded.

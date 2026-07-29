@@ -13,6 +13,7 @@ vars:
 
 on-run-start:
   - "{{ drop_relation_if_present('int_token_reputation') }}"
+  - "{{ drop_relation_if_present('int_wallet_token_interactions') }}"
 
 models:
   evm_wallet_search:

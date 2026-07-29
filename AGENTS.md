@@ -39,7 +39,7 @@ Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, 
 - Define direction relative to the configured wallet and keep self-transfer and zero-address policies explicit.
 - A `Transfer` log proves emission, not intent, economic ownership, transaction initiation, standards compliance, or historical account type.
 - Token symbols/names, registry recognition, and account type are sourced, time-varying enrichment—not identity facts. The configured `vitalik.eth` value is a pinned project label, not a live ENS-resolution claim; any future ENS resolution must record its source and observation time/block.
-- Do not infer token reputation from names, symbols, or registry absence. The dashboard exposes only `All`, `Recognized`, and `Other`: recognition means exact-address registry membership or a manual local override and is not a safety claim.
+- Do not infer token reputation or legitimacy from names, symbols, registry absence, or wallet-token activity patterns. The dashboard exposes only `All`, `Recognized`, and `Other`: recognition means exact-address registry membership or a manual local override and is not a safety claim.
 - `eoa_candidate` means no bytecode was observed at a pinned block. It does not prove personhood, control, permanence, or EOA history.
 - Live account evidence is an ignored local DuckDB cache. Successful bytecode observations are not automatically refreshed; failures remain retryable. Do not reintroduce Safe/ERC-4337 RPC collection or a generated account-evidence CSV without a new architecture decision.
 - Distinguish complete DuckDB/API results from bounded demo exports. Always carry source, block/time boundaries, generation time, limits, and sampling state.
