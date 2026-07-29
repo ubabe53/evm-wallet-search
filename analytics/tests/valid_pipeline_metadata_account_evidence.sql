@@ -48,30 +48,6 @@ where metadata.account_evidence_population_scope != 'distinct_nonzero_nonself_ev
     != metadata.account_evidence_classified_event_count
       + metadata.account_evidence_failed_event_count
       + metadata.account_evidence_not_checked_event_count
-  or (
-    metadata.account_evidence_eligible_address_count = 0
-    and metadata.account_evidence_address_coverage_rate is not null
-  )
-  or (
-    metadata.account_evidence_eligible_address_count > 0
-    and abs(
-      metadata.account_evidence_address_coverage_rate
-      - metadata.account_evidence_classified_address_count::double
-        / metadata.account_evidence_eligible_address_count
-    ) > 0.000000001
-  )
-  or (
-    metadata.account_evidence_eligible_event_count = 0
-    and metadata.account_evidence_event_coverage_rate is not null
-  )
-  or (
-    metadata.account_evidence_eligible_event_count > 0
-    and abs(
-      metadata.account_evidence_event_coverage_rate
-      - metadata.account_evidence_classified_event_count::double
-        / metadata.account_evidence_eligible_event_count
-    ) > 0.000000001
-  )
   or metadata.account_evidence_observation_block_number_min
     > metadata.account_evidence_observation_block_number_max
   or metadata.account_evidence_observation_block_timestamp_min

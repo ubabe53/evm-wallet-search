@@ -200,7 +200,7 @@ export function App() {
               className="subjectLabel"
               title="Configured project label; not a live ENS resolution."
             >
-              {data.metadata.ens}
+              {data.metadata.configured_wallet_label}
             </span>
           </div>
           <div className="subjectMeta">

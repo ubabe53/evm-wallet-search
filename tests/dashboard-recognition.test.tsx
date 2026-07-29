@@ -34,19 +34,17 @@ describe("live token-recognition controls", () => {
     const fetchMock = vi.fn((input: string, init?: RequestInit) => {
       if (input === "/api/v1/metadata") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          ens: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",
+          configured_wallet_label: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",
           generated_at: "2025-01-01T00:00:00Z", transfer_count: 1,
           account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties",
           account_evidence_eligible_address_count: 1,
           account_evidence_classified_address_count: 0,
           account_evidence_failed_address_count: 0,
           account_evidence_not_checked_address_count: 1,
-          account_evidence_address_coverage_rate: 0,
           account_evidence_eligible_event_count: 1,
           account_evidence_classified_event_count: 0,
           account_evidence_failed_event_count: 0,
           account_evidence_not_checked_event_count: 1,
-          account_evidence_event_coverage_rate: 0,
           account_evidence_observation_block_number_min: null,
           account_evidence_observation_block_number_max: null,
           account_evidence_observation_block_timestamp_min: null,
@@ -155,19 +153,17 @@ describe("live token-recognition controls", () => {
     const fetchMock = vi.fn((input: string, init?: RequestInit) => {
       if (input === "/api/v1/metadata") {
         return ok({
-          ens: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",
+          configured_wallet_label: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",
           generated_at: "2025-01-01T00:00:00Z", transfer_count: 1,
           account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties",
           account_evidence_eligible_address_count: 1,
           account_evidence_classified_address_count: 0,
           account_evidence_failed_address_count: 0,
           account_evidence_not_checked_address_count: 1,
-          account_evidence_address_coverage_rate: 0,
           account_evidence_eligible_event_count: 1,
           account_evidence_classified_event_count: 0,
           account_evidence_failed_event_count: 0,
           account_evidence_not_checked_event_count: 1,
-          account_evidence_event_coverage_rate: 0,
           account_evidence_observation_block_number_min: null,
           account_evidence_observation_block_number_max: null,
           account_evidence_observation_block_timestamp_min: null,

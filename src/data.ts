@@ -81,48 +81,48 @@ export type WalletEvent = {
   counterparty_eip7702_delegation_target: string | null;
 };
 
-export type PipelineMetadata = {
-  ens: string;
+type ArtifactMetadata = {
+  configured_wallet_label: string;
   wallet_address: string;
   chain_id: number;
   data_source: "fixture" | "hyperindex";
   generated_at: string;
   snapshot_run_id: string | null;
   snapshot_start_block: number | null;
-  snapshot_increment_start_block: number | null;
   snapshot_end_block: number | null;
   snapshot_end_block_hash: string | null;
   snapshot_finality_policy: "ethereum_finalized" | null;
   snapshot_scope_version: string | null;
   transfer_count: number;
-  token_count: number;
-  recognized_transfer_count: number;
-  recognized_token_count: number;
-  other_transfer_count: number;
-  other_token_count: number;
-  counterparty_count: number;
-  interaction_count: number;
+  event_block_number_min: number | null;
+  event_block_number_max: number | null;
+  first_event_at: string | null;
+  last_event_at: string | null;
   account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties";
   account_evidence_eligible_address_count: number;
   account_evidence_classified_address_count: number;
   account_evidence_failed_address_count: number;
   account_evidence_not_checked_address_count: number;
-  account_evidence_address_coverage_rate: number | null;
   account_evidence_eligible_event_count: number;
   account_evidence_classified_event_count: number;
   account_evidence_failed_event_count: number;
   account_evidence_not_checked_event_count: number;
-  account_evidence_event_coverage_rate: number | null;
   account_evidence_observation_block_number_min: number | null;
   account_evidence_observation_block_number_max: number | null;
   account_evidence_observation_block_timestamp_min: string | null;
   account_evidence_observation_block_timestamp_max: string | null;
   account_evidence_schema_version: string | null;
-  token_summary_row_count: number;
-  counterparty_summary_row_count: number;
-  timeline_row_count: number;
-  first_event_at: string | null;
-  last_event_at: string | null;
+};
+
+export type PipelineMetadata = ArtifactMetadata & {
+  export_schema_version: "dashboard-export-v1";
+  completeness_scope: "duckdb_snapshot";
+  indexer_checkpoint_recorded: false;
+  finality_status: "not_recorded";
+  complete_event_count: number;
+  complete_token_summary_row_count: number;
+  complete_counterparty_summary_row_count: number;
+  complete_timeline_row_count: number;
   recognition_counts: Record<string, {
     transfer_count: number;
     token_count: number;
@@ -153,41 +153,8 @@ export type PipelineMetadata = {
   is_sampled: boolean;
 };
 
-export type ApiMetadata = {
-  ens: string;
-  wallet_address: string;
-  chain_id: number;
-  data_source: "fixture" | "hyperindex";
-  generated_at: string;
-  snapshot_run_id: string | null;
-  snapshot_start_block: number | null;
-  snapshot_increment_start_block: number | null;
-  snapshot_end_block: number | null;
-  snapshot_end_block_hash: string | null;
-  snapshot_finality_policy: "ethereum_finalized" | null;
-  snapshot_scope_version: string | null;
-  transfer_count: number;
-  first_event_at: string | null;
-  last_event_at: string | null;
-  account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties";
-  account_evidence_eligible_address_count: number;
-  account_evidence_classified_address_count: number;
-  account_evidence_failed_address_count: number;
-  account_evidence_not_checked_address_count: number;
-  account_evidence_address_coverage_rate: number | null;
-  account_evidence_eligible_event_count: number;
-  account_evidence_classified_event_count: number;
-  account_evidence_failed_event_count: number;
-  account_evidence_not_checked_event_count: number;
-  account_evidence_event_coverage_rate: number | null;
-  account_evidence_observation_block_number_min: number | null;
-  account_evidence_observation_block_number_max: number | null;
-  account_evidence_observation_block_timestamp_min: string | null;
-  account_evidence_observation_block_timestamp_max: string | null;
-  account_evidence_schema_version: string | null;
-  event_block_number_min: number | null;
-  event_block_number_max: number | null;
-  api_schema_version: string;
+export type ApiMetadata = ArtifactMetadata & {
+  api_schema_version: "dashboard-api-v16";
   database_mode: "live" | "fixture_test";
   completeness_scope: "duckdb_snapshot" | "finalized_block_range";
   indexer_checkpoint_recorded: boolean;

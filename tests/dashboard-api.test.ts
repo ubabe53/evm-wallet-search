@@ -28,7 +28,11 @@ describe("live dashboard API adapter", () => {
   it("loads exact counts and bounded collections without static fixture files", async () => {
     const fetchMock = vi.fn((input: string) => {
       if (input === "/api/v1/metadata") {
-        return response({ ens: "vitalik.eth", wallet_address: "0xwallet", data_source: "hyperindex" });
+        return response({
+          configured_wallet_label: "vitalik.eth",
+          wallet_address: "0xwallet",
+          data_source: "hyperindex",
+        });
       }
       if (input.startsWith("/api/v1/summary?")) {
         return response({ transfer_count: 100_001, token_count: 501, counterparty_count: 2_000 });

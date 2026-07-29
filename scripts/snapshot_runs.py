@@ -367,7 +367,6 @@ def dbt_snapshot_environment(run: SnapshotRun, *, coverage_start_block: int) -> 
     return {
         "EVM_WALLET_SNAPSHOT_RUN_ID": run.run_id,
         "EVM_WALLET_SNAPSHOT_START_BLOCK": str(coverage_start_block),
-        "EVM_WALLET_SNAPSHOT_INCREMENT_START_BLOCK": str(run.from_block),
         "EVM_WALLET_SNAPSHOT_END_BLOCK": str(run.to_block),
         "EVM_WALLET_SNAPSHOT_END_BLOCK_HASH": run.to_block_hash,
         "EVM_WALLET_SNAPSHOT_FINALITY_POLICY": FINALITY_POLICY,

@@ -21,7 +21,39 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v15"
+API_SCHEMA_VERSION = "dashboard-api-v16"
+PIPELINE_METADATA_COLUMNS = """
+  configured_wallet_label,
+  wallet_address,
+  chain_id,
+  data_source,
+  generated_at,
+  snapshot_run_id,
+  snapshot_start_block,
+  snapshot_end_block,
+  snapshot_end_block_hash,
+  snapshot_finality_policy,
+  snapshot_scope_version,
+  transfer_count,
+  event_block_number_min,
+  event_block_number_max,
+  first_event_at,
+  last_event_at,
+  account_evidence_population_scope,
+  account_evidence_eligible_address_count,
+  account_evidence_classified_address_count,
+  account_evidence_failed_address_count,
+  account_evidence_not_checked_address_count,
+  account_evidence_eligible_event_count,
+  account_evidence_classified_event_count,
+  account_evidence_failed_event_count,
+  account_evidence_not_checked_event_count,
+  account_evidence_observation_block_number_min,
+  account_evidence_observation_block_number_max,
+  account_evidence_observation_block_timestamp_min,
+  account_evidence_observation_block_timestamp_max,
+  account_evidence_schema_version
+"""
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -66,6 +98,19 @@ def rows(connection: Any, sql: str, parameters: Iterable[Any] = ()) -> list[dict
         {column: json_value(value) for column, value in zip(columns, row, strict=True)}
         for row in result.fetchall()
     ]
+
+
+def pipeline_metadata_rows(connection: Any) -> list[dict[str, Any]]:
+    """Read the explicit internal metadata contract without leaking future mart columns."""
+
+    return rows(
+        connection,
+        f"""
+        select {PIPELINE_METADATA_COLUMNS}
+        from pipeline_metadata
+        order by chain_id, wallet_address
+        """,
+    )
 
 
 def filter_sql(
@@ -205,10 +250,7 @@ class QueryService:
         connection = None
         try:
             connection = duckdb.connect(str(self.database_path), read_only=False)
-            metadata = rows(
-                connection,
-                "select * from pipeline_metadata order by chain_id, wallet_address",
-            )
+            metadata = pipeline_metadata_rows(connection)
         except Exception as error:
             if connection is not None:
                 connection.close()
@@ -233,7 +275,7 @@ class QueryService:
                 completed_runs = rows(
                     connection,
                     """
-                    select run_id, from_block, to_block, to_block_hash
+                    select run_id, from_block, to_block, to_block_hash, events_found
                     from ops.pipeline_runs
                     where chain_id = ?
                       and wallet_address = ?
@@ -262,8 +304,6 @@ class QueryService:
             latest_matches = (
                 isinstance(snapshot_end, int)
                 and latest_run.get("run_id") == snapshot_run_id
-                and latest_run.get("from_block")
-                == metadata[0].get("snapshot_increment_start_block")
                 and latest_run.get("to_block") == snapshot_end
                 and latest_run.get("to_block_hash")
                 == metadata[0].get("snapshot_end_block_hash")
@@ -273,6 +313,12 @@ class QueryService:
                 connection.close()
                 raise DatabaseUnavailable(
                     "The finalized snapshot runs are incomplete or non-contiguous"
+                )
+            cumulative_event_count = sum(int(run["events_found"]) for run in completed_runs)
+            if cumulative_event_count != metadata[0]["transfer_count"]:
+                connection.close()
+                raise DatabaseUnavailable(
+                    "The finalized snapshot run counts do not reconcile with the analytics events"
                 )
         with self._schema_lock:
             if not self._schema_ready:
@@ -293,15 +339,10 @@ class QueryService:
 
     def metadata(self) -> dict[str, Any]:
         with self.connect() as connection:
-            metadata = rows(connection, "select * from pipeline_metadata")[0]
-            block_bounds = rows(
-                connection,
-                "select min(block_number) as event_block_number_min, max(block_number) as event_block_number_max from wallet_events",
-            )[0]
+            metadata = pipeline_metadata_rows(connection)[0]
         checkpoint_recorded = metadata.get("snapshot_run_id") is not None
         return {
             **metadata,
-            **block_bounds,
             "api_schema_version": API_SCHEMA_VERSION,
             "database_mode": "live" if metadata["data_source"] == "hyperindex" else "fixture_test",
             "completeness_scope": "finalized_block_range" if checkpoint_recorded else "duckdb_snapshot",
@@ -311,39 +352,7 @@ class QueryService:
         }
 
     def provenance(self, connection: Any) -> dict[str, Any]:
-        metadata = rows(
-            connection,
-            """
-            select metadata.ens, metadata.wallet_address, metadata.chain_id,
-              metadata.data_source, metadata.generated_at,
-              metadata.snapshot_run_id, metadata.snapshot_start_block,
-              metadata.snapshot_increment_start_block, metadata.snapshot_end_block,
-              metadata.snapshot_end_block_hash, metadata.snapshot_finality_policy,
-              metadata.snapshot_scope_version,
-              first_event_at, last_event_at,
-              account_evidence_population_scope,
-              account_evidence_eligible_address_count,
-              account_evidence_classified_address_count,
-              account_evidence_failed_address_count,
-              account_evidence_not_checked_address_count,
-              account_evidence_address_coverage_rate,
-              account_evidence_eligible_event_count,
-              account_evidence_classified_event_count,
-              account_evidence_failed_event_count,
-              account_evidence_not_checked_event_count,
-              account_evidence_event_coverage_rate,
-              account_evidence_observation_block_number_min,
-              account_evidence_observation_block_number_max,
-              account_evidence_observation_block_timestamp_min,
-              account_evidence_observation_block_timestamp_max,
-              account_evidence_schema_version,
-              min(events.block_number) as event_block_number_min,
-              max(events.block_number) as event_block_number_max
-            from pipeline_metadata as metadata
-            left join wallet_events as events using (chain_id, wallet_address)
-            group by all
-            """,
-        )[0]
+        metadata = pipeline_metadata_rows(connection)[0]
         checkpoint_recorded = metadata.get("snapshot_run_id") is not None
         return {
             **metadata,

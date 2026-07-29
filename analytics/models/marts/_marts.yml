@@ -230,7 +230,7 @@ models:
       grain: one UTC-day token-recognition-account-type-direction cell per wallet
       primary_key: [chain_id, wallet_address, block_date, token_address, recognition_status, counterparty_account_type, direction]
       provenance: aggregation of int_wallet_transfer_events
-      consumers: [fixture_exporter, pipeline_metadata]
+      consumers: [fixture_exporter]
     columns:
       - name: chain_id
         description: EVM chain identifier for the configured wallet and token.
@@ -285,31 +285,36 @@ models:
       materialization: table
       grain: one row per configured wallet and chain
       primary_key: [chain_id, wallet_address]
-      provenance: configured wallets plus complete event, timeline, and account-evidence populations
+      provenance: configured wallets plus complete event and account-evidence populations
       consumers: [local_api, fixture_exporter]
     columns:
-      - name: ens
-        description: Nullable configured display alias; not a live ENS resolution.
+      - name: configured_wallet_label
+        description: Pinned configured display label, falling back to the wallet address; not a live ENS resolution.
+        tests: [not_null]
       - name: wallet_address
         description: Lowercase configured wallet described by the row.
         tests: [not_null]
       - name: chain_id
         description: EVM chain identifier; currently Ethereum mainnet only.
-        tests: [not_null]
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
       - name: data_source
         description: Whether the artifact was built from deterministic fixtures or HyperIndex.
         tests:
+          - not_null
           - accepted_values:
               arguments:
                 values: [fixture, hyperindex]
       - name: generated_at
         description: UTC time at which dbt materialized this metadata row.
+        tests: [not_null]
       - name: snapshot_run_id
         description: Nullable identifier of the completed live pipeline run supporting this artifact.
       - name: snapshot_start_block
         description: Nullable inclusive start of cumulative contiguous live coverage.
-      - name: snapshot_increment_start_block
-        description: Nullable inclusive start of the latest incremental interval.
       - name: snapshot_end_block
         description: Nullable inclusive finalized end block of cumulative live coverage.
       - name: snapshot_end_block_hash
@@ -320,22 +325,15 @@ models:
         description: Nullable semantic indexing-scope version recorded by the live run.
       - name: transfer_count
         description: Complete captured event count in the DuckDB snapshot.
-      - name: token_count
-        description: Distinct emitting contract count in the snapshot.
-      - name: counterparty_count
-        description: Distinct nonself emitted counterparty count; zero address is included here.
-      - name: recognized_transfer_count
-        description: Captured event count automatically classified as recognized.
-      - name: recognized_token_count
-        description: Distinct emitting contract count automatically classified as recognized.
-      - name: other_transfer_count
-        description: Captured event count automatically classified as other.
-      - name: other_token_count
-        description: Distinct emitting contract count automatically classified as other.
-      - name: interaction_count
-        description: Distinct non-self wallet-counterparty-token-direction interaction count.
-      - name: timeline_row_count
-        description: Number of physical daily timeline cells.
+        tests: [not_null]
+      - name: event_block_number_min
+        description: Minimum observed event block in the snapshot; not a scan-coverage boundary.
+      - name: event_block_number_max
+        description: Maximum observed event block in the snapshot; not a scan-coverage boundary.
+      - name: first_event_at
+        description: Earliest observed event block timestamp; not a scan-coverage boundary.
+      - name: last_event_at
+        description: Latest observed event block timestamp; not a scan-coverage boundary.
       - name: account_evidence_population_scope
         description: Explicit address denominator used for account-evidence coverage.
         tests:
@@ -355,8 +353,6 @@ models:
       - name: account_evidence_not_checked_address_count
         description: Eligible addresses with no cached bytecode observation.
         tests: [not_null]
-      - name: account_evidence_address_coverage_rate
-        description: Classified eligible addresses divided by eligible addresses; null for an empty denominator.
       - name: account_evidence_eligible_event_count
         description: Captured events weighted by their eligible nonzero, nonself counterparty.
         tests: [not_null]
@@ -369,8 +365,6 @@ models:
       - name: account_evidence_not_checked_event_count
         description: Eligible captured events whose counterparty has no cached observation.
         tests: [not_null]
-      - name: account_evidence_event_coverage_rate
-        description: Classified eligible events divided by eligible events; null for an empty denominator.
       - name: account_evidence_observation_block_number_min
         description: Minimum pinned block among successfully classified eligible addresses.
       - name: account_evidence_observation_block_number_max
@@ -381,7 +375,3 @@ models:
         description: Latest pinned-block timestamp among successfully classified eligible addresses.
       - name: account_evidence_schema_version
         description: Account-evidence schema version represented by successful observations.
-      - name: first_event_at
-        description: Earliest captured event timestamp; not a scan-coverage boundary.
-      - name: last_event_at
-        description: Latest captured event timestamp; not a scan-coverage boundary.
