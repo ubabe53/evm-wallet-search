@@ -652,7 +652,17 @@ describe("App", () => {
       "href",
       "https://etherscan.io/address/0x1111111111111111111111111111111111111111",
     );
-    expect(screen.getByText("Token Flow")).toBeInTheDocument();
+    const timelineHeading = screen.getByText("Activity Timeline");
+    const tokenActivityHeading = screen.getByText("Token Activity");
+    const counterpartyHeading = screen.getByText("Top Counterparties");
+    expect(timelineHeading.compareDocumentPosition(tokenActivityHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(tokenActivityHeading.compareDocumentPosition(counterpartyHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(screen.queryByText("Token Flow")).not.toBeInTheDocument();
+    expect(screen.getByText(
+      "One row per emitting contract across captured Transfer-signature events.",
+    )).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Senders | Recipients" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Indirect In / Out" })).toBeInTheDocument();
     expect(screen.getAllByTitle(INDIRECT_TRANSFER_EXPLANATION).length).toBeGreaterThanOrEqual(2);

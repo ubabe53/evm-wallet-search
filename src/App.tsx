@@ -704,7 +704,7 @@ export function TokenTable({
       <tbody>
         {rows.length === 0 && (
           <tr>
-            <td className="tableEmpty" colSpan={6}>No token flows match</td>
+            <td className="tableEmpty" colSpan={6}>No token activity matches</td>
           </tr>
         )}
         {rows.map((row) => (
@@ -1533,6 +1533,28 @@ export function App() {
           />
         </div>
 
+        <div className="panel tokenActivityPanel">
+          <div className="panelHeader">
+            <div className="panelTitle">
+              <h2>Token Activity</h2>
+              <p>One row per emitting contract across captured Transfer-signature events.</p>
+            </div>
+            <span>
+              {filtered.summaries.tokens.length === tokenCount
+                ? `${tokenCount.toLocaleString("en-US")} tokens`
+                : `${filtered.summaries.tokens.length.toLocaleString("en-US")} of ${tokenCount.toLocaleString("en-US")} tokens`}
+            </span>
+          </div>
+          <div className="tokenTableScroll compact">
+            <TokenTable
+              rows={filtered.summaries.tokens}
+              editable={dashboardDataMode === "api"}
+              updatingToken={updatingToken}
+              onRecognitionChange={changeTokenRecognition}
+            />
+          </div>
+        </div>
+
         <div className="panel counterpartyPanel">
           <div className="panelHeader">
             <div className="panelTitle">
@@ -1580,27 +1602,6 @@ export function App() {
         />
       </section>
 
-      <section className="panel lowerPanel">
-        <div className="panelHeader">
-          <div className="panelTitle">
-            <h2>Token Flow</h2>
-            <p>One row per token across inbound and outbound transfers.</p>
-          </div>
-          <span>
-            {filtered.summaries.tokens.length === tokenCount
-              ? `${tokenCount.toLocaleString("en-US")} tokens`
-              : `${filtered.summaries.tokens.length.toLocaleString("en-US")} of ${tokenCount.toLocaleString("en-US")} tokens`}
-          </span>
-        </div>
-        <div className="tokenTableScroll compact">
-          <TokenTable
-            rows={filtered.summaries.tokens}
-            editable={dashboardDataMode === "api"}
-            updatingToken={updatingToken}
-            onRecognitionChange={changeTokenRecognition}
-          />
-        </div>
-      </section>
       {(undoAction || recognitionActionError) && (
         <div className="recognitionToast" role="status" aria-live="polite">
           <span>

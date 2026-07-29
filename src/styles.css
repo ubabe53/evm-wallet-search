@@ -913,10 +913,6 @@ table {
   min-width: 0;
 }
 
-.lowerPanel {
-  margin-top: 16px;
-}
-
 .tokenTableScroll th {
   position: sticky;
   top: 0;
