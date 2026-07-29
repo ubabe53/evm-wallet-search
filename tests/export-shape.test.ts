@@ -87,10 +87,7 @@ describe("dashboard export shape", () => {
     )?.value_raw_sum).toBe(
       "115792089237316195423570985008687907853269984665640564039457584007913129639935",
     );
-    expect(["trusted", "unverified", "suspected_spam", "spam"]).toContain(summaries.tokens[0].token_status);
-    expect(["high_confidence", "listed", "unknown"]).toContain(summaries.tokens[0].token_quality);
-    expect(summaries.tokens[0].token_quality_version).toBe("token-quality-v1");
-    expect(summaries.tokens[0].token_quality_source_count).toBe(summaries.tokens[0].token_quality_sources.length);
+    expect(["recognized", "other"]).toContain(summaries.tokens[0].recognition_status);
     expect(summaries.tokens.every((row: {
       transfer_count: number;
       inbound_transfer_count: number;
@@ -115,23 +112,17 @@ describe("dashboard export shape", () => {
     expect(summaries.counterparties.every((row: {
       counterparty_address: string;
       wallet_address: string;
-      token_status: string;
-      token_quality: string;
+      recognition_status: string;
       transfer_count: number;
       inbound_transfer_count: number;
       outbound_transfer_count: number;
     }) =>
       row.counterparty_address !== "0x0000000000000000000000000000000000000000" &&
       row.counterparty_address !== row.wallet_address &&
-      ["trusted", "unverified", "suspected_spam", "spam"].includes(row.token_status) &&
-      ["high_confidence", "listed", "unknown"].includes(row.token_quality) &&
+      ["recognized", "other"].includes(row.recognition_status) &&
       row.transfer_count === row.inbound_transfer_count + row.outbound_transfer_count)).toBe(true);
-    expect(graph.edges.every((edge: { data: { tokenStatus: string; tokenQuality: string; tokenQualityVersion: string } }) =>
-      ["trusted", "unverified", "suspected_spam", "spam"].includes(edge.data.tokenStatus) &&
-      ["high_confidence", "listed", "unknown"].includes(edge.data.tokenQuality) &&
-      edge.data.tokenQualityVersion === "token-quality-v1")).toBe(true);
-    expect(metadata.non_spam_transfer_count + metadata.spam_transfer_count).toBe(metadata.transfer_count);
-    expect(metadata.spam_token_count).toBeLessThanOrEqual(metadata.token_count);
+    expect(graph.edges.every((edge: { data: { recognitionStatus: string } }) =>
+      ["recognized", "other"].includes(edge.data.recognitionStatus))).toBe(true);
     expect(metadata.recognition_counts["recognized+other"].transfer_count).toBe(metadata.transfer_count);
     expect(metadata.recognition_account_counts[
       "recognized+other|eoa_candidate+contract"

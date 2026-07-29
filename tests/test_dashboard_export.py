@@ -31,7 +31,6 @@ class DashboardExportTest(unittest.TestCase):
                 "transaction_sender_relation varchar",
                 "transaction_target_relation varchar",
                 "is_indirect boolean",
-                "token_quality varchar",
                 "counterparty_account_type varchar",
             ):
                 connection.execute(f"alter table wallet_events add column {column}")
@@ -44,10 +43,7 @@ class DashboardExportTest(unittest.TestCase):
             connection.execute(
                 "alter table token_summary add column self_transfer_count integer"
             )
-            for column in (
-                "token_quality varchar",
-                "counterparty_account_type varchar",
-            ):
+            for column in ("counterparty_account_type varchar",):
                 connection.execute(f"alter table token_summary add column {column}")
 
             dashboard_export.validate_export_schema(connection)

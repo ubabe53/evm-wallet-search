@@ -64,12 +64,6 @@ models:
       - name: token_address
         tests:
           - not_null
-      - name: token_status
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["trusted", "unverified", "suspected_spam", "spam"]
       - name: metadata_source
         tests:
           - not_null
@@ -111,27 +105,6 @@ models:
           - accepted_values:
               arguments:
                 values: ["token-recognition-v1"]
-      - name: token_quality
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["high_confidence", "listed", "unknown"]
-      - name: token_quality_source_count
-        tests:
-          - not_null
-      - name: token_quality_reason
-        tests:
-          - not_null
-      - name: token_quality_provenance
-        tests:
-          - not_null
-      - name: token_quality_version
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["token-quality-v1"]
   - name: stg_account_evidence
     description: One retained pinned-block bytecode observation per (chain_id, address) from the local account-evidence cache. Safe- and ERC-4337-specific evidence are not collected.
     columns:
@@ -233,12 +206,6 @@ models:
           - accepted_values:
               arguments:
                 values: ["token_contract", "transfer_sender", "transfer_recipient", "other", "unknown"]
-      - name: token_status
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["trusted", "unverified", "suspected_spam", "spam"]
       - name: recognition_status
         tests:
           - not_null
@@ -257,18 +224,6 @@ models:
           - accepted_values:
               arguments:
                 values: ["complete", "partial", "unavailable"]
-      - name: token_quality
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["high_confidence", "listed", "unknown"]
-      - name: token_quality_version
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["token-quality-v1"]
       - name: counterparty_account_type
         tests:
           - not_null
@@ -318,24 +273,12 @@ models:
           - accepted_values:
               arguments:
                 values: ["wallet_token", "token_counterparty"]
-      - name: token_status
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["trusted", "unverified", "suspected_spam", "spam"]
       - name: recognition_status
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["recognized", "other"]
-      - name: token_quality
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["high_confidence", "listed", "unknown"]
       - name: counterparty_account_type
         tests:
           - not_null
@@ -346,7 +289,7 @@ models:
         tests:
           - not_null
   - name: token_summary
-    description: One row per wallet, emitting contract, effective recognition, internal status, quality, and exact counterparty account-evidence signature; models are ERC20-oriented, but the source signature does not prove token standard.
+    description: One row per wallet, emitting contract, recognition status, and exact counterparty account-evidence signature; models are ERC20-oriented, but the source signature does not prove token standard.
     columns:
       - name: wallet_address
         tests:
@@ -354,24 +297,12 @@ models:
       - name: token_address
         tests:
           - not_null
-      - name: token_status
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["trusted", "unverified", "suspected_spam", "spam"]
       - name: recognition_status
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["recognized", "other"]
-      - name: token_quality
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["high_confidence", "listed", "unknown"]
       - name: counterparty_account_type
         tests:
           - not_null
@@ -403,7 +334,7 @@ models:
         tests:
           - not_null
   - name: counterparty_summary
-    description: Eligible direct counterparties by wallet, effective token status, token quality, and address with observed-at account evidence, based on captured Transfer-signature events; excludes mint/burn, self, and emitting-contract addresses.
+    description: Eligible direct counterparties by wallet, recognition status, and address with observed-at account evidence, based on captured Transfer-signature events; excludes mint/burn, self, and emitting-contract addresses.
     columns:
       - name: wallet_address
         tests:
@@ -411,24 +342,12 @@ models:
       - name: counterparty_address
         tests:
           - not_null
-      - name: token_status
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["trusted", "unverified", "suspected_spam", "spam"]
       - name: account_type
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["eoa_candidate", "contract", "unknown"]
-      - name: token_quality
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["high_confidence", "listed", "unknown"]
       - name: transfer_count
         tests:
           - not_null
@@ -439,7 +358,7 @@ models:
         tests:
           - not_null
   - name: timeline_daily
-    description: Daily token flow at wallet, token, status, quality, exact counterparty account-evidence signature, and direction grain; token units are never mixed.
+    description: Daily token flow at wallet, token, recognition, exact counterparty account-evidence signature, and direction grain; token units are never mixed.
     columns:
       - name: wallet_address
         tests:
@@ -450,18 +369,6 @@ models:
       - name: token_address
         tests:
           - not_null
-      - name: token_status
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["trusted", "unverified", "suspected_spam", "spam"]
-      - name: token_quality
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["high_confidence", "listed", "unknown"]
       - name: counterparty_account_type
         tests:
           - not_null

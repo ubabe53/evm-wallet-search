@@ -8,7 +8,6 @@ const token = {
   token_symbol: "USDC",
   token_name: "USD Coin",
   token_decimals: 6,
-  token_status: "trusted",
   recognition_status: "recognized",
   recognition_reason: "registry_match",
   recognition_source: "registry",

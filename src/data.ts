@@ -31,17 +31,10 @@ export type GraphEdge = {
     tokenAddress: string | null;
     tokenSymbol: string | null;
     label?: string;
-    tokenStatus?: TokenStatus;
     recognitionStatus?: RecognitionStatus;
     recognitionSource?: string;
     recognitionOverrideStatus?: RecognitionStatus | null;
     metadataAvailability?: MetadataAvailability;
-    tokenQuality?: TokenQuality;
-    tokenQualitySources?: string[];
-    tokenQualitySourceCount?: number;
-    tokenQualityReason?: string;
-    tokenQualityProvenance?: string;
-    tokenQualityVersion?: "token-quality-v1";
     metadataSource?: string | null;
     metadataSourceUrl?: string | null;
     counterpartyAccountType: AccountType;
@@ -53,10 +46,8 @@ export type GraphEdge = {
   };
 };
 
-export type TokenStatus = "trusted" | "unverified" | "suspected_spam" | "spam";
 export type RecognitionStatus = "recognized" | "other";
 export type RecognitionFilter = "all" | RecognitionStatus;
-export type TokenQuality = "high_confidence" | "listed" | "unknown";
 export type MetadataAvailability = "complete" | "partial" | "unavailable";
 export type TransactionSenderRelation = "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 export type TransactionTargetRelation = "token_contract" | "transfer_sender" | "transfer_recipient" | "other" | "unknown";
@@ -85,12 +76,6 @@ export type ClassificationEvidence = {
   recognition_version: "token-recognition-v1";
   recognition_override_status?: RecognitionStatus | null;
   metadata_availability: MetadataAvailability;
-  token_quality: TokenQuality;
-  token_quality_sources: string[];
-  token_quality_source_count: number;
-  token_quality_reason: string;
-  token_quality_provenance: string;
-  token_quality_version: "token-quality-v1";
 };
 
 export type DashboardGraph = {
@@ -105,7 +90,6 @@ export type TokenSummary = {
   token_symbol: string;
   token_name: string | null;
   token_decimals: number | null;
-  token_status: TokenStatus;
   recognition_status: RecognitionStatus;
   recognition_reason: string;
   recognition_source: string;
@@ -115,12 +99,6 @@ export type TokenSummary = {
   metadata_source_url: string | null;
   token_label_reason: string | null;
   metadata_availability: MetadataAvailability;
-  token_quality: TokenQuality;
-  token_quality_sources: string[];
-  token_quality_source_count: number;
-  token_quality_reason: string;
-  token_quality_provenance: string;
-  token_quality_version: "token-quality-v1";
   counterparty_account_type: AccountType;
   transfer_count: number;
   inbound_transfer_count: number;
@@ -138,9 +116,7 @@ export type CounterpartySummary = AccountEvidence & {
   chain_id: number;
   wallet_address: string;
   counterparty_address: string;
-  token_status: TokenStatus;
   recognition_status: RecognitionStatus;
-  token_quality: TokenQuality;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -155,7 +131,6 @@ export type TimelineRow = ClassificationEvidence & {
   block_date: string;
   token_address: string;
   token_symbol: string;
-  token_status: TokenStatus;
   metadata_source: string | null;
   metadata_source_url: string | null;
   counterparty_account_type: AccountType;
@@ -196,7 +171,6 @@ export type WalletEvent = ClassificationEvidence & {
   token_symbol: string | null;
   token_name: string | null;
   token_decimals: number | null;
-  token_status: TokenStatus;
   metadata_source: string | null;
   metadata_source_url: string | null;
   token_label_reason: string | null;
@@ -223,13 +197,6 @@ export type PipelineMetadata = {
   other_transfer_count: number;
   other_token_count: number;
   counterparty_count: number;
-  non_spam_transfer_count: number;
-  non_spam_token_count: number;
-  non_spam_counterparty_count: number;
-  spam_transfer_count: number;
-  spam_token_count: number;
-  suspected_spam_transfer_count: number;
-  suspected_spam_token_count: number;
   interaction_count: number;
   account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties";
   account_evidence_eligible_address_count: number;
@@ -298,7 +265,6 @@ export type ApiMetadata = {
   snapshot_finality_policy: "ethereum_finalized" | null;
   snapshot_scope_version: string | null;
   transfer_count: number;
-  spam_transfer_count: number;
   first_event_at: string | null;
   last_event_at: string | null;
   account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties";

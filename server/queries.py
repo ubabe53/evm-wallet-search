@@ -21,7 +21,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v12"
+API_SCHEMA_VERSION = "dashboard-api-v13"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -538,7 +538,6 @@ class QueryService:
                   coalesce(any_value(token_symbol), substr(token_address, 1, 10)) as token_symbol,
                   any_value(token_name) as token_name,
                   any_value(token_decimals) as token_decimals,
-                  any_value(token_status) as token_status,
                   any_value(recognition_status) as recognition_status,
                   any_value(recognition_reason) as recognition_reason,
                   any_value(recognition_source) as recognition_source,

@@ -25,9 +25,7 @@ select
   any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
   any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
   any_value(counterparty_evidence_schema_version) as evidence_schema_version,
-  token_status,
   recognition_status,
-  token_quality,
   count(*) as transfer_count,
   count(*) filter (where direction = 'in') as inbound_transfer_count,
   count(*) filter (where direction = 'out') as outbound_transfer_count,
@@ -35,4 +33,4 @@ select
   min(block_timestamp) as first_seen_at,
   max(block_timestamp) as last_seen_at
 from eligible_events
-group by chain_id, wallet_address, counterparty_address, token_status, recognition_status, token_quality
+group by chain_id, wallet_address, counterparty_address, recognition_status

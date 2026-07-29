@@ -152,7 +152,7 @@ function generatedAtLabel(value: string): string {
   }).format(new Date(value));
 }
 
-type RankedCounterparty = Omit<CounterpartySummary, "token_status" | "token_quality" | "recognition_status">;
+type RankedCounterparty = Omit<CounterpartySummary, "recognition_status">;
 type DisplayedTokenSummary = Omit<TokenSummary, "counterparty_account_type">;
 type DisplayedTimelineRow = Omit<TimelineRow, "counterparty_account_type">;
 
@@ -228,12 +228,7 @@ export function aggregateCounterparties(rows: CounterpartySummary[]): RankedCoun
   for (const row of rows) {
     const existing = grouped.get(row.counterparty_address);
     if (!existing) {
-      const {
-        token_status: _tokenStatus,
-        token_quality: _tokenQuality,
-        recognition_status: _recognitionStatus,
-        ...summary
-      } = row;
+      const { recognition_status: _recognitionStatus, ...summary } = row;
       grouped.set(row.counterparty_address, { ...summary });
       continue;
     }

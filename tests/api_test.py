@@ -37,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v12")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v13")
         self.assertNotIn("wallet_id", metadata)
         self.assertEqual(metadata["chain_id"], 1)
         self.assertEqual(metadata["ens"], "vitalik.eth")
@@ -189,7 +189,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(other.json()["transfer_count"], 1)
         self.assertEqual(other.json()["query"]["recognition"], "other")
         self.assertEqual(
-            self.client.get("/api/v1/summary", params={"recognition": "trusted"}).status_code,
+            self.client.get("/api/v1/summary", params={"recognition": "invalid"}).status_code,
             422,
         )
 
@@ -239,7 +239,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(
             self.client.put(
                 "/api/v1/tokens/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48/recognition",
-                json={"status": "trusted"},
+                json={"status": "invalid"},
             ).status_code,
             422,
         )

@@ -16,7 +16,7 @@
   --live-text: #067647;
   --in: #0f766e;
   --out: #b45309;
-  --unverified-bg: #f2f4f7;
+  --subtle-bg: #f2f4f7;
   color: var(--text);
   background: var(--page-bg);
   font-family:
@@ -43,7 +43,7 @@
   --live-text: #6ee7b7;
   --in: #5eead4;
   --out: #fbbf24;
-  --unverified-bg: #273241;
+  --subtle-bg: #273241;
 }
 
 * {
@@ -1108,7 +1108,7 @@ th {
   align-items: center;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--unverified-bg);
+  background: var(--subtle-bg);
   padding: 2px 5px;
   color: var(--muted);
   font-size: 10px;
@@ -1143,7 +1143,7 @@ th {
   align-items: center;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--unverified-bg);
+  background: var(--subtle-bg);
   padding: 2px 5px;
   color: var(--muted);
   font-size: 10px;
@@ -1197,7 +1197,7 @@ th {
 }
 
 .transactionLink:hover {
-  background: var(--unverified-bg);
+  background: var(--subtle-bg);
   color: var(--accent);
 }
 

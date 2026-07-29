@@ -11,16 +11,6 @@ with event_metrics as (
     count(distinct token_address) filter (where recognition_status = 'recognized') as recognized_token_count,
     count(*) filter (where recognition_status = 'other') as other_transfer_count,
     count(distinct token_address) filter (where recognition_status = 'other') as other_token_count,
-    count(*) filter (where token_status in ('trusted', 'unverified')) as non_spam_transfer_count,
-    count(distinct token_address) filter (where token_status in ('trusted', 'unverified')) as non_spam_token_count,
-    count(distinct counterparty_address) filter (
-      where token_status in ('trusted', 'unverified')
-        and counterparty_address != wallet_address
-    ) as non_spam_counterparty_count,
-    count(*) filter (where token_status in ('suspected_spam', 'spam')) as spam_transfer_count,
-    count(distinct token_address) filter (where token_status in ('suspected_spam', 'spam')) as spam_token_count,
-    count(*) filter (where token_status = 'suspected_spam') as suspected_spam_transfer_count,
-    count(distinct token_address) filter (where token_status = 'suspected_spam') as suspected_spam_token_count,
     min(block_timestamp) as first_event_at,
     max(block_timestamp) as last_event_at
   from {{ ref('wallet_events') }}
@@ -122,13 +112,6 @@ select
   coalesce(events.recognized_token_count, 0) as recognized_token_count,
   coalesce(events.other_transfer_count, 0) as other_transfer_count,
   coalesce(events.other_token_count, 0) as other_token_count,
-  coalesce(events.non_spam_transfer_count, 0) as non_spam_transfer_count,
-  coalesce(events.non_spam_token_count, 0) as non_spam_token_count,
-  coalesce(events.non_spam_counterparty_count, 0) as non_spam_counterparty_count,
-  coalesce(events.spam_transfer_count, 0) as spam_transfer_count,
-  coalesce(events.spam_token_count, 0) as spam_token_count,
-  coalesce(events.suspected_spam_transfer_count, 0) as suspected_spam_transfer_count,
-  coalesce(events.suspected_spam_token_count, 0) as suspected_spam_token_count,
   coalesce(interactions.interaction_count, 0) as interaction_count,
   coalesce(timeline.timeline_row_count, 0) as timeline_row_count,
   'distinct_nonzero_nonself_event_counterparties' as account_evidence_population_scope,

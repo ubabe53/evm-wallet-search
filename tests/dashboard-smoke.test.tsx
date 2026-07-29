@@ -65,35 +65,23 @@ const eoaEventEvidence = {
   counterparty_evidence_reason_codes: "no_code_observed",
 } as const;
 
-const highQuality = {
+const recognizedEvidence = {
   recognition_status: "recognized",
   recognition_reason: "registry_match",
   recognition_source: "registry",
   recognition_version: "token-recognition-v1",
   recognition_override_status: null,
   metadata_availability: "complete",
-  token_quality: "high_confidence",
-  token_quality_sources: ["trustwallet", "uniswap", "coingecko"],
-  token_quality_source_count: 3,
-  token_quality_reason: "reviewed_manual_approval",
-  token_quality_provenance: "https://example.com/usdc",
-  token_quality_version: "token-quality-v1",
   counterparty_account_type: "contract",
 } as const;
 
-const unknownQuality = {
+const otherEvidence = {
   recognition_status: "other",
   recognition_reason: "no_registry_match",
   recognition_source: "automatic",
   recognition_version: "token-recognition-v1",
   recognition_override_status: null,
   metadata_availability: "complete",
-  token_quality: "unknown",
-  token_quality_sources: [],
-  token_quality_source_count: 0,
-  token_quality_reason: "no_registry_or_reviewed_approval",
-  token_quality_provenance: "https://example.com/spam",
-  token_quality_version: "token-quality-v1",
   counterparty_account_type: "eoa_candidate",
 } as const;
 
@@ -106,11 +94,10 @@ const summaries = {
       token_symbol: "USDC",
       token_name: "USD Coin",
       token_decimals: 6,
-      token_status: "trusted",
       metadata_source: "manual",
       metadata_source_url: "https://example.com/usdc",
       token_label_reason: "Canonical metadata",
-      ...highQuality,
+      ...recognizedEvidence,
       transfer_count: 1,
       inbound_transfer_count: 1,
       outbound_transfer_count: 0,
@@ -123,10 +110,10 @@ const summaries = {
       value_raw_sum: "125000000",
     },
     {
-      chain_id: 1, wallet_address: "0x1", token_address: "0x3", token_symbol: "SPAM",
-      token_name: "Spam Token", token_decimals: 18, token_status: "spam", metadata_source: "manual",
-      metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
-      ...unknownQuality,
+      chain_id: 1, wallet_address: "0x1", token_address: "0x3", token_symbol: "OTHER",
+      token_name: "Other Token", token_decimals: 18, metadata_source: "manual",
+      metadata_source_url: "https://example.com/other", token_label_reason: "Test other",
+      ...otherEvidence,
       transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
       self_transfer_count: 0,
       indirect_inbound_transfer_count: 0, indirect_outbound_transfer_count: 0,
@@ -139,7 +126,7 @@ const summaries = {
       ...contractAccountEvidence,
       chain_id: 1, wallet_address: "0x1",
       counterparty_address: "0x1111111111111111111111111111111111111111",
-      token_status: "trusted", recognition_status: "recognized", token_quality: "high_confidence", transfer_count: 3,
+      recognition_status: "recognized", transfer_count: 3,
       inbound_transfer_count: 2, outbound_transfer_count: 1, token_count: 2,
       first_seen_at: "2023-11-01T00:00:00+00:00", last_seen_at: "2023-11-14T22:15:00+00:00",
     },
@@ -147,14 +134,14 @@ const summaries = {
       ...eoaAccountEvidence,
       chain_id: 1, wallet_address: "0x1",
       counterparty_address: "0x2222222222222222222222222222222222222222",
-      token_status: "spam", recognition_status: "other", token_quality: "unknown", transfer_count: 1,
+      recognition_status: "other", transfer_count: 1,
       inbound_transfer_count: 1, outbound_transfer_count: 0, token_count: 1,
       first_seen_at: "2023-11-14T22:16:00+00:00", last_seen_at: "2023-11-14T22:16:00+00:00",
     },
   ],
 };
 
-const timeline = [{ ...highQuality, chain_id: 1, wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", token_status: "trusted", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, value_raw_sum: "125000000" }];
+const timeline = [{ ...recognizedEvidence, chain_id: 1, wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, value_raw_sum: "125000000" }];
 
 const events = [
   {
@@ -181,26 +168,25 @@ const events = [
     token_symbol: "USDC",
     token_name: "USD Coin",
     token_decimals: 6,
-    token_status: "trusted",
     metadata_source: "manual",
     metadata_source_url: "https://example.com/usdc",
     token_label_reason: "Canonical metadata",
-    ...highQuality,
+    ...recognizedEvidence,
     value_raw: "125000000",
   },
   {
     ...eoaEventEvidence,
-    transfer_id: "1-0xspam-0", chain_id: 1, block_number: 17_000_002,
+    transfer_id: "1-0xother-0", chain_id: 1, block_number: 17_000_002,
     block_timestamp: "2023-11-14T22:16:00+00:00", block_date: "2023-11-14",
-    transaction_hash: "0xspam", transaction_index: 3, log_index: 0,
+    transaction_hash: "0xother", transaction_index: 3, log_index: 0,
     transaction_from_address: null, transaction_to_address: null,
     wallet_address: "0x1", direction: "in",
     from_address: "0x2222222222222222222222222222222222222222", to_address: "0x1",
     transaction_sender_relation: "unknown", transaction_target_relation: "unknown", is_indirect: null,
     counterparty_address: "0x2222222222222222222222222222222222222222", token_address: "0x3",
-    token_symbol: "SPAM", token_name: "Spam Token", token_decimals: 18, token_status: "spam",
-    metadata_source: "manual", metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
-    ...unknownQuality,
+    token_symbol: "OTHER", token_name: "Other Token", token_decimals: 18,
+    metadata_source: "manual", metadata_source_url: "https://example.com/other", token_label_reason: "Test other",
+    ...otherEvidence,
     value_raw: "1000000000000000000",
   },
 ];
@@ -245,11 +231,6 @@ const metadata = {
   other_transfer_count: 1,
   other_token_count: 1,
   counterparty_count: 2,
-  non_spam_transfer_count: 1,
-  non_spam_token_count: 1,
-  non_spam_counterparty_count: 1,
-  spam_transfer_count: 1,
-  spam_token_count: 1,
   interaction_count: 2,
   account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties",
   account_evidence_eligible_address_count: 3,
@@ -386,9 +367,7 @@ describe("App", () => {
       base,
       {
         ...base,
-        token_status: "unverified" as const,
         recognition_status: "other" as const,
-        token_quality: "listed" as const,
         transfer_count: 2,
         inbound_transfer_count: 0,
         outbound_transfer_count: 2,
@@ -702,18 +681,18 @@ describe("App", () => {
     expect(screen.queryByText("Status (2)")).not.toBeInTheDocument();
     expect(screen.queryByText("Quality (1)")).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Recognition" })).toBeInTheDocument();
-    expect(screen.queryByText(/^trusted$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^reputation$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^high confidence$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show less" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     expect(screen.getByText("12 of 12 events")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show less" }));
     expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
-    expect(screen.getAllByText("SPAM").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("OTHER").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("radio", { name: "Recognized" }));
-    expect(screen.queryByText("SPAM")).not.toBeInTheDocument();
+    expect(screen.queryByText("OTHER")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "Other" }));
-    expect(screen.getAllByText("SPAM").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("OTHER").length).toBeGreaterThan(0);
     expect(screen.queryByText("USDC")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "All" }));
     expect(screen.getAllByText("USDC").length).toBeGreaterThan(0);
