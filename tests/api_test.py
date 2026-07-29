@@ -37,14 +37,55 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v15")
-        self.assertNotIn("wallet_id", metadata)
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v16")
+        self.assertEqual(
+            set(metadata),
+            {
+                "configured_wallet_label",
+                "wallet_address",
+                "chain_id",
+                "data_source",
+                "generated_at",
+                "snapshot_run_id",
+                "snapshot_start_block",
+                "snapshot_end_block",
+                "snapshot_end_block_hash",
+                "snapshot_finality_policy",
+                "snapshot_scope_version",
+                "transfer_count",
+                "event_block_number_min",
+                "event_block_number_max",
+                "first_event_at",
+                "last_event_at",
+                "account_evidence_population_scope",
+                "account_evidence_eligible_address_count",
+                "account_evidence_classified_address_count",
+                "account_evidence_failed_address_count",
+                "account_evidence_not_checked_address_count",
+                "account_evidence_eligible_event_count",
+                "account_evidence_classified_event_count",
+                "account_evidence_failed_event_count",
+                "account_evidence_not_checked_event_count",
+                "account_evidence_observation_block_number_min",
+                "account_evidence_observation_block_number_max",
+                "account_evidence_observation_block_timestamp_min",
+                "account_evidence_observation_block_timestamp_max",
+                "account_evidence_schema_version",
+                "api_schema_version",
+                "database_mode",
+                "completeness_scope",
+                "indexer_checkpoint_recorded",
+                "finality_status",
+                "is_sampled",
+            },
+        )
         self.assertEqual(metadata["chain_id"], 1)
-        self.assertEqual(metadata["ens"], "vitalik.eth")
+        self.assertEqual(metadata["configured_wallet_label"], "vitalik.eth")
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
         self.assertEqual(metadata["transfer_count"], 7)
         self.assertEqual(metadata["event_block_number_min"], 17000001)
+        self.assertEqual(metadata["event_block_number_max"], 17006000)
         self.assertEqual(metadata["completeness_scope"], "duckdb_snapshot")
         self.assertFalse(metadata["indexer_checkpoint_recorded"])
         self.assertEqual(metadata["finality_status"], "not_recorded")
@@ -96,8 +137,8 @@ class DashboardApiTest(unittest.TestCase):
                     """
                     update pipeline_metadata set
                       data_source = 'hyperindex', snapshot_run_id = 'run-1',
-                      snapshot_start_block = 0, snapshot_increment_start_block = 0,
-                      snapshot_end_block = 17000010, snapshot_end_block_hash = ?,
+                      snapshot_start_block = 0, snapshot_end_block = 17000010,
+                      snapshot_end_block_hash = ?,
                       snapshot_finality_policy = 'ethereum_finalized',
                       snapshot_scope_version = 'wallet-transfer-signature-v1'
                     """,
@@ -116,6 +157,14 @@ class DashboardApiTest(unittest.TestCase):
                     "update ops.pipeline_runs set from_block = 1 where run_id = 'run-1'"
                 )
             with self.assertRaisesRegex(DatabaseUnavailable, "non-contiguous"):
+                QueryService(database_path).metadata()
+
+            with duckdb.connect(str(database_path)) as connection:
+                connection.execute(
+                    "update ops.pipeline_runs set from_block = 0, events_found = 6 "
+                    "where run_id = 'run-1'"
+                )
+            with self.assertRaisesRegex(DatabaseUnavailable, "do not reconcile"):
                 QueryService(database_path).metadata()
 
     def test_decimal_serialization_preserves_values_beyond_ieee_754_precision(self) -> None:

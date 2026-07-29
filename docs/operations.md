@@ -163,7 +163,7 @@ The first successful build records one `ops.pipeline_runs` row from HyperIndex `
 
 An ordinary dbt failure marks its run `failed`. An abrupt process termination can leave a `running` row; the next build refuses to overlap it. Inspect that row before manually marking it failed, then rerun the same command. Do not delete a completed row to move the checkpoint: completed ranges are the evidence for cumulative continuity.
 
-The resulting `analytics/artifacts/live.duckdb` is the local application's query source and contains both orchestration-owned `ops.pipeline_runs` and the isolated application-owned recognition override table. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API verifies that metadata references a matching completed finalized run, opens one short-lived DuckDB connection per request, applies overrides and filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
+The resulting `analytics/artifacts/live.duckdb` is the local application's query source and contains both orchestration-owned `ops.pipeline_runs` and the isolated application-owned recognition override table. Token and account enrichment candidate selection also reads this live artifact exclusively. Do not export full live history through the fixture-demo exporter. The API verifies that metadata references the latest completed finalized run, that completed intervals are contiguous, and that their cumulative `events_found` reconciles with `pipeline_metadata.transfer_count`. It then opens one short-lived DuckDB connection per request, applies overrides and filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
 
 ## Fixture Demo Export
 
@@ -178,7 +178,7 @@ Run this only after the fixture build. It creates:
 - `public/data/events.json`
 - `public/data/meta.json`
 
-These files are the static GitHub Pages demonstration contract. They must remain bounded, identify fixture provenance, and never claim to be complete HyperIndex history. Files are replaced atomically so readers never observe a partially written individual JSON file.
+These files are the static GitHub Pages demonstration contract. `meta.json` advertises `dashboard-export-v1`, includes observed fixture block/time extrema, keeps cumulative scan coverage explicitly unrecorded, and calculates each complete/exported count and sampling flag from the exact DuckDB relation delivered. The files must remain bounded, identify fixture provenance, and never claim to be complete HyperIndex history. Files are replaced atomically so readers never observe a partially written individual JSON file.
 
 The exporter bounds its fixture rows across the nine non-empty recognition/address-evidence selections the static dashboard supports. The live dashboard computes only the requested selection through DuckDB-backed API endpoints.
 

@@ -33,9 +33,42 @@ EVENT_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 1_000
 TOKEN_SUMMARY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION = 500
 COUNTERPARTY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION = 50
 TIMELINE_ROW_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 5_000
+EXPORT_SCHEMA_VERSION = "dashboard-export-v1"
 RECOGNITION_STATUSES = ("recognized", "other")
 ACCOUNT_FILTERS = ("eoa_candidate", "contract")
 REQUIRED_EXPORT_COLUMNS = {
+    "pipeline_metadata": {
+        "configured_wallet_label",
+        "wallet_address",
+        "chain_id",
+        "data_source",
+        "generated_at",
+        "snapshot_run_id",
+        "snapshot_start_block",
+        "snapshot_end_block",
+        "snapshot_end_block_hash",
+        "snapshot_finality_policy",
+        "snapshot_scope_version",
+        "transfer_count",
+        "event_block_number_min",
+        "event_block_number_max",
+        "first_event_at",
+        "last_event_at",
+        "account_evidence_population_scope",
+        "account_evidence_eligible_address_count",
+        "account_evidence_classified_address_count",
+        "account_evidence_failed_address_count",
+        "account_evidence_not_checked_address_count",
+        "account_evidence_eligible_event_count",
+        "account_evidence_classified_event_count",
+        "account_evidence_failed_event_count",
+        "account_evidence_not_checked_event_count",
+        "account_evidence_observation_block_number_min",
+        "account_evidence_observation_block_number_max",
+        "account_evidence_observation_block_timestamp_min",
+        "account_evidence_observation_block_timestamp_max",
+        "account_evidence_schema_version",
+    },
     "wallet_events": {
         "chain_id",
         "wallet_address",
@@ -94,20 +127,6 @@ def query_rows(connection: Any, query: str, parameters: Sequence[Any] | None = N
     return [dict(zip(columns, row, strict=True)) for row in result.fetchall()]
 
 
-def rows(
-    connection: Any,
-    table: str,
-    order_by: str | None = None,
-    limit: int | None = None,
-) -> list[dict[str, Any]]:
-    query = f"select * from {table}"
-    if order_by:
-        query += f" order by {order_by}"
-    if limit is not None:
-        query += f" limit {limit}"
-    return query_rows(connection, query)
-
-
 def validate_export_schema(connection: Any) -> None:
     """Fail before writing files when required dashboard evidence is unavailable."""
 
@@ -141,10 +160,10 @@ def export_is_sampled(metadata: dict[str, Any]) -> bool:
     """Return whether any browser-facing export is smaller than its complete mart."""
 
     count_pairs = (
-        ("exported_event_count", "transfer_count"),
-        ("exported_token_summary_count", "token_summary_row_count"),
-        ("exported_counterparty_summary_count", "counterparty_summary_row_count"),
-        ("exported_timeline_row_count", "timeline_row_count"),
+        ("exported_event_count", "complete_event_count"),
+        ("exported_token_summary_count", "complete_token_summary_row_count"),
+        ("exported_counterparty_summary_count", "complete_counterparty_summary_row_count"),
+        ("exported_timeline_row_count", "complete_timeline_row_count"),
     )
     return any(metadata[exported] < metadata[complete] for exported, complete in count_pairs)
 
@@ -480,17 +499,58 @@ def main() -> None:
               order by block_date, token_symbol, direction
             """,
         )
-        metadata = rows(connection, "pipeline_metadata", "chain_id, wallet_address")
+        metadata = query_rows(
+            connection,
+            """
+              select
+                configured_wallet_label,
+                wallet_address,
+                chain_id,
+                data_source,
+                generated_at,
+                snapshot_run_id,
+                snapshot_start_block,
+                snapshot_end_block,
+                snapshot_end_block_hash,
+                snapshot_finality_policy,
+                snapshot_scope_version,
+                transfer_count,
+                event_block_number_min,
+                event_block_number_max,
+                first_event_at,
+                last_event_at,
+                account_evidence_population_scope,
+                account_evidence_eligible_address_count,
+                account_evidence_classified_address_count,
+                account_evidence_failed_address_count,
+                account_evidence_not_checked_address_count,
+                account_evidence_eligible_event_count,
+                account_evidence_classified_event_count,
+                account_evidence_failed_event_count,
+                account_evidence_not_checked_event_count,
+                account_evidence_observation_block_number_min,
+                account_evidence_observation_block_number_max,
+                account_evidence_observation_block_timestamp_min,
+                account_evidence_observation_block_timestamp_max,
+                account_evidence_schema_version
+              from pipeline_metadata
+              order by chain_id, wallet_address
+            """,
+        )
 
         if len(metadata) != 1:
             raise RuntimeError(f"Expected one configured wallet, found {len(metadata)}")
+        if metadata[0]["data_source"] != "fixture":
+            raise RuntimeError("Static dashboard export requires fixture provenance")
 
         complete_export_counts = query_rows(
             connection,
             """
               select
-                (select count(*) from token_summary) as token_summary_row_count,
-                (select count(*) from counterparty_summary) as counterparty_summary_row_count,
+                (select count(*) from wallet_events) as complete_event_count,
+                (select count(*) from token_summary) as complete_token_summary_row_count,
+                (select count(*) from counterparty_summary) as complete_counterparty_summary_row_count,
+                (select count(*) from timeline_daily) as complete_timeline_row_count,
                 (
                   select count(*) from (
                     select distinct recognition_status, counterparty_account_type
@@ -499,6 +559,10 @@ def main() -> None:
                 ) as recognition_account_evidence_cell_count
             """,
         )[0]
+        if metadata[0]["transfer_count"] != complete_export_counts["complete_event_count"]:
+            raise RuntimeError(
+                "Pipeline metadata transfer count does not reconcile with wallet_events"
+            )
 
         recognition_counts: dict[str, dict[str, int]] = {}
         for selected in non_empty_subsets(RECOGNITION_STATUSES):
@@ -524,6 +588,10 @@ def main() -> None:
         meta = {
             **metadata[0],
             **complete_export_counts,
+            "export_schema_version": EXPORT_SCHEMA_VERSION,
+            "completeness_scope": "duckdb_snapshot",
+            "indexer_checkpoint_recorded": False,
+            "finality_status": "not_recorded",
             "recognition_counts": recognition_counts,
             "recognition_account_counts": composed_filter_counts,
             "exported_event_count": len(events),

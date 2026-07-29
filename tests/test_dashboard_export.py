@@ -14,6 +14,42 @@ class DashboardExportTest(unittest.TestCase):
         try:
             connection.execute(
                 """
+                create table pipeline_metadata (
+                    configured_wallet_label varchar,
+                    wallet_address varchar,
+                    chain_id bigint,
+                    data_source varchar,
+                    generated_at timestamptz,
+                    snapshot_run_id varchar,
+                    snapshot_start_block bigint,
+                    snapshot_end_block bigint,
+                    snapshot_end_block_hash varchar,
+                    snapshot_finality_policy varchar,
+                    snapshot_scope_version varchar,
+                    transfer_count bigint,
+                    event_block_number_min bigint,
+                    event_block_number_max bigint,
+                    first_event_at timestamptz,
+                    last_event_at timestamptz,
+                    account_evidence_population_scope varchar,
+                    account_evidence_eligible_address_count bigint,
+                    account_evidence_classified_address_count bigint,
+                    account_evidence_failed_address_count bigint,
+                    account_evidence_not_checked_address_count bigint,
+                    account_evidence_eligible_event_count bigint,
+                    account_evidence_classified_event_count bigint,
+                    account_evidence_failed_event_count bigint,
+                    account_evidence_not_checked_event_count bigint,
+                    account_evidence_observation_block_number_min bigint,
+                    account_evidence_observation_block_number_max bigint,
+                    account_evidence_observation_block_timestamp_min timestamptz,
+                    account_evidence_observation_block_timestamp_max timestamptz,
+                    account_evidence_schema_version varchar
+                )
+                """
+            )
+            connection.execute(
+                """
                 create table wallet_events (
                     chain_id bigint,
                     wallet_address varchar,
@@ -238,21 +274,21 @@ class DashboardExportTest(unittest.TestCase):
     def test_sampling_covers_every_bounded_export(self) -> None:
         metadata = {
             "exported_event_count": 10,
-            "transfer_count": 10,
+            "complete_event_count": 10,
             "exported_token_summary_count": 6,
-            "token_summary_row_count": 6,
+            "complete_token_summary_row_count": 6,
             "exported_counterparty_summary_count": 4,
-            "counterparty_summary_row_count": 4,
+            "complete_counterparty_summary_row_count": 4,
             "exported_timeline_row_count": 2,
-            "timeline_row_count": 2,
+            "complete_timeline_row_count": 2,
         }
         self.assertFalse(dashboard_export.export_is_sampled(metadata))
 
         for exported, complete in (
-            ("exported_event_count", "transfer_count"),
-            ("exported_token_summary_count", "token_summary_row_count"),
-            ("exported_counterparty_summary_count", "counterparty_summary_row_count"),
-            ("exported_timeline_row_count", "timeline_row_count"),
+            ("exported_event_count", "complete_event_count"),
+            ("exported_token_summary_count", "complete_token_summary_row_count"),
+            ("exported_counterparty_summary_count", "complete_counterparty_summary_row_count"),
+            ("exported_timeline_row_count", "complete_timeline_row_count"),
         ):
             with self.subTest(complete=complete):
                 sampled = dict(metadata)

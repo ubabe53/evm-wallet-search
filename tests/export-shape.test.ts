@@ -19,7 +19,16 @@ describe("dashboard export shape", () => {
     expect(Array.isArray(summaries.counterparties)).toBe(true);
     expect(Array.isArray(timeline)).toBe(true);
     expect("wallet_id" in metadata).toBe(false);
-    expect(typeof metadata.ens).toBe("string");
+    expect("ens" in metadata).toBe(false);
+    expect(typeof metadata.configured_wallet_label).toBe("string");
+    expect(metadata.export_schema_version).toBe("dashboard-export-v1");
+    expect(metadata.completeness_scope).toBe("duckdb_snapshot");
+    expect(metadata.indexer_checkpoint_recorded).toBe(false);
+    expect(metadata.finality_status).toBe("not_recorded");
+    expect(metadata.snapshot_start_block).toBeNull();
+    expect(metadata.snapshot_end_block).toBeNull();
+    expect(metadata.event_block_number_min).toBe(17_000_001);
+    expect(metadata.event_block_number_max).toBe(17_006_000);
     expect(events.every((event: Record<string, unknown>) =>
       !("wallet_id" in event) && !("ens" in event) &&
       typeof event.chain_id === "number" && typeof event.wallet_address === "string")).toBe(true);
@@ -65,10 +74,17 @@ describe("dashboard export shape", () => {
     expect(metadata.counterparty_account_filter_combination_count).toBe(3);
     expect(metadata.counterparty_ranking_selection_count).toBe(9);
     expect(metadata.counterparty_rankings_exact_for_all_filter_selections).toBe(true);
-    expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.transfer_count);
-    expect(metadata.exported_token_summary_count).toBeLessThanOrEqual(metadata.token_summary_row_count);
-    expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(metadata.counterparty_summary_row_count);
-    expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_count);
+    expect(metadata.transfer_count).toBe(metadata.complete_event_count);
+    expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.complete_event_count);
+    expect(metadata.exported_token_summary_count).toBeLessThanOrEqual(
+      metadata.complete_token_summary_row_count,
+    );
+    expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(
+      metadata.complete_counterparty_summary_row_count,
+    );
+    expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(
+      metadata.complete_timeline_row_count,
+    );
     expect(Object.keys(events[0]).sort()).toEqual([
       "block_number",
       "block_timestamp",
