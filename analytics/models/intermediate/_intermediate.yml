@@ -92,8 +92,6 @@ models:
       consumers: [all dashboard marts]
       persistence_reason: build-only external attachments are unavailable after dbt exits
     columns:
-      - name: transfer_id
-        description: Deterministic convenience identifier derived from chain ID, transaction hash, and log index.
       - name: chain_id
         description: EVM chain identifier; currently Ethereum mainnet only.
       - name: block_number
@@ -102,8 +100,6 @@ models:
         description: Lowercase canonical block hash retained as event-level evidence.
       - name: block_timestamp
         description: UTC timestamp of the event block.
-      - name: block_date
-        description: UTC calendar date derived from the event block timestamp.
       - name: transaction_hash
         description: Lowercase transaction hash and part of canonical event identity.
       - name: transaction_index
@@ -168,7 +164,7 @@ models:
         description: Nullable exact target decoded from EIP-7702 delegation bytecode.
       - name: counterparty_evidence_fetch_status
         description: "`complete`, retryable `failed`, or `not_fetched` when no cache row exists."
-      - name: counterparty_evidence_reason_codes
+      - name: counterparty_evidence_reason_code
         description: Machine-readable reason supporting counterparty account evidence or its absence.
       - name: counterparty_evidence_schema_version
         description: Nullable account-evidence contract version for successful cached observations.

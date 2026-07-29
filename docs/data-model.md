@@ -54,7 +54,7 @@ Filters staged transfers to configured wallets using `(chain_id, wallet_address)
 
 - `direction`: `self` when both emitted participants equal the wallet, otherwise `in` when the wallet is the recipient or `out` when it is the sender. The self branch is evaluated first.
 - `counterparty_address`: the other side of an inbound/outbound transfer; for a self-transfer it equals the tracked wallet so the immutable event remains self-contained and auditable.
-- `counterparty_account_type` plus the complete pinned observation, fetch status, reason codes, and evidence schema version; unenriched counterparties remain `unknown` / `not_fetched`.
+- `counterparty_account_type` plus the complete pinned observation, fetch status, singular reason code, and evidence schema version; unenriched counterparties remain `unknown` / `not_fetched`.
 - `value_raw`: the exact base-10 string emitted in the log. Token `decimals` remain adjacent sourced metadata so a future consumer can derive an amount with an explicit precision and presentation policy; the current model does not cast the raw value to floating point.
 - automatic token recognition status, reason, source, and classifier version copied from token enrichment without changing the event grain.
 - `transaction_sender_relation`: `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `from` and the emitted Transfer participants.
@@ -65,7 +65,8 @@ This is the shared semantic event relation for all dashboard marts. It is materi
 so the standalone DuckDB retains complete row-level event and enrichment evidence after the
 build-only HyperIndex and account-evidence attachments are gone. Each mart selects only the fields
 and grain required by its consumer directly from this relation; `wallet_events` is not an upstream
-fact table for the other marts.
+fact table for the other marts. Its exact 39-column contract omits a second event ID and stored
+calendar date: consumers use the canonical composite key and derive dates from `block_timestamp`.
 
 ## Marts
 

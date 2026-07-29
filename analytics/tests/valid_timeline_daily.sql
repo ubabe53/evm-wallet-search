@@ -1,4 +1,11 @@
-with expected as (
+with events as (
+  select
+    *,
+    cast(block_timestamp as date) as block_date
+  from {{ ref('int_wallet_transfer_events') }}
+),
+
+expected as (
   select
     chain_id,
     wallet_address,
@@ -9,7 +16,7 @@ with expected as (
     counterparty_account_type,
     direction,
     count(*) as transfer_count
-  from {{ ref('int_wallet_transfer_events') }}
+  from events
   group by
     chain_id,
     wallet_address,
