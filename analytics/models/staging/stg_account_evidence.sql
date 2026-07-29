@@ -7,12 +7,13 @@ select
   null::bigint as code_size_bytes,
   null::bigint as observation_block_number,
   null::varchar as observation_block_hash,
-  null::varchar as observation_block_timestamp,
+  null::timestamptz as observation_block_timestamp,
+  null::varchar as finality_policy,
   null::varchar as eip7702_delegation_target,
   null::varchar as fetch_status,
-  null::varchar as reason_codes,
+  null::varchar as reason_code,
   null::varchar as evidence_schema_version,
-  null::varchar as fetched_at
+  null::timestamptz as fetched_at
 where false
 {% else %}
 select
@@ -20,14 +21,15 @@ select
   lower(address) as address,
   account_type,
   code_state,
-  code_size_bytes,
-  observation_block_number,
+  cast(code_size_bytes as bigint) as code_size_bytes,
+  cast(observation_block_number as bigint) as observation_block_number,
   lower(observation_block_hash) as observation_block_hash,
-  cast(observation_block_timestamp as varchar) as observation_block_timestamp,
-  eip7702_delegation_target,
+  cast(observation_block_timestamp as timestamptz) as observation_block_timestamp,
+  finality_policy,
+  lower(eip7702_delegation_target) as eip7702_delegation_target,
   fetch_status,
-  reason_code as reason_codes,
+  reason_code,
   evidence_schema_version,
-  cast(fetched_at as varchar) as fetched_at
+  cast(fetched_at as timestamptz) as fetched_at
 from account_evidence.account_evidence
 {% endif %}

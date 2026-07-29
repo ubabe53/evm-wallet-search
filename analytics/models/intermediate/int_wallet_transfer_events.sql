@@ -11,7 +11,7 @@ tokens as (
 ),
 
 counterparties as (
-  select * from {{ ref('stg_counterparty_metadata') }}
+  select * from {{ ref('stg_account_evidence') }}
 ),
 
 matched as (
@@ -87,7 +87,7 @@ matched as (
     counterparties.observation_block_timestamp as counterparty_observation_block_timestamp,
     counterparties.eip7702_delegation_target as counterparty_eip7702_delegation_target,
     coalesce(counterparties.fetch_status, 'not_fetched') as counterparty_evidence_fetch_status,
-    coalesce(counterparties.reason_codes, 'account_evidence_not_fetched') as counterparty_evidence_reason_codes,
+    coalesce(counterparties.reason_code, 'account_evidence_not_fetched') as counterparty_evidence_reason_codes,
     counterparties.evidence_schema_version as counterparty_evidence_schema_version,
     transfers.value_raw
   from transfers

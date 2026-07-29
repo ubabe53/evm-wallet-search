@@ -17,13 +17,13 @@ Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is 
 - `vitalik.eth`
 - `0xd8da6bf26964af9d7eed9e03e53415d37aa96045`
 
-### `stg_counterparty_metadata`
+### `stg_account_evidence`
 
-In live mode, reads `analytics/artifacts/account_evidence.duckdb` at one row per `(chain_id, address)` historical observation. Fixture mode returns an empty typed relation and does not ship an account-evidence CSV. The current scope fixes `chain_id = 1`. Each row preserves:
+In live mode, reads `analytics/artifacts/account_evidence.duckdb` at one retained pinned-block observation per `(chain_id, address)`. Fixture mode returns an empty typed relation and does not ship an account-evidence CSV. The current scope fixes `chain_id = 1`. Each row preserves:
 
 - `account_type`: `eoa_candidate`, `contract`, or retryable `unknown`.
 - `code_state`: `no_code`, internal `eip7702_delegated`, `contract_code`, or `unknown`, plus exact byte length and delegation target when applicable.
-- Concrete observation block number/hash/timestamp, the `safe` or confirmed-head fallback policy, fetch status/reason, schema version, and fetch time.
+- Concrete observation block number/hash/typed timestamp, `finality_policy`, singular `reason_code`, fetch status, schema version, and typed fetch timestamp.
 
 Successful observations are immutable by default and therefore represent “observed at block,” not permanent identity. Failed calls are checkpointed but remain eligible on the next run. Safe and ERC-4337-specific evidence are not collected.
 
