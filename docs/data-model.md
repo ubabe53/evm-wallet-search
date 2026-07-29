@@ -65,17 +65,13 @@ Filters staged transfers to configured wallets using `(chain_id, wallet_address)
 - `transaction_target_relation`: `token_contract`, `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `to`, the emitting token, and Transfer participants.
 - `is_indirect`: true for an observed `transaction_from_address != from_address`, false for an observed match, and null when transaction-sender evidence is unavailable.
 
-### `int_token_reputation`
-
-One row per `(chain_id, observed or labeled token contract)`. It produces `token_reputation`, a 0-100 `token_reputation_score`, semicolon-delimited `token_reputation_reasons`, and `token_reputation_version`, while carrying the separate quality evidence. `token-reputation-v3` removes configured-wallet name and ENS matching while preserving the quality-aware precedence introduced in version 2. Reviewed spam takes precedence over deterministic metadata heuristics; automated suspicion precedes high-confidence trust. Missing registry membership contributes no score. Token metadata is not compared with configured-wallet ENS or person labels; a future ENS enrichment must not silently reintroduce that coupling.
-
 ### `int_wallet_token_interactions`
 
 One row per `(chain_id, wallet_address, token_address)`. It records total, inbound, outbound, and self-transfer counts, external distinct-counterparty counts, confirmed-indirect inbound/outbound counts, transaction-sender evidence coverage, first/last timestamps, active duration, a 0-100 `interaction_legitimacy_score`, reason codes, version, and `interaction_legitimacy` (`not_suspicious`, `uncertain`, or `suspicious`). It detects broad, bursty, one-direction external transfer sprays. In `interaction-legitimacy-v3`, self-transfers do not contribute counterparties, direction ratios, or the classification window. The outbound-initiator score and `mass_outbound_transaction_sender_matches_wallet` reason require complete outbound transaction-sender evidence matching the wallet; unknown or mismatched senders do not receive that component. A mismatch alone is not a spam classification signal.
 
 ### `int_classified_wallet_transfer_events`
 
-Joins both evidence layers back to one-row-per-transfer events. Its effective `token_status` is one of `trusted`, `unverified`, `suspected_spam`, or `spam`. Reviewed manual spam has final precedence, followed by automated suspicion, then `high_confidence` quality; every other case is unverified.
+Joins wallet-token interaction evidence back to one-row-per-transfer events. Reviewed manual spam retains precedence, suspicious interaction behavior maps to `suspected_spam`, `high_confidence` quality maps to `trusted`, and every other case is `unverified`.
 
 These four values are an internal classification contract, not user choices. Token quality, scores, reason codes, provenance, and versions remain stored for audit and future product decisions. The dashboard exposes only the independent `recognized`/`other` classification.
 
@@ -171,10 +167,9 @@ dbt tests enforce:
 - Valid graph edge roles and metadata source values.
 - Valid `direction` and node type values.
 - Valid non-null token statuses throughout event, graph, token-summary, and timeline models.
-- Valid metadata-availability and token-quality values, source-count reconciliation, non-empty provenance, `token-quality-v1`, and `token-reputation-v3`.
+- Valid metadata-availability and token-quality values, source-count reconciliation, non-empty provenance, and `token-quality-v1`.
 - Valid automatic `recognized`/`other` values and `token-recognition-v1` provenance, plus persistent API override precedence and reset behavior.
 - Null fixture snapshot claims and complete, internally ordered finalized snapshot fields for live builds.
-- Explicit CoinGecko-only OSCAR and PUPPIES coverage proving `listed`/`unverified`, not trusted.
 - Manual override precedence and unverified fallback behavior.
 - Exact preservation of a maximum `uint256` raw event value through staging, event, token-summary, API, and fixture-export contracts.
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.

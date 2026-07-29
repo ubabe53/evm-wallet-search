@@ -78,7 +78,6 @@ const highQuality = {
   token_quality_reason: "reviewed_manual_approval",
   token_quality_provenance: "https://example.com/usdc",
   token_quality_version: "token-quality-v1",
-  token_reputation_version: "token-reputation-v3",
   counterparty_account_type: "contract",
 } as const;
 
@@ -95,7 +94,6 @@ const unknownQuality = {
   token_quality_reason: "no_registry_or_reviewed_approval",
   token_quality_provenance: "https://example.com/spam",
   token_quality_version: "token-quality-v1",
-  token_reputation_version: "token-reputation-v3",
   counterparty_account_type: "eoa_candidate",
 } as const;
 
@@ -113,9 +111,6 @@ const summaries = {
       metadata_source_url: "https://example.com/usdc",
       token_label_reason: "Canonical metadata",
       ...highQuality,
-      token_reputation: "trusted",
-      token_reputation_score: 0,
-      token_reputation_reasons: "curated_registry",
       transfer_count: 1,
       inbound_transfer_count: 1,
       outbound_transfer_count: 0,
@@ -132,7 +127,6 @@ const summaries = {
       token_name: "Spam Token", token_decimals: 18, token_status: "spam", metadata_source: "manual",
       metadata_source_url: "https://example.com/spam", token_label_reason: "Test spam",
       ...unknownQuality,
-      token_reputation: "spam", token_reputation_score: 100, token_reputation_reasons: "reviewed_spam",
       transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
       self_transfer_count: 0,
       indirect_inbound_transfer_count: 0, indirect_outbound_transfer_count: 0,

@@ -44,10 +44,6 @@ export type GraphEdge = {
     tokenQualityVersion?: "token-quality-v1";
     metadataSource?: string | null;
     metadataSourceUrl?: string | null;
-    tokenReputation?: TokenReputation;
-    tokenReputationScore?: number;
-    tokenReputationReasons?: string;
-    tokenReputationVersion?: "token-reputation-v3";
     interactionLegitimacy?: InteractionLegitimacy;
     interactionLegitimacyScore?: number;
     interactionLegitimacyReasons?: string;
@@ -63,7 +59,6 @@ export type GraphEdge = {
 export type TokenStatus = "trusted" | "unverified" | "suspected_spam" | "spam";
 export type RecognitionStatus = "recognized" | "other";
 export type RecognitionFilter = "all" | RecognitionStatus;
-export type TokenReputation = TokenStatus;
 export type TokenQuality = "high_confidence" | "listed" | "unknown";
 export type MetadataAvailability = "complete" | "partial" | "unavailable";
 export type InteractionLegitimacy = "not_suspicious" | "uncertain" | "suspicious";
@@ -100,10 +95,6 @@ export type ClassificationEvidence = {
   token_quality_reason: string;
   token_quality_provenance: string;
   token_quality_version: "token-quality-v1";
-  token_reputation: TokenReputation;
-  token_reputation_score: number;
-  token_reputation_reasons: string;
-  token_reputation_version: "token-reputation-v3";
   interaction_legitimacy: InteractionLegitimacy;
   interaction_legitimacy_score: number;
   interaction_legitimacy_reasons: string;
@@ -137,10 +128,6 @@ export type TokenSummary = {
   token_quality_reason: string;
   token_quality_provenance: string;
   token_quality_version: "token-quality-v1";
-  token_reputation: TokenReputation;
-  token_reputation_score: number;
-  token_reputation_reasons: string;
-  token_reputation_version: "token-reputation-v3";
   counterparty_account_type: AccountType;
   transfer_count: number;
   inbound_transfer_count: number;

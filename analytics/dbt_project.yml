@@ -11,6 +11,9 @@ macro-paths: ["macros"]
 vars:
   use_fixture: true
 
+on-run-start:
+  - "{{ drop_relation_if_present('int_token_reputation') }}"
+
 models:
   evm_wallet_search:
     staging:

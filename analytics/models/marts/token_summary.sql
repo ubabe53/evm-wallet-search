@@ -20,10 +20,6 @@ select
   token_quality_reason,
   token_quality_provenance,
   token_quality_version,
-  token_reputation,
-  token_reputation_score,
-  token_reputation_reasons,
-  token_reputation_version,
   counterparty_account_type,
   count(*) as transfer_count,
   count(*) filter (where direction = 'in') as inbound_transfer_count,
@@ -52,5 +48,4 @@ group by chain_id, wallet_address, token_address, token_symbol, token_name, toke
   metadata_source, metadata_source_url, token_label_reason,
   metadata_availability, token_quality, token_quality_sources, token_quality_source_count,
   token_quality_reason, token_quality_provenance, token_quality_version,
-  token_reputation, token_reputation_score, token_reputation_reasons, token_reputation_version,
   counterparty_account_type

@@ -2,8 +2,7 @@ select transfer_id
 from {{ ref('wallet_events') }}
 where
   (token_address = '0x9999999999999999999999999999999999999999'
-    and (token_status != 'suspected_spam' or token_reputation != 'suspected_spam'
-      or token_reputation_score < 60 or metadata_source != 'ethereum_rpc'
+    and (token_status != 'unverified' or metadata_source != 'ethereum_rpc'
       or metadata_availability != 'complete' or token_quality != 'unknown'
       or token_quality_source_count != 0 or token_quality_reason != 'rpc_metadata_only'
       or token_quality_version != 'token-quality-v1'

@@ -72,7 +72,7 @@ A captured `Transfer(address,address,uint256)` log establishes that a contract e
 
 ### Enrichment evidence
 
-Token metadata, registry membership, RPC responses, spam reputation, and bytecode observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The current `vitalik.eth` value is a pinned configured label from `analytics/seeds/wallets.csv`, not evidence of a live ENS resolution; a future resolution workflow must add source and observation provenance before making that claim.
+Token metadata, registry membership, RPC responses, and bytecode observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The current `vitalik.eth` value is a pinned configured label from `analytics/seeds/wallets.csv`, not evidence of a live ENS resolution; a future resolution workflow must add source and observation provenance before making that claim.
 
 ### Delivery boundary
 
@@ -90,7 +90,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
 - Account-evidence coverage is measured against the current snapshot's distinct nonzero, nonself event counterparties. Classified, failed, and not-checked address and event counts must reconcile to that population; cached rows outside it do not count.
 - Live completeness is a contiguous range of completed snapshot runs from the configured HyperIndex start through an Ethereum `finalized` block; event-bearing block extrema do not establish that range.
-- Suspected and reviewed spam remain distinct internal evidence and are not projected into the dashboard; the public token labels are only `Recognized` and `Other`.
+- Token names and symbols are never scored as reputation evidence. Legacy wallet-token interaction evidence remains internal and is not projected into the dashboard; the public token labels are only `Recognized` and `Other`.
 - Bounded outputs disclose their complete matching count, returned count, limits, provenance, and sampling state where applicable.
 
 Detailed field grains and tests are in `docs/data-model.md`.
@@ -125,7 +125,7 @@ The loopback-only FastAPI service:
 - return self-transfers as the explicit `self` event direction while excluding the tracked wallet from counterparty counts and graph relationships;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
 - apply manual token-recognition overrides before every filter, count, ranking, timeline bucket, graph compatibility page, and event page;
-- expose only `recognition=all|recognized|other` as the public token-classification control while retaining detailed reputation evidence internally;
+- expose only `recognition=all|recognized|other` as the public token-classification control while retaining factual source and interaction evidence internally;
 - treat recognition as inclusive counterparty-cohort membership for counterparty and graph compatibility rankings, then rank eligible addresses by their complete activity inside the remaining account/search/time scope;
 - keep secrets and database paths server-side.
 

@@ -92,9 +92,7 @@ describe("dashboard export shape", () => {
     expect(["high_confidence", "listed", "unknown"]).toContain(summaries.tokens[0].token_quality);
     expect(summaries.tokens[0].token_quality_version).toBe("token-quality-v1");
     expect(summaries.tokens[0].token_quality_source_count).toBe(summaries.tokens[0].token_quality_sources.length);
-    expect(summaries.tokens[0].token_reputation_version).toBe("token-reputation-v3");
     expect(summaries.tokens.every((row: {
-      token_reputation_score: number;
       transfer_count: number;
       inbound_transfer_count: number;
       outbound_transfer_count: number;
@@ -105,7 +103,6 @@ describe("dashboard export shape", () => {
       sender_account_count: number;
       recipient_account_count: number;
     }) =>
-      row.token_reputation_score >= 0 &&
       row.counterparty_count >= 0 &&
       row.sender_account_count >= 0 &&
       row.recipient_account_count >= 0 &&
@@ -130,11 +127,10 @@ describe("dashboard export shape", () => {
       ["trusted", "unverified", "suspected_spam", "spam"].includes(row.token_status) &&
       ["high_confidence", "listed", "unknown"].includes(row.token_quality) &&
       row.transfer_count === row.inbound_transfer_count + row.outbound_transfer_count)).toBe(true);
-    expect(graph.edges.every((edge: { data: { tokenStatus: string; tokenQuality: string; tokenQualityVersion: string; tokenReputationVersion: string } }) =>
+    expect(graph.edges.every((edge: { data: { tokenStatus: string; tokenQuality: string; tokenQualityVersion: string } }) =>
       ["trusted", "unverified", "suspected_spam", "spam"].includes(edge.data.tokenStatus) &&
       ["high_confidence", "listed", "unknown"].includes(edge.data.tokenQuality) &&
-      edge.data.tokenQualityVersion === "token-quality-v1" &&
-      edge.data.tokenReputationVersion === "token-reputation-v3")).toBe(true);
+      edge.data.tokenQualityVersion === "token-quality-v1")).toBe(true);
     expect(metadata.non_spam_transfer_count + metadata.spam_transfer_count).toBe(metadata.transfer_count);
     expect(metadata.spam_token_count).toBeLessThanOrEqual(metadata.token_count);
     expect(metadata.status_counts["trusted+unverified+suspected_spam+spam"].transfer_count).toBe(metadata.transfer_count);

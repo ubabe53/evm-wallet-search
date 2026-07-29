@@ -11,7 +11,7 @@ with expected (
     ('1-0xbbb-1', 'transfer_sender', 'token_contract', false, 'trusted'),
     ('1-0xccc-0', 'transfer_recipient', 'token_contract', true, 'trusted'),
     ('1-0xddd-2', 'other', 'other', true, 'trusted'),
-    ('1-0xeee-0', 'unknown', 'unknown', null, 'suspected_spam')
+    ('1-0xeee-0', 'unknown', 'unknown', null, 'unverified')
 )
 select expected.*
 from expected

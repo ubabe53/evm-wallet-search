@@ -1,15 +1,23 @@
-select transfer_id
-from {{ ref('wallet_events') }}
-where (token_reputation = 'spam' and token_status != 'spam')
-  or (
-    (token_reputation = 'suspected_spam' or interaction_legitimacy = 'suspicious')
-    and token_reputation != 'spam'
-    and token_status != 'suspected_spam'
+select classified.transfer_id
+from {{ ref('wallet_events') }} as classified
+inner join {{ ref('int_wallet_transfer_events') }} as source using (transfer_id)
+where (
+    source.token_status = 'spam'
+    and classified.token_status != 'spam'
   )
   or (
-    token_quality = 'high_confidence'
-    and token_reputation not in ('spam', 'suspected_spam')
-    and interaction_legitimacy != 'suspicious'
-    and token_status != 'trusted'
+    source.token_status != 'spam'
+    and classified.interaction_legitimacy = 'suspicious'
+    and classified.token_status != 'suspected_spam'
   )
-  or (token_quality != 'high_confidence' and token_status = 'trusted')
+  or (
+    source.token_status != 'spam'
+    and classified.token_quality = 'high_confidence'
+    and classified.interaction_legitimacy != 'suspicious'
+    and classified.token_status != 'trusted'
+  )
+  or (
+    source.token_status != 'spam'
+    and classified.token_quality != 'high_confidence'
+    and classified.token_status = 'trusted'
+  )
