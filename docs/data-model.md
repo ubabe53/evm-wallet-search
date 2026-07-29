@@ -87,9 +87,11 @@ Exact raw values, token decimals, and detailed recognition/metadata provenance r
 
 ### `counterparty_summary`
 
-One row per wallet, chain, eligible counterparty, and recognition status. `transfer_count` is the sheer number of captured Transfer-signature events, not a proven ERC-20-only or distinct-transaction metric; inbound and outbound event counts reconcile to that total. The mart also records distinct-emitting-contract count, first/last event timestamps, primary account type, pinned code observation, provenance, and fetch status/reasons. Population coverage belongs to `pipeline_metadata`, not to an individual evidence row.
+One row per wallet, chain, eligible counterparty, and recognition status. This 14-column fixture-serving mart keeps only the identity, recognition cell, account badge evidence rendered by the dashboard, event/token counts, and first/last captured timestamps. `transfer_count` is the number of captured Transfer-signature events, not a proven ERC-20-only or distinct-transaction metric; inbound and outbound event counts reconcile to that total. The live API derives counterparty rankings directly from `wallet_events` so current recognition overrides apply consistently.
 
 The ranking-serving mart excludes the zero address, the tracked wallet itself, and any counterparty address observed as an emitting token contract in the indexed wallet dataset. These exclusions do not delete rows from `wallet_events` or alter event totals.
+
+Detailed bytecode size, observation timestamp, fetch status, reason, and evidence-schema provenance remain in `stg_account_evidence` and `int_wallet_transfer_events`; population coverage and successful-observation bounds remain in `pipeline_metadata`.
 
 ### `timeline_daily`
 

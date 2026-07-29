@@ -93,6 +93,26 @@ class DashboardExportTest(unittest.TestCase):
                 )
                 """
             )
+            connection.execute(
+                """
+                create table counterparty_summary (
+                    chain_id bigint,
+                    wallet_address varchar,
+                    counterparty_address varchar,
+                    account_type varchar,
+                    code_state varchar,
+                    observation_block_number bigint,
+                    eip7702_delegation_target varchar,
+                    recognition_status varchar,
+                    transfer_count integer,
+                    inbound_transfer_count integer,
+                    outbound_transfer_count integer,
+                    token_count integer,
+                    first_seen_at timestamp,
+                    last_seen_at timestamp
+                )
+                """
+            )
 
             with self.assertRaisesRegex(
                 RuntimeError,

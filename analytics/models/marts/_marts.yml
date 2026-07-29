@@ -153,7 +153,7 @@ models:
       grain: one eligible counterparty-recognition cell per configured wallet
       primary_key: [chain_id, wallet_address, counterparty_address, recognition_status]
       provenance: aggregation of int_wallet_transfer_events after ranking exclusions
-      consumers: [local_api, fixture_exporter]
+      consumers: [fixture_exporter]
     columns:
       - name: chain_id
         description: EVM chain identifier for the configured wallet and counterparty.
@@ -172,20 +172,10 @@ models:
                 values: [eoa_candidate, contract, unknown]
       - name: code_state
         description: "{{ doc('code_state') }}"
-      - name: code_size_bytes
-        description: Nullable bytecode size observed at the pinned account-evidence block.
       - name: observation_block_number
         description: Nullable pinned block number supporting successful account classification.
-      - name: observation_block_timestamp
-        description: Nullable UTC timestamp of the pinned account-evidence block.
       - name: eip7702_delegation_target
         description: Nullable target decoded from exact EIP-7702 delegation bytecode.
-      - name: evidence_fetch_status
-        description: "`complete`, retryable `failed`, or `not_fetched` when no cache observation exists."
-      - name: evidence_reason_codes
-        description: Machine-readable reason supporting account evidence or its absence.
-      - name: evidence_schema_version
-        description: Nullable account-evidence contract version.
       - name: recognition_status
         description: Automatic recognition cohort represented by this cell.
       - name: transfer_count

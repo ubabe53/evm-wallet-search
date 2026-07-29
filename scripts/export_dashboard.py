@@ -107,6 +107,22 @@ REQUIRED_EXPORT_COLUMNS = {
         "sender_account_count",
         "recipient_account_count",
     },
+    "counterparty_summary": {
+        "chain_id",
+        "wallet_address",
+        "counterparty_address",
+        "account_type",
+        "code_state",
+        "observation_block_number",
+        "eip7702_delegation_target",
+        "recognition_status",
+        "transfer_count",
+        "inbound_transfer_count",
+        "outbound_transfer_count",
+        "token_count",
+        "first_seen_at",
+        "last_seen_at",
+    },
 }
 
 
