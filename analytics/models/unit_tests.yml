@@ -2,6 +2,8 @@ unit_tests:
   - name: excludes_failed_rpc_attempts_from_token_enrichment
     description: A failed RPC attempt remains in the observation relation and does not create a resolved token-enrichment row by itself.
     model: int_token_enrichment
+    config:
+      enabled: "{{ var('use_fixture', true) }}"
     given:
       - input: ref('token_metadata')
         format: sql
@@ -58,6 +60,8 @@ unit_tests:
   - name: preserves_partial_rpc_metadata_in_token_enrichment
     description: Usable fields from a partial RPC observation remain eligible for resolved metadata while RPC execution fields stay in the observation relation.
     model: int_token_enrichment
+    config:
+      enabled: "{{ var('use_fixture', true) }}"
     given:
       - input: ref('token_metadata')
         format: sql
