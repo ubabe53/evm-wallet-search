@@ -1572,28 +1572,6 @@ export function App() {
           />
         </div>
 
-        <div className="panel tokenActivityPanel">
-          <div className="panelHeader">
-            <div className="panelTitle">
-              <h2>Token Activity</h2>
-              <p>One row per emitting contract across captured Transfer-signature events.</p>
-            </div>
-            <span>
-              {filtered.summaries.tokens.length === tokenCount
-                ? `${tokenCount.toLocaleString("en-US")} tokens`
-                : `${filtered.summaries.tokens.length.toLocaleString("en-US")} of ${tokenCount.toLocaleString("en-US")} tokens`}
-            </span>
-          </div>
-          <div className="tokenTableScroll compact">
-            <TokenTable
-              rows={filtered.summaries.tokens}
-              editable={dashboardDataMode === "api"}
-              updatingToken={updatingToken}
-              onRecognitionChange={changeTokenRecognition}
-            />
-          </div>
-        </div>
-
         <div className="panel counterpartyPanel">
           <div className="panelHeader">
             <div className="panelTitle">
@@ -1621,6 +1599,28 @@ export function App() {
               Showing {Math.min(counterpartyLimit, rankedCounterparties.length).toLocaleString("en-US")} of {apiResult.counterpartyCount.toLocaleString("en-US")} matching counterparties.
             </p>
           )}
+        </div>
+
+        <div className="panel tokenActivityPanel">
+          <div className="panelHeader">
+            <div className="panelTitle">
+              <h2>Token Activity</h2>
+              <p>One row per emitting contract across captured Transfer-signature events.</p>
+            </div>
+            <span>
+              {filtered.summaries.tokens.length === tokenCount
+                ? `${tokenCount.toLocaleString("en-US")} tokens`
+                : `${filtered.summaries.tokens.length.toLocaleString("en-US")} of ${tokenCount.toLocaleString("en-US")} tokens`}
+            </span>
+          </div>
+          <div className="tokenTableScroll compact">
+            <TokenTable
+              rows={filtered.summaries.tokens}
+              editable={dashboardDataMode === "api"}
+              updatingToken={updatingToken}
+              onRecognitionChange={changeTokenRecognition}
+            />
+          </div>
         </div>
       </section>
 
