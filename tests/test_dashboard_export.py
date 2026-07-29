@@ -113,6 +113,21 @@ class DashboardExportTest(unittest.TestCase):
                 )
                 """
             )
+            connection.execute(
+                """
+                create table timeline_daily (
+                    chain_id bigint,
+                    wallet_address varchar,
+                    block_date date,
+                    token_address varchar,
+                    token_symbol varchar,
+                    recognition_status varchar,
+                    counterparty_account_type varchar,
+                    direction varchar,
+                    transfer_count integer
+                )
+                """
+            )
 
             with self.assertRaisesRegex(
                 RuntimeError,

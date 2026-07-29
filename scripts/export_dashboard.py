@@ -123,6 +123,17 @@ REQUIRED_EXPORT_COLUMNS = {
         "first_seen_at",
         "last_seen_at",
     },
+    "timeline_daily": {
+        "chain_id",
+        "wallet_address",
+        "block_date",
+        "token_address",
+        "token_symbol",
+        "recognition_status",
+        "counterparty_account_type",
+        "direction",
+        "transfer_count",
+    },
 }
 
 
