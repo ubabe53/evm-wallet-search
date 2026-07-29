@@ -37,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v14")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v15")
         self.assertNotIn("wallet_id", metadata)
         self.assertEqual(metadata["chain_id"], 1)
         self.assertEqual(metadata["ens"], "vitalik.eth")
@@ -413,7 +413,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(summary["counterparty_count"], 0)
 
     def test_ranked_endpoints_disclose_complete_and_returned_counts(self) -> None:
-        for endpoint in ("tokens", "counterparties", "graph"):
+        for endpoint in ("tokens", "counterparties"):
             with self.subTest(endpoint=endpoint):
                 response = self.client.get(
                     f"/api/v1/{endpoint}",
@@ -429,7 +429,7 @@ class DashboardApiTest(unittest.TestCase):
                 )
                 self.assertFalse(payload["is_sampled"])
 
-    def test_counterparty_and_graph_rank_the_same_inclusive_recognition_cohort(self) -> None:
+    def test_counterparty_ranking_uses_inclusive_recognition_cohort(self) -> None:
         mixed_address = "0x1111111111111111111111111111111111111111"
         inserted_transaction_hash = "0x" + "f" * 64
         with self.service.connect() as connection:
@@ -458,18 +458,8 @@ class DashboardApiTest(unittest.TestCase):
                     counterparties = self.client.get(
                         "/api/v1/counterparties", params=parameters
                     ).json()
-                    graph = self.client.get("/api/v1/graph", params=parameters).json()
-
                     self.assertEqual(counterparties["items"][0]["counterparty_address"], mixed_address)
                     self.assertEqual(counterparties["items"][0]["transfer_count"], 2)
-                    self.assertEqual(graph["items"][0]["counterparty_address"], mixed_address)
-                    self.assertEqual(graph["items"][0]["transfer_count"], 2)
-                    self.assertEqual(
-                        [item["counterparty_address"] for item in graph["items"]],
-                        [item["counterparty_address"] for item in counterparties["items"]],
-                    )
-                    self.assertNotIn("token_address", graph["items"][0])
-                    self.assertNotIn("direction", graph["items"][0])
         finally:
             with self.service.connect() as connection:
                 connection.execute(

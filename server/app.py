@@ -153,13 +153,6 @@ def create_app(service: QueryService | None = None) -> FastAPI:
     ) -> dict:
         return query_service.counterparties(filters, limit=limit)
 
-    @application.get("/api/v1/graph")
-    def graph(
-        filters: Annotated[DashboardFilters, Depends(dashboard_filters)],
-        limit: Annotated[int, Query(ge=1, le=100)] = 25,
-    ) -> dict:
-        return query_service.graph(filters, limit=limit)
-
     return application
 
 

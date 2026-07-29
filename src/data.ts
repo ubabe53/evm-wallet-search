@@ -1,51 +1,3 @@
-export type GraphNode = {
-  data: {
-    id: string;
-    label: string;
-    type: "wallet" | "counterparty" | "token";
-    address: string | null;
-    tokenAddress: string | null;
-    symbol: string | null;
-    accountType: AccountType | null;
-    codeState: CodeState | null;
-    observationBlockNumber: number | null;
-    observationBlockTimestamp: string | null;
-    eip7702DelegationTarget: string | null;
-    evidenceFetchStatus: EvidenceFetchStatus | null;
-    evidenceReasonCodes: string | null;
-    size?: number;
-    transferCount?: number;
-  };
-};
-
-export type GraphEdge = {
-  data: {
-    id: string;
-    interactionId: string;
-    edgeRole: "wallet_token" | "token_counterparty" | "wallet_counterparty";
-    source: string;
-    target: string;
-    walletAddress: string;
-    counterpartyAddress: string;
-    direction: "in" | "out" | "both";
-    tokenAddress: string | null;
-    tokenSymbol: string | null;
-    label?: string;
-    recognitionStatus?: RecognitionStatus;
-    recognitionSource?: string;
-    recognitionOverrideStatus?: RecognitionStatus | null;
-    metadataAvailability?: MetadataAvailability;
-    metadataSource?: string | null;
-    metadataSourceUrl?: string | null;
-    counterpartyAccountType: AccountType;
-    transferCount: number;
-    counterpartyTransferCount: number;
-    inboundTransferCount?: number;
-    outboundTransferCount?: number;
-    tokenCount?: number;
-  };
-};
-
 export type RecognitionStatus = "recognized" | "other";
 export type RecognitionFilter = "all" | RecognitionStatus;
 export type MetadataAvailability = "complete" | "partial" | "unavailable";
@@ -60,11 +12,6 @@ export type AccountEvidence = {
   code_state: CodeState;
   observation_block_number: number | null;
   eip7702_delegation_target: string | null;
-};
-
-export type DashboardGraph = {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
 };
 
 export type TokenSummary = {
@@ -187,13 +134,11 @@ export type PipelineMetadata = {
     counterparty_count: number;
   }>;
   exported_event_count: number;
-  exported_interaction_count: number;
   exported_token_summary_count: number;
   exported_counterparty_summary_count: number;
   exported_timeline_row_count: number;
   recognition_account_evidence_cell_count: number;
   event_export_limit_per_recognition_account_evidence: number;
-  graph_interaction_export_limit_per_recognition_account_evidence: number;
   token_summary_ranking_limit_per_recognition_account_selection: number;
   token_summary_ranking_selection_count: number;
   token_summary_ranking_candidate_token_count: number;

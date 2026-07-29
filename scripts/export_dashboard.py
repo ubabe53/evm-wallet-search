@@ -30,7 +30,6 @@ PUBLIC_DATA = ROOT / "public" / "data"
 
 # Static JSON stays intentionally bounded; DuckDB remains the complete artifact.
 EVENT_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 1_000
-GRAPH_INTERACTION_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 250
 TOKEN_SUMMARY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION = 500
 COUNTERPARTY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION = 50
 TIMELINE_ROW_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 5_000
@@ -143,7 +142,6 @@ def export_is_sampled(metadata: dict[str, Any]) -> bool:
 
     count_pairs = (
         ("exported_event_count", "transfer_count"),
-        ("exported_interaction_count", "interaction_count"),
         ("exported_token_summary_count", "token_summary_row_count"),
         ("exported_counterparty_summary_count", "counterparty_summary_row_count"),
         ("exported_timeline_row_count", "timeline_row_count"),
@@ -151,124 +149,11 @@ def export_is_sampled(metadata: dict[str, Any]) -> bool:
     return any(metadata[exported] < metadata[complete] for exported, complete in count_pairs)
 
 
-def display_label(node: dict[str, Any]) -> str:
-    """Keep graph labels readable while preserving full addresses in node data."""
-
-    label = node["label"]
-    if node["node_type"] == "counterparty" and isinstance(label, str) and len(label) == 42:
-        label = f"{label[:6]}...{label[-4:]}"
-    if node["node_type"] == "counterparty" and node["account_type"]:
-        type_label = {"eoa_candidate": "EOA", "contract": "Contract"}.get(node["account_type"])
-        return f"{label}\n{type_label}" if type_label else label
-    return label
-
-
 def non_empty_subsets(values: tuple[str, ...]) -> list[tuple[str, ...]]:
     return [
         tuple(value for index, value in enumerate(values) if mask & (1 << index))
         for mask in range(1, 1 << len(values))
     ]
-
-
-def build_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "nodes": [
-            {
-                "data": {
-                    "id": node["node_id"],
-                    "label": display_label(node),
-                    "type": node["node_type"],
-                    "address": node["address"],
-                    "tokenAddress": node["token_address"],
-                    "symbol": node["symbol"],
-                    "accountType": node["account_type"],
-                    "codeState": node["code_state"],
-                    "observationBlockNumber": node["observation_block_number"],
-                    "observationBlockTimestamp": node["observation_block_timestamp"],
-                    "eip7702DelegationTarget": node["eip7702_delegation_target"],
-                    "evidenceFetchStatus": node["evidence_fetch_status"],
-                    "evidenceReasonCodes": node["evidence_reason_codes"],
-                }
-            }
-            for node in nodes
-        ],
-        "edges": [
-            {
-                "data": {
-                    "id": edge["edge_id"],
-                    "interactionId": edge["interaction_id"],
-                    "edgeRole": edge["edge_role"],
-                    "source": edge["source_node_id"],
-                    "target": edge["target_node_id"],
-                    "walletAddress": edge["wallet_address"],
-                    "counterpartyAddress": edge["counterparty_address"],
-                    "direction": edge["direction"],
-                    "tokenAddress": edge["token_address"],
-                    "tokenSymbol": edge["token_symbol"],
-                    "recognitionStatus": edge["recognition_status"],
-                    "recognitionSource": edge["recognition_source"],
-                    "recognitionOverrideStatus": None,
-                    "metadataAvailability": edge["metadata_availability"],
-                    "metadataSource": edge["metadata_source"],
-                    "metadataSourceUrl": edge["metadata_source_url"],
-                    "counterpartyAccountType": edge["counterparty_account_type"],
-                    "transferCount": edge["transfer_count"],
-                    "counterpartyTransferCount": edge["counterparty_transfer_count"],
-                }
-            }
-            for edge in edges
-        ],
-    }
-
-
-def graph_rows(connection: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Select both legs and endpoint nodes for the highest-activity interactions."""
-
-    ranked_interactions = f"""
-      select interaction_id
-      from (
-        select
-          interaction_id,
-          row_number() over (
-            partition by
-              max(recognition_status),
-              max(counterparty_account_type)
-            order by max(transfer_count) desc, max(last_seen_at) desc, interaction_id
-          ) as status_rank
-        from graph_edges
-        group by interaction_id
-      )
-      where status_rank <= {GRAPH_INTERACTION_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE}
-    """
-    edges = query_rows(
-        connection,
-        f"""
-          select edges.*
-          from graph_edges as edges
-          inner join ({ranked_interactions}) as selected using (interaction_id)
-          order by edges.transfer_count desc, edges.edge_id
-        """,
-    )
-    nodes = query_rows(
-        connection,
-        f"""
-          with selected_edges as (
-            select edges.*
-            from graph_edges as edges
-            inner join ({ranked_interactions}) as selected using (interaction_id)
-          ),
-          endpoint_ids as (
-            select source_node_id as node_id from selected_edges
-            union
-            select target_node_id as node_id from selected_edges
-          )
-          select nodes.*
-          from graph_nodes as nodes
-          inner join endpoint_ids using (node_id)
-          order by nodes.node_type, nodes.label
-        """,
-    )
-    return nodes, edges
 
 
 def token_summary_rows(
@@ -533,7 +418,6 @@ def main() -> None:
 
     try:
         validate_export_schema(connection)
-        nodes, edges = graph_rows(connection)
         events = query_rows(
             connection,
             f"""
@@ -643,12 +527,10 @@ def main() -> None:
             "recognition_counts": recognition_counts,
             "recognition_account_counts": composed_filter_counts,
             "exported_event_count": len(events),
-            "exported_interaction_count": len({edge["interaction_id"] for edge in edges}),
             "exported_token_summary_count": len(token_summaries),
             "exported_counterparty_summary_count": len(counterparty_summaries),
             "exported_timeline_row_count": len(timeline),
             "event_export_limit_per_recognition_account_evidence": EVENT_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE,
-            "graph_interaction_export_limit_per_recognition_account_evidence": GRAPH_INTERACTION_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE,
             "token_summary_ranking_limit_per_recognition_account_selection": TOKEN_SUMMARY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION,
             "token_summary_ranking_selection_count": (
                 len(non_empty_subsets(RECOGNITION_STATUSES))
@@ -673,7 +555,6 @@ def main() -> None:
         }
         meta["is_sampled"] = export_is_sampled(meta)
 
-        write_json("graph.json", build_graph(nodes, edges))
         write_json(
             "summaries.json",
             {

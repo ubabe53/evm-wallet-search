@@ -75,20 +75,6 @@ Lean application-serving event table with exactly 18 stored columns. Its grain a
 
 Complete immutable event evidence—including block hash, emitted participants, exact raw value, transaction envelope, relation codes, token decimals, and enrichment provenance—remains in `int_wallet_transfer_events`. The lean mart is a delivery projection, not the system-of-record event relation.
 
-### `graph_nodes`
-
-Nodes for tracked addresses, external counterparties, and tokens participating in inbound/outbound interactions. Self-transfers do not create graph nodes or relationships. Counterparty nodes carry primary account type, code observation, fetch status, and reasons. Population coverage belongs to `pipeline_metadata`; tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
-
-The legacy fixture graph export shortens counterparty labels for readability while retaining full addresses in its payload. The current dashboard does not load or render these nodes.
-
-### `graph_edges`
-
-Each external wallet-counterparty-token-direction interaction produces two directed legs: `wallet_token` and `token_counterparty`. Inbound flow is counterparty to token to wallet; outbound flow is wallet to token to counterparty. Self-transfers remain in event and token-flow marts but are excluded from the external interaction graph. This makes every exported token node part of the graph.
-
-Graph edges carry recognition and metadata provenance. They do not carry or derive token reputation evidence.
-
-`counterparty_transfer_count` is the complete number of captured wallet-relevant Transfer-signature events for the wallet-counterparty pair across all emitting contracts and both directions. It is not a proven ERC-20-only count. It is repeated on each interaction edge for legacy bounded graph-export compatibility.
-
 ### `token_summary`
 
 One row per wallet, emitting contract, recognition status, and counterparty account type across inbound, outbound, and self activity. The grain does not include the full account-evidence signature. This serving grain supports inclusive account filtering. The local API filters cell rows and aggregates them back to one row per wallet and emitting contract before ranking and returning a bounded page; the fixture demo performs the equivalent operation over its small static payload. It records total, inbound, outbound, and self captured Transfer-signature event counts; the total reconciles as inbound + outbound + self. It also records confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned external-counterparty address counts; token-decimals metadata; and the exact raw-third-value total. Without token-standard disambiguation, those counts and totals are ERC-20-intended rather than proven fungible-token measures.
@@ -131,7 +117,7 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 
 ## Local API contract
 
-The `/api/v1` service currently advertises response schema `dashboard-api-v14`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, or a metadata run ID that does not match one completed `ops.pipeline_runs` row. It left-joins the application-owned override table before recognition, repeated inclusive `account`, optional literal `q`, and optional UTC date predicates are applied. Search covers the identifiers and labels exposed by the dashboard: transaction hash, configured wallet, counterparty, token address, token symbol, and token name. `start` is inclusive and `end` is exclusive; they are `YYYY-MM-DD` dates and must be provided together with `start < end`. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty and graph rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search/time scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. Version 14 makes the events, tokens, counterparties, and fixture JSON responses explicit lean projections of fields consumed by the dashboard, derives event `transfer_id` at delivery time, and uses transaction index in its stable event cursor. Exact raw values remain in the complete intermediate relation and raw totals remain in analytical aggregates, but neither is published to the current dashboard. Counterparty counts and graph compatibility relationships remain external-only. The service exposes:
+The `/api/v1` service currently advertises response schema `dashboard-api-v15`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, or a metadata run ID that does not match one completed `ops.pipeline_runs` row. It left-joins the application-owned override table before recognition, repeated inclusive `account`, optional literal `q`, and optional UTC date predicates are applied. Search covers the identifiers and labels exposed by the dashboard: transaction hash, configured wallet, counterparty, token address, token symbol, and token name. `start` is inclusive and `end` is exclusive; they are `YYYY-MM-DD` dates and must be provided together with `start < end`. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search/time scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. Version 15 removes the unused compatibility endpoint while preserving the lean events, tokens, counterparties, and fixture JSON projections introduced in version 14. The API derives event `transfer_id` at delivery time and uses transaction index in its stable event cursor. Exact raw values remain in the complete intermediate relation and raw totals remain in analytical aggregates, but neither is published to the current dashboard. Counterparty counts remain external-only. The service exposes:
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, contiguous finalized snapshot bounds, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema remain separate from the indexer checkpoint;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
@@ -141,9 +127,7 @@ The `/api/v1` service currently advertises response schema `dashboard-api-v14`. 
 - `PUT /tokens/{token_address}/recognition`: persist `recognized` or `other`, returning the previous override so a client can undo exactly;
 - `DELETE /tokens/{token_address}/recognition`: remove the override and return to the automatic result;
 - `counterparties`: one exact aggregate per eligible address, with the same zero/self/emitting-token exclusions as the mart ranking, ranked by captured Transfer-signature event count after inclusive cohort selection;
-- `graph`: the same one-row-per-eligible-counterparty grain and ordering as `counterparties`, including total, inbound, outbound, and distinct-emitting-contract counts for a direct aggregate edge.
-
-Event responses distinguish `complete_matching_count` from `returned_count`, `limit`, `next_cursor`, and `is_paginated`. Ranked responses distinguish the complete matching item count from the returned top-N and `is_truncated`. Timeline `complete_matching_count` is the sum of exact captured-event counts while `returned_count` is the number of gap-filled buckets. `is_sampled` is always false because no matching source rows are randomly or permanently discarded. A top-N graph or ranking is a bounded presentation over a complete calculation, not a sample.
+Event responses distinguish `complete_matching_count` from `returned_count`, `limit`, `next_cursor`, and `is_paginated`. Ranked responses distinguish the complete matching item count from the returned top-N and `is_truncated`. Timeline `complete_matching_count` is the sum of exact captured-event counts while `returned_count` is the number of gap-filled buckets. `is_sampled` is always false because no matching source rows are randomly or permanently discarded. A top-N ranking is a bounded presentation over a complete calculation, not a sample.
 
 The React live adapter sends the same recognition, account, and search predicates to every endpoint, displays summary counts from the complete matching set, and distinguishes those totals from bounded token, counterparty, and event rows. `All years` requests yearly buckets without a date predicate. Selecting a year—through the dropdown or its bar—requests that year's monthly buckets while sending its exact half-open UTC range to summary, event, token, and counterparty requests. Selecting a month narrows those endpoints again; clearing the month returns to the selected year, while `All years` clears the time scope. The timeline request omits the active date predicate so all buckets in the current navigation scope remain available. Event expansion follows `next_cursor`; it never infers completeness from the current browser array. The static adapter remains separate, reads only generated fixture JSON, permits year/month timeline navigation, and does not claim that its bounded rows support dashboard period cross-filtering.
 
@@ -156,17 +140,13 @@ dbt tests enforce:
 - Unique staged transfer IDs.
 - No duplicate staged transfer logs.
 - Non-null wallet, counterparty, and token addresses in dashboard marts.
-- Valid graph edge endpoints.
-- No orphan graph nodes.
-- Valid graph edge roles and metadata source values.
-- Valid `direction` and node type values.
+- Valid `direction` values.
 - Valid metadata-availability values throughout enrichment and serving models.
 - Valid automatic `recognized`/`other` values and `token-recognition-v1` provenance, plus persistent API override precedence and reset behavior.
 - Null fixture snapshot claims and complete, internally ordered finalized snapshot fields for live builds.
 - Manual recognition override precedence and `other` fallback behavior.
 - Exact preservation of a maximum `uint256` raw event value through staging, the complete intermediate event relation, and token-summary aggregation.
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.
-- Exact graph counterparty transfer counts across tokens and directions.
 - Counterparty-summary totals that reconcile with inbound plus outbound counts, with ranking exclusions enforced.
 - Exact transaction sender/target relation derivation, nullable legacy behavior, and indirect direction aggregates.
 - Valid account-type/code-state precedence, exact 23-byte EIP-7702 evidence, and pinned observation/coverage consistency.

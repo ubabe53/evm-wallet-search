@@ -21,7 +21,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v14"
+API_SCHEMA_VERSION = "dashboard-api-v15"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -702,64 +702,6 @@ class QueryService:
                   max(block_timestamp) as last_seen_at
                 from ({eligible})
                 group by chain_id, wallet_address, counterparty_address
-                order by transfer_count desc, last_seen_at desc, counterparty_address
-                limit {limit}
-                """,
-                parameters,
-            )
-            provenance = self.provenance(connection)
-        return {
-            "provenance": provenance,
-            "query": self.query_contract(filters),
-            "complete_matching_count": total,
-            "returned_count": len(items),
-            "limit": limit,
-            "is_truncated": total > len(items),
-            "is_sampled": False,
-            "items": items,
-        }
-
-    def graph(self, filters: DashboardFilters, *, limit: int) -> dict[str, Any]:
-        cte, parameters = counterparty_cte(filters)
-        eligible = f"""
-          select events.* from counterparty_events as events
-          where events.counterparty_address != '{ZERO_ADDRESS}'
-            and events.counterparty_address != events.wallet_address
-            and not exists (
-              select 1 from wallet_events as token_events
-              where token_events.chain_id = events.chain_id
-                and token_events.token_address = events.counterparty_address
-            )
-        """
-        counterparty_sql = f"""
-          select
-            chain_id,
-            wallet_address,
-            counterparty_address,
-            any_value(counterparty_account_type) as account_type,
-            any_value(counterparty_code_state) as code_state,
-            any_value(counterparty_observation_block_number) as observation_block_number,
-            any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
-            count(*) as transfer_count,
-            count(*) filter (where direction = 'in') as inbound_transfer_count,
-            count(*) filter (where direction = 'out') as outbound_transfer_count,
-            count(distinct token_address) as token_count,
-            min(block_timestamp) as first_seen_at,
-            max(block_timestamp) as last_seen_at
-          from ({eligible}) as events
-          group by chain_id, wallet_address, counterparty_address
-        """
-        with self.connect() as connection:
-            total = rows(
-                connection,
-                f"{cte} select count(*) as count from ({counterparty_sql})",
-                parameters,
-            )[0]["count"]
-            items = rows(
-                connection,
-                f"""
-                {cte}
-                select * from ({counterparty_sql}) as counterparties
                 order by transfer_count desc, last_seen_at desc, counterparty_address
                 limit {limit}
                 """,

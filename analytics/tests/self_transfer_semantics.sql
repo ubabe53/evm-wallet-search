@@ -34,24 +34,6 @@ where not exists (
 
 union all
 
-select 'graph_edge' as failure
-where exists (
-  select 1
-  from {{ ref('graph_edges') }}
-  where counterparty_address = wallet_address
-)
-
-union all
-
-select 'graph_node' as failure
-where exists (
-  select 1
-  from {{ ref('graph_nodes') }}
-  where node_id = 'counterparty:0xd8da6bf26964af9d7eed9e03e53415d37aa96045'
-)
-
-union all
-
 select 'timeline_direction' as failure
 where not exists (
   select 1

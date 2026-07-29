@@ -59,7 +59,7 @@ models:
       grain: one configured wallet per chain
       primary_key: [chain_id, wallet_address]
       provenance: wallets seed
-      consumers: [int_wallet_transfer_events, graph_nodes, pipeline_metadata]
+      consumers: [int_wallet_transfer_events, pipeline_metadata]
     columns:
       - name: chain_id
         description: EVM chain identifier; currently Ethereum mainnet only.
