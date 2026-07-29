@@ -1,0 +1,148 @@
+version: 2
+
+seeds:
+  - name: raw_transfer_events_fixture
+    description: Deterministic captured-event fixture used by dbt tests and the static portfolio demo. {{ doc('bounded_fixture') }}
+    meta:
+      grain: one captured Transfer-signature log
+      primary_key: [chain_id, transaction_hash, log_index]
+      provenance: checked-in deterministic test fixture
+      consumers: [stg_transfer_events]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier in the fixture.
+      - name: block_number
+        description: Fixture event block number.
+      - name: block_hash
+        description: Fixture lowercase canonical-looking block hash.
+      - name: block_timestamp
+        description: Fixture event block timestamp as Unix seconds.
+      - name: transaction_hash
+        description: Fixture transaction hash.
+      - name: transaction_index
+        description: Fixture transaction position within its block.
+      - name: transaction_from_address
+        description: Nullable fixture top-level transaction sender.
+      - name: transaction_to_address
+        description: Nullable fixture top-level transaction target.
+      - name: log_index
+        description: Fixture log position within its transaction.
+      - name: token_address
+        description: Fixture emitting contract address.
+      - name: from_address
+        description: Fixture emitted `from` participant.
+      - name: to_address
+        description: Fixture emitted `to` participant.
+      - name: value_raw
+        description: "{{ doc('exact_raw_value') }}"
+
+  - name: wallets
+    description: Checked-in configured wallet target and pinned display metadata.
+    meta:
+      grain: one configured wallet
+      primary_key: [address]
+      provenance: checked-in project configuration
+      consumers: [stg_wallets]
+    columns:
+      - name: ens
+        description: Configured display alias; not resolved during builds.
+      - name: address
+        description: Canonical configured Ethereum address.
+      - name: label
+        description: Human-readable project label.
+
+  - name: token_metadata
+    description: Generated exact-address token registry snapshot used for automatic recognition and display metadata.
+    meta:
+      grain: one Ethereum token contract address
+      primary_key: [token_address]
+      provenance: generated from selected external exact-address registries
+      consumers: [int_token_enrichment]
+    columns:
+      - name: token_address
+        description: Lowercase Ethereum contract address used for exact matching.
+      - name: symbol
+        description: Nullable registry-derived token symbol.
+      - name: name
+        description: Nullable registry-derived token name.
+      - name: decimals
+        description: Nullable registry-derived decimals metadata.
+      - name: recognition_status
+        description: Registry-derived automatic status; generated rows are recognized.
+      - name: metadata_source
+        description: Registry or joined registry set in which the exact address appeared.
+      - name: metadata_source_url
+        description: URL or joined provenance value for the registry snapshot.
+
+  - name: token_label_overrides
+    description: Small reviewed seed for explicit token display or automatic-recognition corrections.
+    meta:
+      grain: one reviewed Ethereum token contract address
+      primary_key: [token_address]
+      provenance: checked-in manual review
+      consumers: [int_token_enrichment]
+    columns:
+      - name: token_address
+        description: Lowercase Ethereum contract address receiving the reviewed override.
+      - name: symbol
+        description: Nullable reviewed display symbol.
+      - name: name
+        description: Nullable reviewed display name.
+      - name: decimals
+        description: Nullable reviewed decimals metadata.
+      - name: recognition_status
+        description: Nullable reviewed automatic classification of recognized or other.
+      - name: reason
+        description: Reviewer-authored rationale for the seed row.
+      - name: source_url
+        description: Nullable URL supporting the reviewed row.
+
+  - name: token_rpc_metadata
+    description: Ignored/local-style RPC metadata observations used by live builds after explicit enrichment; failed rows remain diagnostic and are excluded from selected metadata.
+    meta:
+      grain: one latest RPC metadata attempt per token contract
+      primary_key: [token_address]
+      provenance: explicit pinned-block Ethereum RPC enrichment
+      consumers: [int_token_enrichment in live mode]
+    columns:
+      - name: token_address
+        description: Lowercase Ethereum token-emitting contract address.
+      - name: name
+        description: Nullable decoded RPC token name.
+      - name: symbol
+        description: Nullable decoded RPC token symbol.
+      - name: decimals
+        description: Nullable decoded RPC token decimals.
+      - name: rpc_block_number
+        description: Pinned block number at which metadata calls were made.
+      - name: fetched_at
+        description: UTC observation completion time serialized in the seed.
+      - name: fetch_status
+        description: Complete, partial, or failed metadata observation state.
+      - name: error_code
+        description: Nullable machine-readable RPC or ABI decoding error.
+
+  - name: token_rpc_metadata_fixture
+    description: Deterministic RPC metadata observation fixture used to test precedence and partial metadata behavior.
+    meta:
+      grain: one fixture RPC metadata attempt per token contract
+      primary_key: [token_address]
+      provenance: checked-in deterministic RPC metadata fixture
+      consumers: [int_token_enrichment in fixture mode]
+    columns:
+      - name: token_address
+        description: Fixture Ethereum token-emitting contract address.
+      - name: name
+        description: Nullable fixture decoded token name.
+      - name: symbol
+        description: Nullable fixture decoded token symbol.
+      - name: decimals
+        description: Nullable fixture decoded token decimals.
+      - name: rpc_block_number
+        description: Fixture pinned RPC block number.
+      - name: fetched_at
+        description: Fixture observation completion time.
+      - name: fetch_status
+        description: Fixture complete, partial, or failed observation state.
+      - name: error_code
+        description: Nullable fixture RPC or ABI decoding error.

@@ -1,0 +1,509 @@
+version: 2
+
+models:
+  - name: wallet_events
+    description: Lean event delivery table with exactly 18 stored columns; complete row-level evidence remains in int_wallet_transfer_events. {{ doc('transfer_signature_scope') }}
+    meta:
+      layer: mart
+      materialization: table
+      grain: one captured event per configured wallet
+      primary_key: [chain_id, wallet_address, transaction_hash, log_index]
+      provenance: direct projection of int_wallet_transfer_events
+      consumers: [local_api, fixture_exporter]
+      exclusions: [raw value, emitted participants, block hash, transaction envelope, detailed enrichment provenance]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier; currently Ethereum mainnet only.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
+      - name: wallet_address
+        description: Lowercase configured wallet relative to which direction and counterparty are defined.
+        tests: [not_null]
+      - name: block_number
+        description: Event block number used for stable ordering and cursor pagination.
+        tests: [not_null]
+      - name: block_timestamp
+        description: UTC event block timestamp used for display and period filtering.
+        tests: [not_null]
+      - name: transaction_hash
+        description: Lowercase transaction hash from canonical event identity.
+        tests: [not_null]
+      - name: transaction_index
+        description: Transaction position within the block for deterministic ordering.
+        tests: [not_null]
+      - name: log_index
+        description: Log position within the transaction and part of canonical event identity.
+        tests: [not_null]
+      - name: token_address
+        description: Lowercase address of the contract that emitted the shared Transfer signature.
+        tests: [not_null]
+      - name: token_symbol
+        description: Nullable sourced token symbol used for display.
+      - name: token_name
+        description: Nullable sourced token name used for display and literal search.
+      - name: recognition_status
+        description: "{{ doc('token_recognition') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [recognized, other]
+      - name: direction
+        description: "{{ doc('direction') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [in, out, self]
+      - name: is_indirect
+        description: True when observed transaction sender differs from emitted `from`; null without envelope evidence.
+      - name: counterparty_address
+        description: Opposite emitted participant for inbound/outbound events; equals the wallet for self events.
+        tests: [not_null]
+      - name: counterparty_account_type
+        description: "{{ doc('account_type') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eoa_candidate, contract, unknown]
+      - name: counterparty_code_state
+        description: "{{ doc('code_state') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [no_code, eip7702_delegated, contract_code, unknown]
+      - name: counterparty_observation_block_number
+        description: Nullable pinned block number supporting successful account classification.
+      - name: counterparty_eip7702_delegation_target
+        description: Nullable target decoded from exact EIP-7702 delegation bytecode.
+
+  - name: token_summary
+    description: Token-activity cells grouped by wallet, token, automatic recognition state, and counterparty account type. Cells are aggregated back to token grain by the API or fixture client before ranking. {{ doc('transfer_signature_scope') }}
+    meta:
+      layer: mart
+      materialization: table
+      grain: one wallet-token-recognition-account-type cell
+      primary_key: [chain_id, wallet_address, token_address, recognition_status, counterparty_account_type]
+      provenance: aggregation of int_wallet_transfer_events
+      consumers: [local_api, fixture_exporter]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier for the configured wallet and token.
+      - name: wallet_address
+        description: Lowercase configured wallet whose activity is summarized.
+        tests: [not_null]
+      - name: token_address
+        description: Lowercase emitting contract address and token identity.
+        tests: [not_null]
+      - name: token_symbol
+        description: Display symbol, falling back to an address prefix when metadata is absent.
+      - name: token_name
+        description: Nullable sourced token display name.
+      - name: token_decimals
+        description: Nullable sourced decimals metadata; it is not applied implicitly to raw totals.
+      - name: recognition_status
+        description: "{{ doc('token_recognition') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [recognized, other]
+      - name: recognition_reason
+        description: Machine-readable reason for automatic recognition.
+      - name: recognition_source
+        description: Source family for automatic recognition.
+      - name: recognition_version
+        description: Version of the automatic recognition contract.
+      - name: metadata_source
+        description: Nullable source or joined source set for token display metadata.
+      - name: metadata_source_url
+        description: Nullable review URL for token metadata.
+      - name: token_label_reason
+        description: Nullable reviewer-authored manual token-label reason.
+      - name: metadata_availability
+        description: Completeness state for symbol, name, and decimals metadata.
+      - name: counterparty_account_type
+        description: Account-type cell used for inclusive dashboard filtering.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eoa_candidate, contract, unknown]
+      - name: transfer_count
+        description: Number of captured Transfer-signature events in the cell.
+      - name: inbound_transfer_count
+        description: Captured events whose wallet-relative direction is inbound.
+        tests: [not_null]
+      - name: outbound_transfer_count
+        description: Captured events whose wallet-relative direction is outbound.
+        tests: [not_null]
+      - name: self_transfer_count
+        description: Captured events whose emitted sender and recipient both equal the wallet.
+        tests: [not_null]
+      - name: indirect_inbound_transfer_count
+        description: Inbound events with observed transaction sender different from emitted `from`.
+        tests: [not_null]
+      - name: indirect_outbound_transfer_count
+        description: Outbound events with observed transaction sender different from emitted `from`.
+        tests: [not_null]
+      - name: counterparty_count
+        description: Distinct nonzero, nonself external emitted participants across inbound and outbound events.
+        tests: [not_null]
+      - name: sender_account_count
+        description: Distinct nonzero, nonself participants opposite the wallet on inbound events.
+        tests: [not_null]
+      - name: recipient_account_count
+        description: Distinct nonzero, nonself participants opposite the wallet on outbound events.
+        tests: [not_null]
+      - name: value_raw_sum
+        description: Exact DuckDB BIGNUM sum within one token contract and cell; never aggregated across token addresses.
+
+  - name: counterparty_summary
+    description: Ranked-counterparty cells by wallet, address, and recognition state. Zero, self, and addresses observed as emitting token contracts are excluded from this ranking relation only.
+    meta:
+      layer: mart
+      materialization: table
+      grain: one eligible counterparty-recognition cell per configured wallet
+      primary_key: [chain_id, wallet_address, counterparty_address, recognition_status]
+      provenance: aggregation of int_wallet_transfer_events after ranking exclusions
+      consumers: [local_api, fixture_exporter]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier for the configured wallet and counterparty.
+      - name: wallet_address
+        description: Lowercase configured wallet whose activity is summarized.
+        tests: [not_null]
+      - name: counterparty_address
+        description: Lowercase eligible external address opposite the configured wallet.
+        tests: [not_null]
+      - name: account_type
+        description: "{{ doc('account_type') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eoa_candidate, contract, unknown]
+      - name: code_state
+        description: "{{ doc('code_state') }}"
+      - name: code_size_bytes
+        description: Nullable bytecode size observed at the pinned account-evidence block.
+      - name: observation_block_number
+        description: Nullable pinned block number supporting successful account classification.
+      - name: observation_block_timestamp
+        description: Nullable UTC timestamp of the pinned account-evidence block.
+      - name: eip7702_delegation_target
+        description: Nullable target decoded from exact EIP-7702 delegation bytecode.
+      - name: evidence_fetch_status
+        description: "`complete`, retryable `failed`, or `not_fetched` when no cache observation exists."
+      - name: evidence_reason_codes
+        description: Machine-readable reason supporting account evidence or its absence.
+      - name: evidence_schema_version
+        description: Nullable account-evidence contract version.
+      - name: recognition_status
+        description: Automatic recognition cohort represented by this cell.
+      - name: transfer_count
+        description: Number of captured inbound and outbound Transfer-signature events for the cell.
+        tests: [not_null]
+      - name: inbound_transfer_count
+        description: Captured events where the counterparty is the emitted sender.
+        tests: [not_null]
+      - name: outbound_transfer_count
+        description: Captured events where the counterparty is the emitted recipient.
+        tests: [not_null]
+      - name: token_count
+        description: Distinct emitting contract addresses observed with the counterparty.
+      - name: first_seen_at
+        description: Earliest captured event timestamp in the cell; not first-ever chain activity.
+      - name: last_seen_at
+        description: Latest captured event timestamp in the cell; not last-ever chain activity.
+
+  - name: timeline_daily
+    description: Daily token-activity cells by wallet, token, recognition state, counterparty account type, and wallet-relative direction. {{ doc('transfer_signature_scope') }}
+    meta:
+      layer: mart
+      materialization: table
+      grain: one UTC-day token-recognition-account-type-direction cell per wallet
+      primary_key: [chain_id, wallet_address, block_date, token_address, recognition_status, counterparty_account_type, direction]
+      provenance: aggregation of int_wallet_transfer_events
+      consumers: [fixture_exporter, pipeline_metadata]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier for the configured wallet and token.
+      - name: wallet_address
+        description: Lowercase configured wallet whose activity is summarized.
+        tests: [not_null]
+      - name: block_date
+        description: UTC calendar date derived from event block timestamps.
+        tests: [not_null]
+      - name: token_address
+        description: Lowercase emitting contract address; keeps different token quantities separate.
+        tests: [not_null]
+      - name: token_symbol
+        description: Display symbol, falling back to an address prefix when metadata is absent.
+      - name: recognition_status
+        description: Automatic recognition state represented by the cell.
+      - name: recognition_reason
+        description: Machine-readable reason for automatic recognition.
+      - name: recognition_source
+        description: Source family for automatic recognition.
+      - name: recognition_version
+        description: Version of the automatic recognition contract.
+      - name: metadata_availability
+        description: Completeness state for token symbol, name, and decimals metadata.
+      - name: metadata_source
+        description: Nullable source or joined source set for token metadata.
+      - name: metadata_source_url
+        description: Nullable review URL for token metadata.
+      - name: counterparty_account_type
+        description: Account-type cell used by fixture dashboard filtering.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eoa_candidate, contract, unknown]
+      - name: direction
+        description: "{{ doc('direction') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [in, out, self]
+      - name: transfer_count
+        description: Number of captured Transfer-signature events in the daily cell.
+      - name: value_raw_sum
+        description: Exact DuckDB BIGNUM sum within one token contract and daily cell.
+
+  - name: graph_nodes
+    description: Legacy compatibility nodes for tracked wallets, external counterparties, and emitting token contracts participating in non-self interactions. The current dashboard does not load this mart.
+    meta:
+      layer: mart
+      materialization: table
+      grain: one namespaced graph node
+      primary_key: [node_id]
+      provenance: int_wallet_transfer_events plus configured wallet labels
+      consumers: [fixture_graph_export_compatibility]
+    columns:
+      - name: node_id
+        description: Namespaced stable identifier prefixed by wallet, counterparty, or token.
+        tests: [unique, not_null]
+      - name: node_type
+        description: Public graph node family.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [wallet, counterparty, token]
+      - name: label
+        description: Display label; configured alias for wallets, address for counterparties, and symbol/address fallback for tokens.
+      - name: address
+        description: Wallet or counterparty address; null for token nodes.
+      - name: token_address
+        description: Emitting contract address for token nodes; null otherwise.
+      - name: symbol
+        description: Nullable sourced symbol for token nodes.
+      - name: account_type
+        description: Counterparty account type; null for wallet and token nodes.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [eoa_candidate, contract, unknown]
+      - name: code_state
+        description: Counterparty bytecode state; null for wallet and token nodes.
+      - name: observation_block_number
+        description: Nullable pinned block supporting counterparty account evidence.
+      - name: observation_block_timestamp
+        description: Nullable serialized timestamp of the pinned counterparty observation block.
+      - name: eip7702_delegation_target
+        description: Nullable EIP-7702 delegation target for counterparty nodes.
+      - name: evidence_fetch_status
+        description: Nullable counterparty evidence fetch state.
+      - name: evidence_reason_codes
+        description: Nullable machine-readable reason supporting counterparty evidence.
+
+  - name: graph_edges
+    description: Legacy compatibility relation with two directed legs for every non-self wallet-token-counterparty-direction interaction.
+    meta:
+      layer: mart
+      materialization: table
+      grain: one edge leg per wallet-token-counterparty-direction interaction
+      primary_key: [edge_id]
+      provenance: aggregation of int_wallet_transfer_events
+      consumers: [fixture_graph_export_compatibility, local_graph_compatibility_endpoint]
+    columns:
+      - name: edge_id
+        description: Stable interaction identifier plus edge-leg suffix.
+        tests: [unique, not_null]
+      - name: interaction_id
+        description: Stable wallet-counterparty-token-direction interaction identifier shared by both edge legs.
+      - name: edge_role
+        description: Whether the leg connects wallet to token or token to counterparty.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [wallet_token, token_counterparty]
+      - name: source_node_id
+        description: Namespaced source node determined by wallet-relative direction.
+        tests: [not_null]
+      - name: target_node_id
+        description: Namespaced target node determined by wallet-relative direction.
+        tests: [not_null]
+      - name: chain_id
+        description: EVM chain identifier for the interaction.
+      - name: wallet_address
+        description: Lowercase configured wallet participating in the interaction.
+      - name: counterparty_address
+        description: Lowercase external emitted participant.
+      - name: token_address
+        description: Lowercase emitting contract address.
+        tests: [not_null]
+      - name: token_symbol
+        description: Display symbol, falling back to an address prefix.
+      - name: recognition_status
+        description: Automatic recognition state for the emitting contract.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [recognized, other]
+      - name: recognition_reason
+        description: Machine-readable reason for automatic recognition.
+      - name: recognition_source
+        description: Source family for automatic recognition.
+      - name: recognition_version
+        description: Version of the automatic recognition contract.
+      - name: metadata_availability
+        description: Completeness state for token display metadata.
+      - name: metadata_source
+        description: Nullable source or joined source set for token metadata.
+      - name: metadata_source_url
+        description: Nullable review URL for token metadata.
+      - name: counterparty_account_type
+        description: Account-type cell carried by the interaction.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eoa_candidate, contract, unknown]
+      - name: direction
+        description: Wallet-relative inbound or outbound direction; self interactions are excluded.
+      - name: transfer_count
+        description: Number of captured events for this wallet-counterparty-token-direction interaction.
+      - name: first_seen_at
+        description: Earliest captured event timestamp for the interaction.
+      - name: last_seen_at
+        description: Latest captured event timestamp for the interaction.
+      - name: counterparty_transfer_count
+        description: Complete captured event count for the wallet-counterparty pair across tokens and directions.
+        tests: [not_null]
+
+  - name: pipeline_metadata
+    description: One provenance and completeness row per configured wallet. Live snapshot fields are run-backed finalized coverage; fixture snapshot fields are intentionally null. {{ doc('finalized_snapshot') }}
+    meta:
+      layer: mart
+      materialization: table
+      grain: one row per configured wallet and chain
+      primary_key: [chain_id, wallet_address]
+      provenance: configured wallets plus complete event, timeline, and account-evidence populations
+      consumers: [local_api, fixture_exporter]
+    columns:
+      - name: ens
+        description: Nullable configured display alias; not a live ENS resolution.
+      - name: wallet_address
+        description: Lowercase configured wallet described by the row.
+        tests: [not_null]
+      - name: chain_id
+        description: EVM chain identifier; currently Ethereum mainnet only.
+        tests: [not_null]
+      - name: data_source
+        description: Whether the artifact was built from deterministic fixtures or HyperIndex.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [fixture, hyperindex]
+      - name: generated_at
+        description: UTC time at which dbt materialized this metadata row.
+      - name: snapshot_run_id
+        description: Nullable identifier of the completed live pipeline run supporting this artifact.
+      - name: snapshot_start_block
+        description: Nullable inclusive start of cumulative contiguous live coverage.
+      - name: snapshot_increment_start_block
+        description: Nullable inclusive start of the latest incremental interval.
+      - name: snapshot_end_block
+        description: Nullable inclusive finalized end block of cumulative live coverage.
+      - name: snapshot_end_block_hash
+        description: Nullable lowercase canonical hash pinned for the live finalized end block.
+      - name: snapshot_finality_policy
+        description: Nullable live finality policy; currently `ethereum_finalized`.
+      - name: snapshot_scope_version
+        description: Nullable semantic indexing-scope version recorded by the live run.
+      - name: transfer_count
+        description: Complete captured event count in the DuckDB snapshot.
+      - name: token_count
+        description: Distinct emitting contract count in the snapshot.
+      - name: counterparty_count
+        description: Distinct nonself emitted counterparty count; zero address is included here.
+      - name: recognized_transfer_count
+        description: Captured event count automatically classified as recognized.
+      - name: recognized_token_count
+        description: Distinct emitting contract count automatically classified as recognized.
+      - name: other_transfer_count
+        description: Captured event count automatically classified as other.
+      - name: other_token_count
+        description: Distinct emitting contract count automatically classified as other.
+      - name: interaction_count
+        description: Distinct non-self wallet-counterparty-token-direction interaction count.
+      - name: timeline_row_count
+        description: Number of physical daily timeline cells.
+      - name: account_evidence_population_scope
+        description: Explicit address denominator used for account-evidence coverage.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [distinct_nonzero_nonself_event_counterparties]
+      - name: account_evidence_eligible_address_count
+        description: Distinct nonzero, nonself event counterparties eligible for bytecode evidence.
+        tests: [not_null]
+      - name: account_evidence_classified_address_count
+        description: Eligible addresses with a successful pinned bytecode observation.
+        tests: [not_null]
+      - name: account_evidence_failed_address_count
+        description: Eligible addresses whose latest bytecode attempt failed and remains retryable.
+        tests: [not_null]
+      - name: account_evidence_not_checked_address_count
+        description: Eligible addresses with no cached bytecode observation.
+        tests: [not_null]
+      - name: account_evidence_address_coverage_rate
+        description: Classified eligible addresses divided by eligible addresses; null for an empty denominator.
+      - name: account_evidence_eligible_event_count
+        description: Captured events weighted by their eligible nonzero, nonself counterparty.
+        tests: [not_null]
+      - name: account_evidence_classified_event_count
+        description: Eligible captured events whose counterparty has successful account evidence.
+        tests: [not_null]
+      - name: account_evidence_failed_event_count
+        description: Eligible captured events whose counterparty bytecode attempt failed.
+        tests: [not_null]
+      - name: account_evidence_not_checked_event_count
+        description: Eligible captured events whose counterparty has no cached observation.
+        tests: [not_null]
+      - name: account_evidence_event_coverage_rate
+        description: Classified eligible events divided by eligible events; null for an empty denominator.
+      - name: account_evidence_observation_block_number_min
+        description: Minimum pinned block among successfully classified eligible addresses.
+      - name: account_evidence_observation_block_number_max
+        description: Maximum pinned block among successfully classified eligible addresses.
+      - name: account_evidence_observation_block_timestamp_min
+        description: Earliest pinned-block timestamp among successfully classified eligible addresses.
+      - name: account_evidence_observation_block_timestamp_max
+        description: Latest pinned-block timestamp among successfully classified eligible addresses.
+      - name: account_evidence_schema_version
+        description: Account-evidence schema version represented by successful observations.
+      - name: first_event_at
+        description: Earliest captured event timestamp; not a scan-coverage boundary.
+      - name: last_event_at
+        description: Latest captured event timestamp; not a scan-coverage boundary.

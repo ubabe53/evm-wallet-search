@@ -55,8 +55,9 @@ bun run test
 - `docs/architecture.md`: pipeline flow, scope, and documentation update rules.
 - `docs/data-model.md`: staging, intermediate, mart grain, and tests.
 - `docs/operations.md`: local database mode, fixture-demo mode, setup, and verification.
+- `analytics/models/**/_*.yml`, `analytics/seeds/_seeds.yml`, and `analytics/models/sources.yml`: dbt Docs field-level contracts, grains, keys, provenance, consumers, and tests.
 
-When code changes a documented behavior or boundary, update the owning context in the same change. Use the routing table in `AGENTS.md`; for example, a mart schema change must update `docs/data-model.md`, `analytics/models/schema.yml` as applicable, `src/data.ts`, and any affected export or dashboard notes.
+When code changes a documented behavior or boundary, update the owning context in the same change. Use the routing table in `AGENTS.md`; for example, a mart schema change must update `docs/data-model.md`, the owning dbt YAML file, `src/data.ts`, and any affected export or dashboard notes.
 
 ## GitHub Automation
 
