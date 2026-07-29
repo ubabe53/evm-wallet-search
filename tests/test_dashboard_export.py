@@ -96,7 +96,7 @@ class DashboardExportTest(unittest.TestCase):
             combined_counts[row["counterparty_address"]] = (
                 combined_counts.get(row["counterparty_address"], 0) + row["transfer_count"]
             )
-        self.assertEqual(max(combined_counts, key=combined_counts.get), "0xaaa")
+        self.assertEqual(max(combined_counts, key=lambda address: combined_counts[address]), "0xaaa")
 
     def test_counterparty_candidates_cover_all_315_filter_selections_in_one_query(self) -> None:
         with patch.object(dashboard_export, "query_rows", return_value=[]) as query:

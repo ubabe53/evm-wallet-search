@@ -15,6 +15,8 @@ Use these commands when validating changes:
 
 ```sh
 bun install --frozen-lockfile
+python -m pip install -r requirements-dev.txt
+bun run static:check
 bun run test
 bun run dashboard:build
 ```

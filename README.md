@@ -18,6 +18,7 @@ The local frontend now queries that API. The static JSON path is retained only f
 
 ```sh
 bun install
+python3 -m pip install -r requirements-dev.txt
 bun run indexer:dev
 bun run analytics:build:hyperindex
 bun run api:dev
@@ -25,6 +26,7 @@ bun run analytics:build:fixture
 bun run labels:sync
 bun run labels:enrich --limit 100
 bun run addresses:enrich
+bun run static:check
 bun run test
 ```
 
@@ -58,7 +60,10 @@ When code changes a documented behavior or boundary, update the owning context i
 
 ## GitHub Automation
 
-- CI runs the deterministic fixture-demo pipeline and production static build on every pull request and every push to `main`. Its downloadable dashboard build is retained for one day; that is artifact storage, not a website expiry time.
+- CI first runs the fast mandatory static gate—Oxlint and `tsc` for JavaScript/TypeScript,
+  Ruff and Pyright for Python—then runs the deterministic fixture-demo pipeline and
+  production static build on every pull request and every push to `main`. Its downloadable
+  dashboard build is retained for one day; that is artifact storage, not a website expiry time.
 - Deploy runs only after successful `main` CI (or a manual dispatch) and only when the repository variable `ENABLE_GITHUB_PAGES` is exactly `true`. The published site remains online until it is replaced or disabled.
 - Dependabot checks GitHub Actions, the root JavaScript application, the indexer package, and Python analytics dependencies every Monday.
 - The pull-request template makes validation, data-contract, security, documentation, and screenshot checks explicit.

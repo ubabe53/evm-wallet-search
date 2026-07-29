@@ -13,11 +13,11 @@ from typing import Any
 
 try:
     from .artifact_paths import ACCOUNT_EVIDENCE_DB_PATH, LIVE_DB_PATH
-    from .enrich_token_metadata import JsonRpcClient
+    from .enrich_token_metadata import JsonRpcBatchCaller, JsonRpcCaller, JsonRpcClient
     from .project_config import resolved_runtime
 except ImportError:
     from artifact_paths import ACCOUNT_EVIDENCE_DB_PATH, LIVE_DB_PATH
-    from enrich_token_metadata import JsonRpcClient
+    from enrich_token_metadata import JsonRpcBatchCaller, JsonRpcCaller, JsonRpcClient
     from project_config import resolved_runtime
 
 
@@ -133,7 +133,7 @@ def decode_code(value: str | None) -> tuple[str, str, int | None, str | None, st
 
 
 def resolve_observation_block(
-    client: JsonRpcClient,
+    client: JsonRpcCaller,
     fallback_confirmations: int = DEFAULT_FALLBACK_CONFIRMATIONS,
 ) -> tuple[str, dict[str, Any], str]:
     """Resolve one concrete safe block, falling back to a confirmed head."""
@@ -161,7 +161,7 @@ def resolve_observation_block(
 
 
 def fetch_code_batch(
-    client: JsonRpcClient,
+    client: JsonRpcBatchCaller,
     addresses: list[str],
     block_tag: str,
     max_retries: int = DEFAULT_MAX_RETRIES,

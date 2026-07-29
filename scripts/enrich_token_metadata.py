@@ -16,7 +16,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 try:
     from .artifact_paths import LIVE_DB_PATH
@@ -70,7 +70,7 @@ def decode_text_result(value: str | None) -> str | None:
     except ValueError:
         return None
     try:
-        from eth_abi import decode
+        from eth_abi.abi import decode
 
         decoded = decode(["string"], raw)[0]
         return clean_text(decoded)
@@ -164,6 +164,17 @@ class JsonRpcClient:
         }
 
 
+class JsonRpcCaller(Protocol):
+    def call(self, method: str, params: list[Any]) -> Any: ...
+
+
+class JsonRpcBatchCaller(Protocol):
+    def batch(
+        self,
+        requests: list[tuple[str, list[Any], tuple[str, str]]],
+    ) -> dict[tuple[str, str], str | None]: ...
+
+
 def read_existing(path: Path = OUTPUT_PATH) -> dict[str, dict[str, str]]:
     if not path.exists():
         return {}
@@ -199,7 +210,7 @@ def select_candidates(
     return eligible[:limit]
 
 
-def fetch_metadata(client: JsonRpcClient, addresses: list[str], block_tag: str) -> list[dict[str, Any]]:
+def fetch_metadata(client: JsonRpcBatchCaller, addresses: list[str], block_tag: str) -> list[dict[str, Any]]:
     results: dict[tuple[str, str], str | None] = {}
     calls = [
         ("eth_call", [{"to": address, "data": selector}, block_tag], (address, field))

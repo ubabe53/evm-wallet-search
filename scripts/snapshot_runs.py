@@ -14,10 +14,10 @@ from typing import Any, Callable
 
 try:
     from .artifact_paths import ANALYTICS_DIR, LIVE_DB_PATH
-    from .enrich_token_metadata import JsonRpcClient
+    from .enrich_token_metadata import JsonRpcCaller
 except ImportError:
     from artifact_paths import ANALYTICS_DIR, LIVE_DB_PATH
-    from enrich_token_metadata import JsonRpcClient
+    from enrich_token_metadata import JsonRpcCaller
 
 
 CHAIN_ID = 1
@@ -118,7 +118,7 @@ def fetch_hyperindex_metadata(
     )
 
 
-def resolve_finalized_block(client: JsonRpcClient) -> FinalizedBlock:
+def resolve_finalized_block(client: JsonRpcCaller) -> FinalizedBlock:
     block = client.call("eth_getBlockByNumber", ["finalized", False])
     if not isinstance(block, dict) or not block.get("number") or not block.get("hash"):
         raise RuntimeError("Ethereum RPC did not return a finalized block")
@@ -130,7 +130,7 @@ def resolve_finalized_block(client: JsonRpcClient) -> FinalizedBlock:
 
 
 def resolve_snapshot_target(
-    client: JsonRpcClient,
+    client: JsonRpcCaller,
     metadata: HyperIndexMetadata,
 ) -> FinalizedBlock:
     """Pin the newest block that is both fully indexed and finalized."""
@@ -333,14 +333,17 @@ def finish_snapshot_run(
 
     with duckdb.connect(str(database_path)) as connection:
         if succeeded:
-            events_found = connection.execute(
+            event_count_row = connection.execute(
                 """
                 select count(*)
                 from wallet_events
                 where chain_id = ? and wallet_address = ? and block_number between ? and ?
                 """,
                 [run.chain_id, run.wallet_address, run.from_block, run.to_block],
-            ).fetchone()[0]
+            ).fetchone()
+            if event_count_row is None:
+                raise RuntimeError("Could not count events for the completed snapshot run")
+            events_found = event_count_row[0]
             connection.execute(
                 """
                 update ops.pipeline_runs

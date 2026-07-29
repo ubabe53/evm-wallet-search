@@ -10,7 +10,6 @@ from pathlib import Path
 
 from project_config import resolved_runtime
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

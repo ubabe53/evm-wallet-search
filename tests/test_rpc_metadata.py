@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from eth_abi.abi import encode
+
 from scripts.enrich_token_metadata import (
     JsonRpcClient,
     decode_decimals_result,
@@ -11,7 +13,6 @@ from scripts.enrich_token_metadata import (
     select_candidates,
     write_rows,
 )
-from eth_abi import encode
 
 
 class FakeConnection:
@@ -78,7 +79,10 @@ class RpcMetadataTest(unittest.TestCase):
     def test_json_rpc_call_rejects_malformed_or_mismatched_responses(self) -> None:
         for response in ([], {"jsonrpc": "2.0", "id": 99, "result": "0x01"}):
             with self.subTest(response=response):
-                client = JsonRpcClient("https://private.invalid/key", transport=lambda _url, _payload: response)
+                client = JsonRpcClient(
+                    "https://private.invalid/key",
+                    transport=lambda _url, _payload, response=response: response,
+                )
                 with self.assertRaisesRegex(RuntimeError, "invalid response"):
                     client.call("eth_chainId", [])
 

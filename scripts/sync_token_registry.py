@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SEED_PATH = ROOT / "analytics" / "seeds" / "token_metadata.csv"
 MANIFEST_PATH = ROOT / "analytics" / "seeds" / "token_metadata_manifest.json"

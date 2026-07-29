@@ -2,8 +2,8 @@ import os
 import unittest
 from unittest.mock import patch
 
-from scripts.artifact_paths import FIXTURE_DB_PATH, LIVE_DB_PATH
 from scripts import run_dbt
+from scripts.artifact_paths import FIXTURE_DB_PATH, LIVE_DB_PATH
 
 
 class ArtifactPathsTest(unittest.TestCase):
