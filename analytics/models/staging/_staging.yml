@@ -1,0 +1,148 @@
+version: 2
+
+models:
+  - name: stg_transfer_events
+    description: Deduplicated, normalized wallet-relevant Transfer-signature events. {{ doc('transfer_signature_scope') }}
+    meta:
+      layer: staging
+      materialization: view
+      grain: one captured Transfer-signature log
+      primary_key: [chain_id, transaction_hash, log_index]
+      provenance: HyperIndex Erc20Transfer in live mode; raw_transfer_events_fixture in fixture mode
+      consumers: [int_wallet_transfer_events]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier; currently Ethereum mainnet only.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
+      - name: block_number
+        description: Number of the block containing the log.
+        tests: [not_null]
+      - name: block_hash
+        description: Lowercase canonical block hash supplied with the captured event.
+        tests: [not_null]
+      - name: block_timestamp
+        description: UTC timestamp of the event block.
+      - name: transaction_hash
+        description: Lowercase hash of the transaction containing the log.
+        tests: [not_null]
+      - name: transaction_index
+        description: Transaction position within its block.
+      - name: transaction_from_address
+        description: Nullable lowercase top-level transaction sender; absent on legacy rows without envelope evidence.
+      - name: transaction_to_address
+        description: Nullable lowercase top-level transaction target; null also represents contract creation or unavailable evidence.
+      - name: log_index
+        description: Log position within the transaction and part of canonical event identity.
+        tests: [not_null]
+      - name: token_address
+        description: Lowercase address of the contract that emitted the shared Transfer signature.
+        tests: [not_null]
+      - name: from_address
+        description: Lowercase indexed `from` participant emitted by the log.
+        tests: [not_null]
+      - name: to_address
+        description: Lowercase indexed `to` participant emitted by the log.
+        tests: [not_null]
+      - name: value_raw
+        description: "{{ doc('exact_raw_value') }}"
+        tests: [not_null]
+
+  - name: stg_wallets
+    description: Normalized configured wallet targets. ENS and label values are pinned project metadata, not live resolution claims.
+    meta:
+      layer: staging
+      materialization: view
+      grain: one configured wallet per chain
+      primary_key: [chain_id, wallet_address]
+      provenance: wallets seed
+      consumers: [int_wallet_transfer_events, graph_nodes, pipeline_metadata]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier; currently Ethereum mainnet only.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
+      - name: ens
+        description: Nullable configured display alias; it is not resolved during the dbt build.
+      - name: wallet_address
+        description: Lowercase canonical configured wallet address.
+        tests: [not_null]
+      - name: label
+        description: Nullable configured human-readable project label.
+
+  - name: stg_account_evidence
+    description: Normalized pinned-block bytecode observations from the ignored local account-evidence cache; fixture builds expose an empty typed relation.
+    meta:
+      layer: staging
+      materialization: view
+      grain: one retained bytecode observation per chain and address
+      primary_key: [chain_id, address]
+      provenance: local account_evidence DuckDB cache; empty in fixture mode
+      consumers: [int_wallet_transfer_events]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier for the observed address.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
+      - name: address
+        description: Lowercase address whose bytecode was observed.
+        tests: [not_null]
+      - name: account_type
+        description: "{{ doc('account_type') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eoa_candidate, contract, unknown]
+      - name: code_state
+        description: "{{ doc('code_state') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [no_code, eip7702_delegated, contract_code, unknown]
+      - name: code_size_bytes
+        description: Nullable number of bytecode bytes observed at the pinned block.
+      - name: observation_block_number
+        description: Pinned block number at which bytecode was queried.
+        tests: [not_null]
+      - name: observation_block_hash
+        description: Lowercase canonical hash of the pinned observation block.
+        tests: [not_null]
+      - name: observation_block_timestamp
+        description: UTC timestamp of the pinned observation block.
+        tests: [not_null]
+      - name: finality_policy
+        description: Finality policy applied to the observation block; currently Ethereum finalized.
+        tests: [not_null]
+      - name: eip7702_delegation_target
+        description: Nullable lowercase 20-byte target decoded from exact EIP-7702 delegation bytecode.
+      - name: fetch_status
+        description: Whether the pinned bytecode request completed or failed and remains retryable.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [complete, failed]
+      - name: reason_code
+        description: Singular machine-readable reason supporting the classification or failure.
+        tests: [not_null]
+      - name: evidence_schema_version
+        description: Version of the account-evidence observation contract.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [account-evidence-v2]
+      - name: fetched_at
+        description: UTC time at which the bytecode request completed.
+        tests: [not_null]

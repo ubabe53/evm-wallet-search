@@ -85,12 +85,11 @@ describe("dashboard model", () => {
   it("aggregates matching account cells back to token grain before ranking", () => {
     const base = summaries.tokens[0] as unknown as TokenSummary;
     const rows = aggregateTokenSummaries([
-      { ...base, counterparty_account_type: "contract", transfer_count: 60, value_raw_sum: "60" },
+      { ...base, counterparty_account_type: "contract", transfer_count: 60 },
       {
         ...base,
         counterparty_account_type: "eoa_candidate",
         transfer_count: 60,
-        value_raw_sum: "60",
       },
       {
         ...base,
@@ -98,7 +97,6 @@ describe("dashboard model", () => {
         token_symbol: "BBB",
         counterparty_account_type: "contract",
         transfer_count: 100,
-        value_raw_sum: "100",
       },
     ]);
 
@@ -106,23 +104,21 @@ describe("dashboard model", () => {
       ["0x2", 120],
       ["0xbbb", 100],
     ]);
-    expect(rows[0].value_raw_sum).toBe("120");
   });
 
   it("aggregates account cells back to the displayed daily token-direction grain", () => {
     const base = timeline[0] as unknown as TimelineRow;
     const rows = aggregateTimelineRows([
-      { ...base, counterparty_account_type: "contract", transfer_count: 2, value_raw_sum: "10" },
+      { ...base, counterparty_account_type: "contract", transfer_count: 2 },
       {
         ...base,
         counterparty_account_type: "eoa_candidate",
         transfer_count: 3,
-        value_raw_sum: "20",
       },
     ]);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ transfer_count: 5, value_raw_sum: "30" });
+    expect(rows[0]).toMatchObject({ transfer_count: 5 });
   });
 
   it("buckets timeline rows into fixed yearly overviews and selected-year months", () => {

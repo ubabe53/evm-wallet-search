@@ -38,21 +38,29 @@ RECOGNITION_STATUSES = ("recognized", "other")
 ACCOUNT_FILTERS = ("eoa_candidate", "contract")
 REQUIRED_EXPORT_COLUMNS = {
     "wallet_events": {
-        "from_address",
-        "to_address",
-        "value_raw",
-        "transaction_from_address",
-        "transaction_to_address",
-        "transaction_sender_relation",
-        "transaction_target_relation",
+        "chain_id",
+        "wallet_address",
+        "block_number",
+        "block_timestamp",
+        "transaction_hash",
+        "transaction_index",
+        "log_index",
+        "token_address",
+        "token_symbol",
+        "token_name",
+        "recognition_status",
+        "direction",
         "is_indirect",
+        "counterparty_address",
         "counterparty_account_type",
+        "counterparty_code_state",
+        "counterparty_observation_block_number",
+        "counterparty_eip7702_delegation_target",
     },
     "token_summary": {
         "indirect_inbound_transfer_count",
         "indirect_outbound_transfer_count",
         "self_transfer_count",
-        "value_raw_sum",
         "counterparty_account_type",
     },
 }
@@ -329,7 +337,23 @@ def token_summary_rows(
     return query_rows(
         connection,
         f"""
-          select *
+          select
+            chain_id,
+            wallet_address,
+            token_address,
+            token_symbol,
+            token_name,
+            recognition_status,
+            counterparty_account_type,
+            transfer_count,
+            inbound_transfer_count,
+            outbound_transfer_count,
+            self_transfer_count,
+            indirect_inbound_transfer_count,
+            indirect_outbound_transfer_count,
+            counterparty_count,
+            sender_account_count,
+            recipient_account_count
           from token_summary
           where token_address in ({placeholders})
           order by transfer_count desc, token_symbol, token_address, counterparty_account_type
@@ -413,7 +437,21 @@ def counterparty_rows(
     return query_rows(
         connection,
         f"""
-          select *
+          select
+            chain_id,
+            wallet_address,
+            counterparty_address,
+            account_type,
+            code_state,
+            observation_block_number,
+            eip7702_delegation_target,
+            recognition_status,
+            transfer_count,
+            inbound_transfer_count,
+            outbound_transfer_count,
+            token_count,
+            first_seen_at,
+            last_seen_at
           from counterparty_summary
           where counterparty_address in ({placeholders})
           order by transfer_count desc, last_seen_at desc, counterparty_address, recognition_status
@@ -434,7 +472,7 @@ def recognition_account_counts(connection: Any) -> dict[str, dict[str, int]]:
         f"""
           with classified as (
             select
-              transfer_id,
+              transaction_hash,
               token_address,
               counterparty_address,
               wallet_address,
@@ -456,7 +494,7 @@ def recognition_account_counts(connection: Any) -> dict[str, dict[str, int]]:
           select
             selections.recognition_mask,
             selections.account_mask,
-            count(classified.transfer_id) as transfer_count,
+            count(classified.transaction_hash) as transfer_count,
             count(distinct classified.token_address) as token_count,
             count(distinct classified.counterparty_address) filter (
               where classified.counterparty_address != classified.wallet_address
@@ -499,16 +537,37 @@ def main() -> None:
         events = query_rows(
             connection,
             f"""
-              select * exclude (recognition_rank)
+              select
+                cast(chain_id as varchar)
+                  || '-' || transaction_hash
+                  || '-' || cast(log_index as varchar) as transfer_id,
+                chain_id,
+                wallet_address,
+                block_number,
+                block_timestamp,
+                transaction_hash,
+                transaction_index,
+                log_index,
+                token_address,
+                token_symbol,
+                token_name,
+                recognition_status,
+                direction,
+                is_indirect,
+                counterparty_address,
+                counterparty_account_type,
+                counterparty_code_state,
+                counterparty_observation_block_number,
+                counterparty_eip7702_delegation_target
               from (
                 select *, row_number() over (
                   partition by recognition_status, counterparty_account_type
-                  order by block_timestamp desc, transaction_hash, log_index
+                  order by block_number desc, transaction_index desc, log_index desc, transaction_hash desc
                 ) as recognition_rank
                 from wallet_events
               )
               where recognition_rank <= {EVENT_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE}
-              order by block_timestamp desc, transaction_hash, log_index
+              order by block_number desc, transaction_index desc, log_index desc, transaction_hash desc
             """,
         )
         token_summaries = token_summary_rows(connection)
@@ -516,7 +575,16 @@ def main() -> None:
         timeline = query_rows(
             connection,
             f"""
-              select * exclude (recognition_rank)
+              select
+                chain_id,
+                wallet_address,
+                block_date,
+                token_address,
+                token_symbol,
+                recognition_status,
+                counterparty_account_type,
+                direction,
+                transfer_count
               from (
                 select *, row_number() over (
                   partition by recognition_status, counterparty_account_type

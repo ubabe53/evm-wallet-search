@@ -71,7 +71,7 @@ Update the following context in the same change when applicable:
 | --- | --- |
 | System boundaries, services, dependency direction, or major data flow | `ARCHITECTURE.md` and `docs/architecture.md` |
 | Indexing scope, pipeline behavior, ranking, sampling, or semantic policy | `docs/architecture.md` |
-| Model grain, keys, fields, tests, classifications, or exclusions | `docs/data-model.md` and `analytics/models/schema.yml` as applicable |
+| Model grain, keys, fields, tests, classifications, or exclusions | `docs/data-model.md` and the owning dbt YAML under `analytics/models/` or `analytics/seeds/` |
 | Setup, credentials, commands, enrichment, deployment, or recovery | `docs/operations.md` and the relevant README section |
 | Dashboard controls or visible behavior | README dashboard section and frontend tests |
 | Local API contract | server contract, frontend types/tests, `ARCHITECTURE.md`, and `docs/data-model.md` |

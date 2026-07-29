@@ -1,0 +1,176 @@
+version: 2
+
+models:
+  - name: int_token_enrichment
+    description: Resolved token display metadata and automatic exact-address recognition evidence. Registry, reviewed override, and successful RPC metadata are combined without changing token identity.
+    meta:
+      layer: intermediate
+      materialization: view
+      grain: one token contract per chain
+      primary_key: [chain_id, token_address]
+      provenance: token_metadata, token_label_overrides, and successful token_rpc_metadata observations
+      consumers: [int_wallet_transfer_events]
+    columns:
+      - name: chain_id
+        description: EVM chain identifier for the token contract.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
+      - name: token_address
+        description: Lowercase token-emitting contract address.
+        tests: [not_null]
+      - name: symbol
+        description: Nullable display symbol selected by manual, registry, then RPC precedence.
+      - name: name
+        description: Nullable display name selected by manual, registry, then RPC precedence.
+      - name: decimals
+        description: Nullable sourced token decimals metadata; never applied implicitly to raw event values.
+      - name: recognition_status
+        description: "{{ doc('token_recognition') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [recognized, other]
+      - name: recognition_reason
+        description: Machine-readable reason for the automatic recognition result.
+      - name: recognition_source
+        description: "Classification source family: reviewed manual input, exact registry membership, or automatic absence."
+      - name: recognition_version
+        description: Version of the automatic token-recognition contract.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [token-recognition-v1]
+      - name: metadata_source
+        description: Source or joined source set from which the selected display metadata originated.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - manual
+                  - trustwallet
+                  - uniswap
+                  - coingecko
+                  - coinbase
+                  - trustwallet+uniswap
+                  - trustwallet+coingecko
+                  - trustwallet+coinbase
+                  - uniswap+coingecko
+                  - uniswap+coinbase
+                  - coingecko+coinbase
+                  - trustwallet+uniswap+coingecko
+                  - trustwallet+uniswap+coinbase
+                  - trustwallet+coingecko+coinbase
+                  - uniswap+coingecko+coinbase
+                  - trustwallet+uniswap+coingecko+coinbase
+                  - ethereum_rpc
+      - name: metadata_source_url
+        description: Nullable source URL retained for reviewable registry or manual provenance.
+      - name: token_label_reason
+        description: Nullable reviewer-authored reason from the manual token-label seed.
+      - name: metadata_availability
+        description: Whether symbol, name, and decimals are all present, partly present, or unavailable.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [complete, partial, unavailable]
+
+  - name: int_wallet_transfer_events
+    description: Durable complete semantic event relation for all downstream marts. It joins configured-wallet direction, token enrichment, transaction-envelope evidence, account evidence, and exact raw values while preserving the event grain. {{ doc('transfer_signature_scope') }}
+    meta:
+      layer: intermediate
+      materialization: table
+      grain: one captured event per configured wallet
+      primary_key: [chain_id, wallet_address, transaction_hash, log_index]
+      provenance: stg_transfer_events joined to configured wallets and observed enrichment
+      consumers: [all dashboard marts]
+      persistence_reason: build-only external attachments are unavailable after dbt exits
+    columns:
+      - name: transfer_id
+        description: Deterministic convenience identifier derived from chain ID, transaction hash, and log index.
+      - name: chain_id
+        description: EVM chain identifier; currently Ethereum mainnet only.
+      - name: block_number
+        description: Number of the block containing the captured event.
+      - name: block_hash
+        description: Lowercase canonical block hash retained as event-level evidence.
+      - name: block_timestamp
+        description: UTC timestamp of the event block.
+      - name: block_date
+        description: UTC calendar date derived from the event block timestamp.
+      - name: transaction_hash
+        description: Lowercase transaction hash and part of canonical event identity.
+      - name: transaction_index
+        description: Transaction position within the block.
+      - name: transaction_from_address
+        description: Nullable top-level transaction sender retained as separate initiation evidence.
+      - name: transaction_to_address
+        description: Nullable top-level transaction target retained as separate routing evidence.
+      - name: log_index
+        description: Log position within the transaction and part of canonical event identity.
+      - name: wallet_address
+        description: Lowercase configured wallet relative to which direction and counterparty are defined.
+      - name: token_address
+        description: Lowercase address of the contract that emitted the shared Transfer signature.
+      - name: token_symbol
+        description: Nullable sourced display symbol at build time.
+      - name: token_name
+        description: Nullable sourced display name at build time.
+      - name: token_decimals
+        description: Nullable sourced decimals metadata, retained separately from the raw value.
+      - name: recognition_status
+        description: "{{ doc('token_recognition') }}"
+      - name: recognition_reason
+        description: Machine-readable reason supporting the automatic recognition result.
+      - name: recognition_source
+        description: Source family supporting the automatic recognition result.
+      - name: recognition_version
+        description: Version of the automatic token-recognition contract.
+      - name: metadata_source
+        description: Nullable source or joined source set supporting selected token display metadata.
+      - name: metadata_source_url
+        description: Nullable review URL for selected token metadata.
+      - name: token_label_reason
+        description: Nullable reviewed manual token-label reason.
+      - name: metadata_availability
+        description: Completeness state for symbol, name, and decimals metadata.
+      - name: from_address
+        description: Lowercase indexed `from` participant emitted by the log.
+      - name: to_address
+        description: Lowercase indexed `to` participant emitted by the log.
+      - name: transaction_sender_relation
+        description: Equality-only relation of top-level transaction sender to emitted participants.
+      - name: transaction_target_relation
+        description: Equality-only relation of top-level transaction target to token and emitted participants.
+      - name: is_indirect
+        description: True when observed transaction sender differs from emitted `from`; false on a match and null without sender evidence.
+      - name: direction
+        description: "{{ doc('direction') }}"
+      - name: counterparty_address
+        description: Opposite emitted participant for inbound/outbound events; equals the wallet for self events.
+      - name: counterparty_account_type
+        description: "{{ doc('account_type') }}"
+      - name: counterparty_code_state
+        description: "{{ doc('code_state') }}"
+      - name: counterparty_code_size_bytes
+        description: Nullable bytecode size observed at the pinned account-evidence block.
+      - name: counterparty_observation_block_number
+        description: Nullable pinned block number supporting successful counterparty classification.
+      - name: counterparty_observation_block_timestamp
+        description: Nullable UTC timestamp of the pinned counterparty observation block.
+      - name: counterparty_eip7702_delegation_target
+        description: Nullable exact target decoded from EIP-7702 delegation bytecode.
+      - name: counterparty_evidence_fetch_status
+        description: "`complete`, retryable `failed`, or `not_fetched` when no cache row exists."
+      - name: counterparty_evidence_reason_codes
+        description: Machine-readable reason supporting counterparty account evidence or its absence.
+      - name: counterparty_evidence_schema_version
+        description: Nullable account-evidence contract version for successful cached observations.
+      - name: value_raw
+        description: "{{ doc('exact_raw_value') }}"

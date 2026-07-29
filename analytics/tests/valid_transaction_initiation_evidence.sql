@@ -1,5 +1,5 @@
 select *
-from {{ ref('wallet_events') }}
+from {{ ref('int_wallet_transfer_events') }}
 where
   (transaction_from_address is null and (
     transaction_sender_relation != 'unknown' or is_indirect is not null

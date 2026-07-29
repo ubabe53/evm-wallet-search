@@ -3,7 +3,7 @@ with wallet_nodes as (
     events.chain_id,
     events.wallet_address,
     any_value(wallets.ens) as ens
-  from {{ ref('wallet_events') }} as events
+  from {{ ref('int_wallet_transfer_events') }} as events
   join {{ ref('stg_wallets') }} as wallets using (chain_id, wallet_address)
   where events.direction != 'self'
   group by events.chain_id, events.wallet_address
@@ -41,7 +41,7 @@ select
   any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
   any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
   any_value(counterparty_evidence_reason_codes) as evidence_reason_codes
-from {{ ref('wallet_events') }}
+from {{ ref('int_wallet_transfer_events') }}
 where direction != 'self'
 group by counterparty_address
 
@@ -61,6 +61,6 @@ select
   cast(null as varchar) as eip7702_delegation_target,
   cast(null as varchar) as evidence_fetch_status,
   cast(null as varchar) as evidence_reason_codes
-from {{ ref('wallet_events') }}
+from {{ ref('int_wallet_transfer_events') }}
 where direction != 'self'
 group by token_address, token_symbol

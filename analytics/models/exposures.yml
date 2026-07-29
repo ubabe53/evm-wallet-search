@@ -1,0 +1,39 @@
+version: 2
+
+exposures:
+  - name: local_wallet_dashboard_api
+    label: Local wallet dashboard API
+    type: application
+    maturity: medium
+    description: Loopback-only FastAPI application serving complete filtered results from the live DuckDB artifact.
+    depends_on:
+      - ref('wallet_events')
+      - ref('token_summary')
+      - ref('counterparty_summary')
+      - ref('pipeline_metadata')
+    owner:
+      name: EVM Wallet Search maintainers
+      email: maintainers@example.invalid
+    meta:
+      delivery_mode: live_local
+      completeness: complete within the recorded finalized snapshot range
+
+  - name: fixture_dashboard_export
+    label: Fixture dashboard export
+    type: application
+    maturity: medium
+    description: Bounded deterministic JSON export used only by tests and the static portfolio demo.
+    depends_on:
+      - ref('wallet_events')
+      - ref('token_summary')
+      - ref('counterparty_summary')
+      - ref('timeline_daily')
+      - ref('graph_nodes')
+      - ref('graph_edges')
+      - ref('pipeline_metadata')
+    owner:
+      name: EVM Wallet Search maintainers
+      email: maintainers@example.invalid
+    meta:
+      delivery_mode: bounded_fixture
+      completeness: not evidence of HyperIndex coverage

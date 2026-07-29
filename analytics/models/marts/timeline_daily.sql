@@ -15,7 +15,7 @@ select
   direction,
   count(*) as transfer_count,
   sum(cast(value_raw as bignum)) as value_raw_sum
-from {{ ref('wallet_events') }}
+from {{ ref('int_wallet_transfer_events') }}
 group by chain_id, wallet_address, block_date, token_address, token_symbol,
   recognition_status, recognition_reason, recognition_source, recognition_version,
   metadata_availability, metadata_source, metadata_source_url,

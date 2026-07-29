@@ -1,6 +1,6 @@
 with self_event as (
   select *
-  from {{ ref('wallet_events') }}
+  from {{ ref('int_wallet_transfer_events') }}
   where transfer_id = '1-0xself-0'
 ),
 

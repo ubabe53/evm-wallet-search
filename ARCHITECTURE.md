@@ -61,7 +61,13 @@ Rules:
 - HyperIndex Postgres is the ingestion source, not the application query interface.
 - DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. Orchestration owns `ops.pipeline_runs`, while the isolated `app.token_recognition_overrides` table is mutable local product state; dbt models rewrite neither schema.
 - Enrichment joins onto event facts. It may add sourced interpretation but must not rewrite immutable event evidence.
-- User-facing aggregations operate on eligible mart rows and keep token-contract identity in the grain where amounts are involved.
+- `int_wallet_transfer_events` is the shared, materialized semantic event relation. It keeps the
+  complete row-level evidence inside the standalone DuckDB artifact after build-time source
+  attachments are gone. Dashboard marts are independent,
+  purpose-built projections from that view; one serving mart must not become the accidental source
+  of fields needed by every other mart.
+- User-facing aggregations operate on eligible semantic event rows and keep token-contract identity
+  in the grain where amounts are involved.
 - Generated demo files are downstream artifacts and are never hand-edited.
 
 ## Data and trust boundaries
@@ -121,7 +127,7 @@ The loopback-only FastAPI service:
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, timeline buckets, graph compatibility pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
-- return event raw values and per-token raw totals as exact strings while retaining token-decimals metadata separately;
+- expose only the event identity, display, classification, and count fields consumed by the dashboard while retaining exact raw values, token decimals, and detailed provenance in the complete DuckDB intermediate relation;
 - return self-transfers as the explicit `self` event direction while excluding the tracked wallet from counterparty counts and graph relationships;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
 - apply manual token-recognition overrides before every filter, count, ranking, timeline bucket, graph compatibility page, and event page;

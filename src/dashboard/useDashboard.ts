@@ -192,9 +192,9 @@ export function useDashboard() {
       accountVisible(event.counterparty_account_type));
     const visibleTokens = data.summaries.tokens.filter((row) =>
       recognitionVisible(row.recognition_status) &&
-      accountVisible(row.counterparty_account_type));
+      accountVisible(row.counterparty_account_type ?? "unknown"));
     const visibleCounterparties = data.summaries.counterparties.filter((row) =>
-      recognitionVisible(row.recognition_status) &&
+      recognitionVisible(row.recognition_status ?? "other") &&
       accountVisible(row.account_type));
     const visibleTimeline = data.timeline.filter((row) =>
       recognitionVisible(row.recognition_status) &&
@@ -213,41 +213,25 @@ export function useDashboard() {
 
     const eventMatches = (event: WalletEvent) =>
       [
-        event.transfer_id,
         event.transaction_hash,
-        event.transaction_from_address,
-        event.transaction_to_address,
-        event.block_date,
-        event.direction,
-        event.transaction_sender_relation,
-        event.transaction_target_relation,
         event.wallet_address,
         event.counterparty_address,
-        event.counterparty_account_type,
-        event.counterparty_code_state,
-        event.counterparty_evidence_reason_codes,
         event.token_address,
         event.token_symbol,
         event.token_name,
-        event.recognition_status,
-        event.recognition_source,
-        event.metadata_availability,
-        event.metadata_source,
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const tokenMatches = (row: DisplayedTokenSummary) =>
-      [row.token_symbol, row.token_name, row.token_address, row.recognition_status,
-        row.recognition_source, row.metadata_source, row.metadata_availability]
+      [row.token_symbol, row.token_name, row.token_address]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedQuery));
 
     const events = visibleData.events.filter(eventMatches);
     const directlyMatchedTokens = visibleData.summaries.tokens.filter(tokenMatches);
     const directlyMatchedCounterparties = visibleData.summaries.counterparties.filter((row) =>
-      [row.counterparty_address, row.account_type, row.code_state, row.evidence_reason_codes]
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
+      row.counterparty_address.toLowerCase().includes(normalizedQuery),
     );
 
     const tokenAddresses = new Set([

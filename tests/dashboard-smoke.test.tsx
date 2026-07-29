@@ -178,8 +178,8 @@ describe("App", () => {
       .find((element) => element.classList.contains("recognitionStatus"));
     expect(recognizedStatus).toHaveTextContent(/^Recognized$/);
 
-    fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "contract" } });
-    expect(screen.getAllByRole("link", { name: "0x1111...1111" }).length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0xaaa" } });
+    expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" }).length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0x1111" } });
     expect(screen.getAllByText("0x1111...1111").length).toBeGreaterThan(0);

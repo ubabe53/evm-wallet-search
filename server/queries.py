@@ -21,7 +21,7 @@ ACCOUNT_FILTERS = (
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
-API_SCHEMA_VERSION = "dashboard-api-v13"
+API_SCHEMA_VERSION = "dashboard-api-v14"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -90,17 +90,8 @@ def filter_sql(
     if filters.query:
         clauses.append(
             "contains(lower(concat_ws('|', "
-            "events.transfer_id, events.transaction_hash, events.transaction_from_address, "
-            "events.transaction_to_address, cast(events.block_date as varchar), events.direction, "
-            "events.transaction_sender_relation, events.transaction_target_relation, "
-            "(select metadata.ens from pipeline_metadata as metadata "
-            "where metadata.chain_id = events.chain_id "
-            "and metadata.wallet_address = events.wallet_address), "
-            "events.wallet_address, events.from_address, events.to_address, events.counterparty_address, "
-            "events.counterparty_account_type, events.counterparty_code_state, "
-            "events.counterparty_evidence_reason_codes, events.token_address, events.token_symbol, "
-            "events.token_name, events.recognition_status, events.recognition_source, "
-            "events.metadata_availability, events.metadata_source)), ?)"
+            "events.transaction_hash, events.wallet_address, events.counterparty_address, "
+            "events.token_address, events.token_symbol, events.token_name)), ?)"
         )
         parameters.append(filters.query.strip().lower())
 
@@ -119,16 +110,8 @@ def filtered_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
     return f"""
       with effective_events as (
         select
-          events.* exclude (recognition_status, recognition_reason, recognition_source),
+          events.* exclude (recognition_status),
           coalesce(overrides.status, events.recognition_status) as recognition_status,
-          case
-            when overrides.status is not null then 'manual_override'
-            else events.recognition_reason
-          end as recognition_reason,
-          case
-            when overrides.status is not null then 'manual'
-            else events.recognition_source
-          end as recognition_source,
           overrides.status as recognition_override_status
         from wallet_events as events
         left join app.token_recognition_overrides as overrides
@@ -155,16 +138,8 @@ def counterparty_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
     return f"""
       with effective_events as (
         select
-          events.* exclude (recognition_status, recognition_reason, recognition_source),
+          events.* exclude (recognition_status),
           coalesce(overrides.status, events.recognition_status) as recognition_status,
-          case
-            when overrides.status is not null then 'manual_override'
-            else events.recognition_reason
-          end as recognition_reason,
-          case
-            when overrides.status is not null then 'manual'
-            else events.recognition_source
-          end as recognition_source,
           overrides.status as recognition_override_status
         from wallet_events as events
         left join app.token_recognition_overrides as overrides
@@ -188,7 +163,13 @@ def counterparty_cte(filters: DashboardFilters) -> tuple[str, list[Any]]:
 
 
 def encode_cursor(row: dict[str, Any]) -> str:
-    payload = [row["block_number"], row["transaction_index"], row["log_index"], row["transfer_id"]]
+    payload = [
+        "event-v2",
+        row["block_number"],
+        row["transaction_index"],
+        row["log_index"],
+        row["transaction_hash"],
+    ]
     return base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
 
 
@@ -198,12 +179,13 @@ def decode_cursor(cursor: str) -> tuple[int, int, int, str]:
         payload = json.loads(base64.urlsafe_b64decode(padded).decode())
         if (
             not isinstance(payload, list)
-            or len(payload) != 4
-            or not all(isinstance(value, int) for value in payload[:3])
-            or not isinstance(payload[3], str)
+            or len(payload) != 5
+            or payload[0] != "event-v2"
+            or not all(isinstance(value, int) for value in payload[1:4])
+            or not isinstance(payload[4], str)
         ):
             raise ValueError
-        return payload[0], payload[1], payload[2], payload[3]
+        return payload[1], payload[2], payload[3], payload[4]
     except (ValueError, TypeError, binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as error:
         raise InvalidCursor("Invalid event cursor") from error
 
@@ -399,7 +381,6 @@ class QueryService:
                   events.token_address,
                   any_value(events.token_symbol) as token_symbol,
                   any_value(events.recognition_status) as automatic_status,
-                  any_value(events.recognition_reason) as automatic_reason,
                   overrides.status as override_status,
                   overrides.updated_at,
                   coalesce(overrides.status, any_value(events.recognition_status)) as recognition_status,
@@ -482,18 +463,23 @@ class QueryService:
         count_parameters = list(parameters)
         cursor_sql = ""
         if cursor:
-            block_number, transaction_index, log_index, transfer_id = decode_cursor(cursor)
+            block_number, transaction_index, log_index, transaction_hash = decode_cursor(cursor)
             cursor_sql = """
               where block_number < ?
                  or (block_number = ? and transaction_index < ?)
                  or (block_number = ? and transaction_index = ? and log_index < ?)
-                 or (block_number = ? and transaction_index = ? and log_index = ? and transfer_id < ?)
+                 or (
+                   block_number = ?
+                   and transaction_index = ?
+                   and log_index = ?
+                   and transaction_hash < ?
+                 )
             """
             parameters.extend([
                 block_number,
                 block_number, transaction_index,
                 block_number, transaction_index, log_index,
-                block_number, transaction_index, log_index, transfer_id,
+                block_number, transaction_index, log_index, transaction_hash,
             ])
         with self.connect() as connection:
             total = rows(connection, f"{cte} select count(*) as count from filtered_events", count_parameters)[0]["count"]
@@ -501,9 +487,31 @@ class QueryService:
                 connection,
                 f"""
                 {cte}
-                select * from filtered_events
+                select
+                  cast(chain_id as varchar)
+                    || '-' || transaction_hash
+                    || '-' || cast(log_index as varchar) as transfer_id,
+                  chain_id,
+                  wallet_address,
+                  block_number,
+                  block_timestamp,
+                  transaction_hash,
+                  transaction_index,
+                  log_index,
+                  token_address,
+                  token_symbol,
+                  token_name,
+                  recognition_status,
+                  direction,
+                  is_indirect,
+                  counterparty_address,
+                  counterparty_account_type,
+                  counterparty_code_state,
+                  counterparty_observation_block_number,
+                  counterparty_eip7702_delegation_target
+                from filtered_events
                 {cursor_sql}
-                order by block_number desc, transaction_index desc, log_index desc, transfer_id desc
+                order by block_number desc, transaction_index desc, log_index desc, transaction_hash desc
                 limit {limit + 1}
                 """,
                 parameters,
@@ -537,15 +545,8 @@ class QueryService:
                   token_address,
                   coalesce(any_value(token_symbol), substr(token_address, 1, 10)) as token_symbol,
                   any_value(token_name) as token_name,
-                  any_value(token_decimals) as token_decimals,
                   any_value(recognition_status) as recognition_status,
-                  any_value(recognition_reason) as recognition_reason,
-                  any_value(recognition_source) as recognition_source,
-                  any_value(recognition_version) as recognition_version,
                   any_value(recognition_override_status) as recognition_override_status,
-                  any_value(metadata_source) as metadata_source,
-                  any_value(metadata_source_url) as metadata_source_url,
-                  any_value(metadata_availability) as metadata_availability,
                   count(*) as transfer_count,
                   count(*) filter (where direction = 'in') as inbound_transfer_count,
                   count(*) filter (where direction = 'out') as outbound_transfer_count,
@@ -560,8 +561,7 @@ class QueryService:
                   ) as sender_account_count,
                   count(distinct counterparty_address) filter (
                     where direction = 'out' and counterparty_address != '{ZERO_ADDRESS}' and counterparty_address != wallet_address
-                  ) as recipient_account_count,
-                  cast(sum(cast(value_raw as bignum)) as varchar) as value_raw_sum
+                  ) as recipient_account_count
                 from filtered_events
                 group by chain_id, wallet_address, token_address
                 order by transfer_count desc, token_address
@@ -692,13 +692,8 @@ class QueryService:
                   counterparty_address,
                   any_value(counterparty_account_type) as account_type,
                   any_value(counterparty_code_state) as code_state,
-                  any_value(counterparty_code_size_bytes) as code_size_bytes,
                   any_value(counterparty_observation_block_number) as observation_block_number,
-                  any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
                   any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
-                  any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
-                  any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
-                  any_value(counterparty_evidence_schema_version) as evidence_schema_version,
                   count(*) as transfer_count,
                   count(*) filter (where direction = 'in') as inbound_transfer_count,
                   count(*) filter (where direction = 'out') as outbound_transfer_count,
@@ -743,13 +738,8 @@ class QueryService:
             counterparty_address,
             any_value(counterparty_account_type) as account_type,
             any_value(counterparty_code_state) as code_state,
-            any_value(counterparty_code_size_bytes) as code_size_bytes,
             any_value(counterparty_observation_block_number) as observation_block_number,
-            any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
             any_value(counterparty_eip7702_delegation_target) as eip7702_delegation_target,
-            any_value(counterparty_evidence_fetch_status) as evidence_fetch_status,
-            any_value(counterparty_evidence_reason_codes) as evidence_reason_codes,
-            any_value(counterparty_evidence_schema_version) as evidence_schema_version,
             count(*) as transfer_count,
             count(*) filter (where direction = 'in') as inbound_transfer_count,
             count(*) filter (where direction = 'out') as outbound_transfer_count,

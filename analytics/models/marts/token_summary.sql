@@ -35,7 +35,7 @@ select
       and counterparty_address != wallet_address
   ) as recipient_account_count,
   sum(cast(value_raw as bignum)) as value_raw_sum
-from {{ ref('wallet_events') }}
+from {{ ref('int_wallet_transfer_events') }}
 group by chain_id, wallet_address, token_address, token_symbol, token_name, token_decimals,
   recognition_status, recognition_reason, recognition_source, recognition_version,
   metadata_source, metadata_source_url, token_label_reason,

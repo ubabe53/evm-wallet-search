@@ -1,3 +1,5 @@
+{{ config(materialized='table') }}
+
 with transfers as (
   select * from {{ ref('stg_transfer_events') }}
 ),

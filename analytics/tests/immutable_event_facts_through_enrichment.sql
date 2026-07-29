@@ -2,7 +2,7 @@ select
   coalesce(events.chain_id, source.chain_id) as chain_id,
   coalesce(events.transaction_hash, source.transaction_hash) as transaction_hash,
   coalesce(events.log_index, source.log_index) as log_index
-from {{ ref('wallet_events') }} as events
+from {{ ref('int_wallet_transfer_events') }} as events
 full outer join {{ ref('stg_transfer_events') }} as source
   using (chain_id, transaction_hash, log_index)
 where events.chain_id is null

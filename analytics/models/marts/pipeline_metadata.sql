@@ -13,7 +13,7 @@ with event_metrics as (
     count(distinct token_address) filter (where recognition_status = 'other') as other_token_count,
     min(block_timestamp) as first_event_at,
     max(block_timestamp) as last_event_at
-  from {{ ref('wallet_events') }}
+  from {{ ref('int_wallet_transfer_events') }}
   group by chain_id, wallet_address
 ),
 
@@ -21,7 +21,7 @@ interaction_metrics as (
   select chain_id, wallet_address, count(*) as interaction_count
   from (
     select distinct chain_id, wallet_address, counterparty_address, token_address, direction
-    from {{ ref('wallet_events') }}
+    from {{ ref('int_wallet_transfer_events') }}
     where direction != 'self'
   )
   group by chain_id, wallet_address
@@ -43,7 +43,7 @@ account_evidence_population as (
     any_value(counterparty_observation_block_number) as observation_block_number,
     any_value(counterparty_observation_block_timestamp) as observation_block_timestamp,
     any_value(counterparty_evidence_schema_version) as evidence_schema_version
-  from {{ ref('wallet_events') }}
+  from {{ ref('int_wallet_transfer_events') }}
   where counterparty_address != '0x0000000000000000000000000000000000000000'
     and counterparty_address != wallet_address
   group by chain_id, wallet_address, counterparty_address

@@ -100,7 +100,6 @@ export function aggregateTokenSummaries(rows: TokenSummary[]): DisplayedTokenSum
     existing.counterparty_count += row.counterparty_count;
     existing.sender_account_count += row.sender_account_count;
     existing.recipient_account_count += row.recipient_account_count;
-    existing.value_raw_sum = (BigInt(existing.value_raw_sum) + BigInt(row.value_raw_sum)).toString();
   }
 
   return [...grouped.values()].sort((left, right) =>
@@ -132,7 +131,6 @@ export function aggregateTimelineRows(rows: TimelineRow[]): DisplayedTimelineRow
     }
 
     existing.transfer_count += row.transfer_count;
-    existing.value_raw_sum = (BigInt(existing.value_raw_sum) + BigInt(row.value_raw_sum)).toString();
   }
 
   return [...grouped.values()].sort((left, right) =>

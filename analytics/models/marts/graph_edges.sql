@@ -18,7 +18,7 @@ with interaction_counts as (
     count(*) as transfer_count,
     min(block_timestamp) as first_seen_at,
     max(block_timestamp) as last_seen_at
-  from {{ ref('wallet_events') }}
+  from {{ ref('int_wallet_transfer_events') }}
   where direction != 'self'
   group by chain_id, wallet_address, counterparty_address, token_address, token_symbol,
     recognition_status, recognition_reason, recognition_source, recognition_version,
