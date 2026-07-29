@@ -102,9 +102,8 @@ The planned Docker distribution will package the local services and persistent d
 
 ### GitHub Pages — fixture demo only
 
-The fixture exporter produces five generated files. The current static dashboard loads summaries, timeline rows, events, and metadata; `graph.json` remains only as a legacy export-contract artifact:
+The fixture exporter produces four generated files consumed by the static dashboard:
 
-- `graph.json`: legacy graph nodes and edges; not loaded by the current dashboard.
 - `summaries.json`: token and counterparty summaries.
 - `timeline.json`: daily aggregates.
 - `events.json`: event-level transfer rows.

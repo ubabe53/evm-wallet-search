@@ -173,7 +173,6 @@ bun run export:dashboard
 
 Run this only after the fixture build. It creates:
 
-- `public/data/graph.json`
 - `public/data/summaries.json`
 - `public/data/timeline.json`
 - `public/data/events.json`

@@ -28,8 +28,6 @@ exposures:
       - ref('token_summary')
       - ref('counterparty_summary')
       - ref('timeline_daily')
-      - ref('graph_nodes')
-      - ref('graph_edges')
       - ref('pipeline_metadata')
     owner:
       name: EVM Wallet Search maintainers

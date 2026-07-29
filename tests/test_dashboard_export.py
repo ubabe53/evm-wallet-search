@@ -235,20 +235,10 @@ class DashboardExportTest(unittest.TestCase):
 
         self.assertEqual(query.call_count, 1)
 
-    def test_graph_label_exposes_only_public_binary_types(self) -> None:
-        label = dashboard_export.display_label({
-            "node_type": "counterparty",
-            "label": "0x3333333333333333333333333333333333333333",
-            "account_type": "eoa_candidate",
-        })
-        self.assertEqual(label, "0x3333...3333\nEOA")
-
     def test_sampling_covers_every_bounded_export(self) -> None:
         metadata = {
             "exported_event_count": 10,
             "transfer_count": 10,
-            "exported_interaction_count": 8,
-            "interaction_count": 8,
             "exported_token_summary_count": 6,
             "token_summary_row_count": 6,
             "exported_counterparty_summary_count": 4,
@@ -260,7 +250,6 @@ class DashboardExportTest(unittest.TestCase):
 
         for exported, complete in (
             ("exported_event_count", "transfer_count"),
-            ("exported_interaction_count", "interaction_count"),
             ("exported_token_summary_count", "token_summary_row_count"),
             ("exported_counterparty_summary_count", "counterparty_summary_row_count"),
             ("exported_timeline_row_count", "timeline_row_count"),

@@ -75,20 +75,6 @@ Lean application-serving event table with exactly 18 stored columns. Its grain a
 
 Complete immutable event evidence—including block hash, emitted participants, exact raw value, transaction envelope, relation codes, token decimals, and enrichment provenance—remains in `int_wallet_transfer_events`. The lean mart is a delivery projection, not the system-of-record event relation.
 
-### `graph_nodes`
-
-Nodes for tracked addresses, external counterparties, and tokens participating in inbound/outbound interactions. Self-transfers do not create graph nodes or relationships. Counterparty nodes carry primary account type, code observation, fetch status, and reasons. Population coverage belongs to `pipeline_metadata`; tracked-address and token nodes leave account evidence null because this counterparty snapshot does not classify them.
-
-The legacy fixture graph export shortens counterparty labels for readability while retaining full addresses in its payload. The current dashboard does not load or render these nodes.
-
-### `graph_edges`
-
-Each external wallet-counterparty-token-direction interaction produces two directed legs: `wallet_token` and `token_counterparty`. Inbound flow is counterparty to token to wallet; outbound flow is wallet to token to counterparty. Self-transfers remain in event and token-flow marts but are excluded from the external interaction graph. This makes every exported token node part of the graph.
-
-Graph edges carry recognition and metadata provenance. They do not carry or derive token reputation evidence.
-
-`counterparty_transfer_count` is the complete number of captured wallet-relevant Transfer-signature events for the wallet-counterparty pair across all emitting contracts and both directions. It is not a proven ERC-20-only count. It is repeated on each interaction edge for legacy bounded graph-export compatibility.
-
 ### `token_summary`
 
 One row per wallet, emitting contract, recognition status, and counterparty account type across inbound, outbound, and self activity. The grain does not include the full account-evidence signature. This serving grain supports inclusive account filtering. The local API filters cell rows and aggregates them back to one row per wallet and emitting contract before ranking and returning a bounded page; the fixture demo performs the equivalent operation over its small static payload. It records total, inbound, outbound, and self captured Transfer-signature event counts; the total reconciles as inbound + outbound + self. It also records confirmed-indirect inbound and outbound counts; distinct sender, recipient, and unioned external-counterparty address counts; token-decimals metadata; and the exact raw-third-value total. Without token-standard disambiguation, those counts and totals are ERC-20-intended rather than proven fungible-token measures.
@@ -156,17 +142,13 @@ dbt tests enforce:
 - Unique staged transfer IDs.
 - No duplicate staged transfer logs.
 - Non-null wallet, counterparty, and token addresses in dashboard marts.
-- Valid graph edge endpoints.
-- No orphan graph nodes.
-- Valid graph edge roles and metadata source values.
-- Valid `direction` and node type values.
+- Valid `direction` values.
 - Valid metadata-availability values throughout enrichment and serving models.
 - Valid automatic `recognized`/`other` values and `token-recognition-v1` provenance, plus persistent API override precedence and reset behavior.
 - Null fixture snapshot claims and complete, internally ordered finalized snapshot fields for live builds.
 - Manual recognition override precedence and `other` fallback behavior.
 - Exact preservation of a maximum `uint256` raw event value through staging, the complete intermediate event relation, and token-summary aggregation.
 - Valid, unique pinned-block RPC snapshots and RPC metadata precedence.
-- Exact graph counterparty transfer counts across tokens and directions.
 - Counterparty-summary totals that reconcile with inbound plus outbound counts, with ranking exclusions enforced.
 - Exact transaction sender/target relation derivation, nullable legacy behavior, and indirect direction aggregates.
 - Valid account-type/code-state precedence, exact 23-byte EIP-7702 evidence, and pinned observation/coverage consistency.

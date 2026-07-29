@@ -5,19 +5,16 @@ import { join } from "node:path";
 const dataPath = (name: string) => join(process.cwd(), "public", "data", name);
 
 describe("dashboard export shape", () => {
-  it("contains graph, summary, timeline, and event JSON after export", () => {
-    for (const file of ["graph.json", "summaries.json", "timeline.json", "events.json", "meta.json"]) {
+  it("contains summary, timeline, event, and metadata JSON after export", () => {
+    for (const file of ["summaries.json", "timeline.json", "events.json", "meta.json"]) {
       expect(existsSync(dataPath(file))).toBe(true);
     }
 
-    const graph = JSON.parse(readFileSync(dataPath("graph.json"), "utf8"));
     const summaries = JSON.parse(readFileSync(dataPath("summaries.json"), "utf8"));
     const timeline = JSON.parse(readFileSync(dataPath("timeline.json"), "utf8"));
     const events = JSON.parse(readFileSync(dataPath("events.json"), "utf8"));
     const metadata = JSON.parse(readFileSync(dataPath("meta.json"), "utf8"));
 
-    expect(Array.isArray(graph.nodes)).toBe(true);
-    expect(Array.isArray(graph.edges)).toBe(true);
     expect(Array.isArray(summaries.tokens)).toBe(true);
     expect(Array.isArray(summaries.counterparties)).toBe(true);
     expect(Array.isArray(timeline)).toBe(true);
@@ -56,9 +53,6 @@ describe("dashboard export shape", () => {
     expect(metadata.exported_event_count).toBeLessThanOrEqual(
       metadata.event_export_limit_per_recognition_account_evidence * metadata.recognition_account_evidence_cell_count,
     );
-    expect(metadata.exported_interaction_count).toBeLessThanOrEqual(
-      metadata.graph_interaction_export_limit_per_recognition_account_evidence * metadata.recognition_account_evidence_cell_count,
-    );
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(
       metadata.timeline_row_export_limit_per_recognition_account_evidence * metadata.recognition_account_evidence_cell_count,
     );
@@ -72,11 +66,9 @@ describe("dashboard export shape", () => {
     expect(metadata.counterparty_ranking_selection_count).toBe(9);
     expect(metadata.counterparty_rankings_exact_for_all_filter_selections).toBe(true);
     expect(metadata.exported_event_count).toBeLessThanOrEqual(metadata.transfer_count);
-    expect(metadata.exported_interaction_count).toBeLessThanOrEqual(metadata.interaction_count);
     expect(metadata.exported_token_summary_count).toBeLessThanOrEqual(metadata.token_summary_row_count);
     expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(metadata.counterparty_summary_row_count);
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_count);
-    expect(graph.edges.length).toBe(metadata.exported_interaction_count * 2);
     expect(Object.keys(events[0]).sort()).toEqual([
       "block_number",
       "block_timestamp",
@@ -177,18 +169,12 @@ describe("dashboard export shape", () => {
       row.counterparty_address !== row.wallet_address &&
       ["recognized", "other"].includes(row.recognition_status) &&
       row.transfer_count === row.inbound_transfer_count + row.outbound_transfer_count)).toBe(true);
-    expect(graph.edges.every((edge: { data: { recognitionStatus: string } }) =>
-      ["recognized", "other"].includes(edge.data.recognitionStatus))).toBe(true);
     expect(metadata.recognition_counts["recognized+other"].transfer_count).toBe(metadata.transfer_count);
     expect(metadata.recognition_account_counts[
       "recognized+other|eoa_candidate+contract"
     ].transfer_count).toBe(metadata.transfer_count);
 
-    const endpoints = new Set(graph.edges.flatMap((edge: { data: { source: string; target: string } }) => [edge.data.source, edge.data.target]));
-    expect(graph.nodes.every((node: { data: { id: string } }) => endpoints.has(node.data.id))).toBe(true);
     const accountTypes = ["eoa_candidate", "contract", "unknown"];
-    expect(graph.nodes.every((node: { data: { type: string; accountType: string | null } }) =>
-      node.data.type !== "counterparty" || accountTypes.includes(node.data.accountType ?? ""))).toBe(true);
     expect(events.every((event: { counterparty_account_type: string }) =>
       accountTypes.includes(event.counterparty_account_type))).toBe(true);
     expect(new Set(summaries.counterparties.map((row: { account_type: string }) => row.account_type))).toEqual(
@@ -204,9 +190,5 @@ describe("dashboard export shape", () => {
       event.transfer_id === `1-${event.transaction_hash}-${event.log_index}` &&
       Number.isInteger(event.transaction_index) &&
       (event.is_indirect == null || typeof event.is_indirect === "boolean"))).toBe(true);
-    expect(graph.edges.every((edge: { data: { transferCount: number; counterpartyTransferCount: number } }) =>
-      edge.data.counterpartyTransferCount >= edge.data.transferCount)).toBe(true);
-    expect(graph.edges.every((edge: { data: { counterpartyAccountType: string } }) =>
-      accountTypes.includes(edge.data.counterpartyAccountType))).toBe(true);
   });
 });
