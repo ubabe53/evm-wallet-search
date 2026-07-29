@@ -42,14 +42,13 @@ seeds:
       grain: one configured wallet
       primary_key: [address]
       provenance: checked-in project configuration
+      refresh_policy: recreated on every dbt build because this is a tiny configuration seed
       consumers: [stg_wallets]
     columns:
       - name: ens
         description: Configured display alias; not resolved during builds.
       - name: address
         description: Canonical configured Ethereum address.
-      - name: label
-        description: Human-readable project label.
 
   - name: token_metadata
     description: Generated exact-address token registry snapshot used for automatic recognition and display metadata.

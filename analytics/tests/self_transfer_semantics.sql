@@ -1,7 +1,9 @@
 with self_event as (
   select *
   from {{ ref('int_wallet_transfer_events') }}
-  where transfer_id = '1-0xself-0'
+  where chain_id = 1
+    and transaction_hash = '0xself'
+    and log_index = 0
 ),
 
 self_token_summary as (

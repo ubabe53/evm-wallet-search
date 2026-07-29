@@ -64,7 +64,7 @@ Rules:
 - `int_wallet_transfer_events` is the shared, materialized semantic event relation. It keeps the
   complete row-level evidence inside the standalone DuckDB artifact after build-time source
   attachments are gone. Dashboard marts are independent,
-  purpose-built projections from that view; one serving mart must not become the accidental source
+  purpose-built projections from that relation; one serving mart must not become the accidental source
   of fields needed by every other mart.
 - User-facing aggregations operate on eligible semantic event rows and keep token-contract identity
   in the grain where amounts are involved.

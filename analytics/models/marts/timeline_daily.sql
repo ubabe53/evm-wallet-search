@@ -1,3 +1,10 @@
+with events as (
+  select
+    *,
+    cast(block_timestamp as date) as block_date
+  from {{ ref('int_wallet_transfer_events') }}
+)
+
 select
   chain_id,
   wallet_address,
@@ -8,6 +15,6 @@ select
   counterparty_account_type,
   direction,
   count(*) as transfer_count
-from {{ ref('int_wallet_transfer_events') }}
+from events
 group by chain_id, wallet_address, block_date, token_address, token_symbol,
   recognition_status, counterparty_account_type, direction

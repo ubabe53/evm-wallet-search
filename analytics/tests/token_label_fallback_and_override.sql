@@ -1,4 +1,4 @@
-select transfer_id
+select chain_id, transaction_hash, log_index
 from {{ ref('int_wallet_transfer_events') }}
 where
   (token_address = '0x9999999999999999999999999999999999999999'

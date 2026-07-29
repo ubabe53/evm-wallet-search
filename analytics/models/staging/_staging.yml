@@ -52,7 +52,7 @@ models:
         tests: [not_null]
 
   - name: stg_wallets
-    description: Normalized configured wallet targets. ENS and label values are pinned project metadata, not live resolution claims.
+    description: Normalized configured wallet targets. ENS values are pinned project metadata, not live resolution claims.
     meta:
       layer: staging
       materialization: view
@@ -73,8 +73,6 @@ models:
       - name: wallet_address
         description: Lowercase canonical configured wallet address.
         tests: [not_null]
-      - name: label
-        description: Nullable configured human-readable project label.
 
   - name: stg_account_evidence
     description: Normalized pinned-block bytecode observations from the ignored local account-evidence cache; fixture builds expose an empty typed relation.

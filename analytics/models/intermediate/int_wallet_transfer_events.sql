@@ -18,14 +18,10 @@ counterparties as (
 
 matched as (
   select
-    cast(transfers.chain_id as varchar)
-      || '-' || transfers.transaction_hash
-      || '-' || cast(transfers.log_index as varchar) as transfer_id,
     transfers.chain_id,
     transfers.block_number,
     transfers.block_hash,
     transfers.block_timestamp,
-    cast(transfers.block_timestamp as date) as block_date,
     transfers.transaction_hash,
     transfers.transaction_index,
     transfers.transaction_from_address,
@@ -82,7 +78,7 @@ matched as (
     counterparties.observation_block_timestamp as counterparty_observation_block_timestamp,
     counterparties.eip7702_delegation_target as counterparty_eip7702_delegation_target,
     coalesce(counterparties.fetch_status, 'not_fetched') as counterparty_evidence_fetch_status,
-    coalesce(counterparties.reason_code, 'account_evidence_not_fetched') as counterparty_evidence_reason_codes,
+    coalesce(counterparties.reason_code, 'account_evidence_not_fetched') as counterparty_evidence_reason_code,
     counterparties.evidence_schema_version as counterparty_evidence_schema_version,
     transfers.value_raw
   from transfers
