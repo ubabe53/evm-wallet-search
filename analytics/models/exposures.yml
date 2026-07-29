@@ -8,8 +8,6 @@ exposures:
     description: Loopback-only FastAPI application serving complete filtered results from the live DuckDB artifact.
     depends_on:
       - ref('wallet_events')
-      - ref('token_summary')
-      - ref('counterparty_summary')
       - ref('pipeline_metadata')
     owner:
       name: EVM Wallet Search maintainers

@@ -74,10 +74,57 @@ class DashboardExportTest(unittest.TestCase):
             connection.execute(
                 """
                 create table token_summary (
+                    chain_id bigint,
+                    wallet_address varchar,
+                    token_address varchar,
+                    token_symbol varchar,
+                    token_name varchar,
+                    recognition_status varchar,
+                    counterparty_account_type varchar,
+                    transfer_count integer,
+                    inbound_transfer_count integer,
+                    outbound_transfer_count integer,
+                    self_transfer_count integer,
                     indirect_inbound_transfer_count integer,
                     indirect_outbound_transfer_count integer,
-                    self_transfer_count integer,
-                    counterparty_account_type varchar
+                    counterparty_count integer,
+                    sender_account_count integer,
+                    recipient_account_count integer
+                )
+                """
+            )
+            connection.execute(
+                """
+                create table counterparty_summary (
+                    chain_id bigint,
+                    wallet_address varchar,
+                    counterparty_address varchar,
+                    account_type varchar,
+                    code_state varchar,
+                    observation_block_number bigint,
+                    eip7702_delegation_target varchar,
+                    recognition_status varchar,
+                    transfer_count integer,
+                    inbound_transfer_count integer,
+                    outbound_transfer_count integer,
+                    token_count integer,
+                    first_seen_at timestamp,
+                    last_seen_at timestamp
+                )
+                """
+            )
+            connection.execute(
+                """
+                create table timeline_daily (
+                    chain_id bigint,
+                    wallet_address varchar,
+                    block_date date,
+                    token_address varchar,
+                    token_symbol varchar,
+                    recognition_status varchar,
+                    counterparty_account_type varchar,
+                    direction varchar,
+                    transfer_count integer
                 )
                 """
             )

@@ -23,14 +23,6 @@ violations as (
   left join {{ ref('int_wallet_transfer_events') }} as events
     using (chain_id, transaction_hash, log_index)
   where events.value_raw is distinct from expected.value_raw
-
-  union all
-
-  select 'token_summary' as relation_name
-  from expected
-  left join {{ ref('token_summary') }} as summaries using (token_address)
-  group by expected.value_raw
-  having cast(sum(summaries.value_raw_sum) as varchar) is distinct from expected.value_raw
 )
 
 select * from violations

@@ -4,15 +4,7 @@ select
   token_address,
   coalesce(token_symbol, substr(token_address, 1, 10)) as token_symbol,
   token_name,
-  token_decimals,
   recognition_status,
-  recognition_reason,
-  recognition_source,
-  recognition_version,
-  metadata_source,
-  metadata_source_url,
-  token_label_reason,
-  metadata_availability,
   counterparty_account_type,
   count(*) as transfer_count,
   count(*) filter (where direction = 'in') as inbound_transfer_count,
@@ -33,11 +25,7 @@ select
     where direction = 'out'
       and counterparty_address != '0x0000000000000000000000000000000000000000'
       and counterparty_address != wallet_address
-  ) as recipient_account_count,
-  sum(cast(value_raw as bignum)) as value_raw_sum
+  ) as recipient_account_count
 from {{ ref('int_wallet_transfer_events') }}
-group by chain_id, wallet_address, token_address, token_symbol, token_name, token_decimals,
-  recognition_status, recognition_reason, recognition_source, recognition_version,
-  metadata_source, metadata_source_url, token_label_reason,
-  metadata_availability,
-  counterparty_account_type
+group by chain_id, wallet_address, token_address, token_symbol, token_name,
+  recognition_status, counterparty_account_type

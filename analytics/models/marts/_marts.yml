@@ -90,7 +90,7 @@ models:
       grain: one wallet-token-recognition-account-type cell
       primary_key: [chain_id, wallet_address, token_address, recognition_status, counterparty_account_type]
       provenance: aggregation of int_wallet_transfer_events
-      consumers: [local_api, fixture_exporter]
+      consumers: [fixture_exporter]
     columns:
       - name: chain_id
         description: EVM chain identifier for the configured wallet and token.
@@ -104,8 +104,6 @@ models:
         description: Display symbol, falling back to an address prefix when metadata is absent.
       - name: token_name
         description: Nullable sourced token display name.
-      - name: token_decimals
-        description: Nullable sourced decimals metadata; it is not applied implicitly to raw totals.
       - name: recognition_status
         description: "{{ doc('token_recognition') }}"
         tests:
@@ -113,20 +111,6 @@ models:
           - accepted_values:
               arguments:
                 values: [recognized, other]
-      - name: recognition_reason
-        description: Machine-readable reason for automatic recognition.
-      - name: recognition_source
-        description: Source family for automatic recognition.
-      - name: recognition_version
-        description: Version of the automatic recognition contract.
-      - name: metadata_source
-        description: Nullable source or joined source set for token display metadata.
-      - name: metadata_source_url
-        description: Nullable review URL for token metadata.
-      - name: token_label_reason
-        description: Nullable reviewer-authored manual token-label reason.
-      - name: metadata_availability
-        description: Completeness state for symbol, name, and decimals metadata.
       - name: counterparty_account_type
         description: Account-type cell used for inclusive dashboard filtering.
         tests:
@@ -160,8 +144,6 @@ models:
       - name: recipient_account_count
         description: Distinct nonzero, nonself participants opposite the wallet on outbound events.
         tests: [not_null]
-      - name: value_raw_sum
-        description: Exact DuckDB BIGNUM sum within one token contract and cell; never aggregated across token addresses.
 
   - name: counterparty_summary
     description: Ranked-counterparty cells by wallet, address, and recognition state. Zero, self, and addresses observed as emitting token contracts are excluded from this ranking relation only.
@@ -171,7 +153,7 @@ models:
       grain: one eligible counterparty-recognition cell per configured wallet
       primary_key: [chain_id, wallet_address, counterparty_address, recognition_status]
       provenance: aggregation of int_wallet_transfer_events after ranking exclusions
-      consumers: [local_api, fixture_exporter]
+      consumers: [fixture_exporter]
     columns:
       - name: chain_id
         description: EVM chain identifier for the configured wallet and counterparty.
@@ -190,20 +172,10 @@ models:
                 values: [eoa_candidate, contract, unknown]
       - name: code_state
         description: "{{ doc('code_state') }}"
-      - name: code_size_bytes
-        description: Nullable bytecode size observed at the pinned account-evidence block.
       - name: observation_block_number
         description: Nullable pinned block number supporting successful account classification.
-      - name: observation_block_timestamp
-        description: Nullable UTC timestamp of the pinned account-evidence block.
       - name: eip7702_delegation_target
         description: Nullable target decoded from exact EIP-7702 delegation bytecode.
-      - name: evidence_fetch_status
-        description: "`complete`, retryable `failed`, or `not_fetched` when no cache observation exists."
-      - name: evidence_reason_codes
-        description: Machine-readable reason supporting account evidence or its absence.
-      - name: evidence_schema_version
-        description: Nullable account-evidence contract version.
       - name: recognition_status
         description: Automatic recognition cohort represented by this cell.
       - name: transfer_count
@@ -247,18 +219,6 @@ models:
         description: Display symbol, falling back to an address prefix when metadata is absent.
       - name: recognition_status
         description: Automatic recognition state represented by the cell.
-      - name: recognition_reason
-        description: Machine-readable reason for automatic recognition.
-      - name: recognition_source
-        description: Source family for automatic recognition.
-      - name: recognition_version
-        description: Version of the automatic recognition contract.
-      - name: metadata_availability
-        description: Completeness state for token symbol, name, and decimals metadata.
-      - name: metadata_source
-        description: Nullable source or joined source set for token metadata.
-      - name: metadata_source_url
-        description: Nullable review URL for token metadata.
       - name: counterparty_account_type
         description: Account-type cell used by fixture dashboard filtering.
         tests:
@@ -275,8 +235,6 @@ models:
                 values: [in, out, self]
       - name: transfer_count
         description: Number of captured Transfer-signature events in the daily cell.
-      - name: value_raw_sum
-        description: Exact DuckDB BIGNUM sum within one token contract and daily cell.
 
   - name: pipeline_metadata
     description: One provenance and completeness row per configured wallet. Live snapshot fields are run-backed finalized coverage; fixture snapshot fields are intentionally null. {{ doc('finalized_snapshot') }}
