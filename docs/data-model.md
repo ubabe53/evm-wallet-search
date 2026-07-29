@@ -142,8 +142,8 @@ The fixture exporter records exact transfer/token/counterparty statistics for th
 
 dbt tests enforce:
 
-- Unique staged transfer IDs.
-- No duplicate staged transfer logs.
+- No duplicate staged transfer logs at canonical `(chain_id, transaction_hash, log_index)` grain.
+- An exact 16-relation `main`-schema inventory, including each relation's table/view materialization, so retired or accidentally introduced analytics relations cannot remain hidden in an existing DuckDB artifact.
 - Non-null wallet, counterparty, and token addresses in dashboard marts.
 - Valid `direction` values.
 - Valid metadata-availability values throughout enrichment and serving models.

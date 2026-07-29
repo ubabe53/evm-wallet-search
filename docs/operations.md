@@ -81,7 +81,7 @@ Each reviewed manual `recognized` or `other` entry must include a reason and evi
 
 ## Token Recognition
 
-Recognition resolution runs during every dbt build and makes no network calls. Builds idempotently remove the retired reputation, interaction-legitimacy, and classified-event views from existing DuckDB artifacts.
+Recognition resolution runs during every dbt build and makes no network calls. Before building, dbt idempotently removes every known retired `main`-schema analytics relation. The completed build then validates the exact current 16-relation inventory and each relation's table/view materialization, so legacy graph, reputation, and superseded staging objects cannot survive unnoticed in an existing artifact. The cleanup never targets the separately owned `ops`, `app`, or account-evidence schemas.
 
 The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only.
 

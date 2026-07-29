@@ -13,9 +13,7 @@ vars:
   use_fixture: true
 
 on-run-start:
-  - "{{ drop_relation_if_present('int_token_reputation') }}"
-  - "{{ drop_relation_if_present('int_wallet_token_interactions') }}"
-  - "{{ drop_relation_if_present('int_classified_wallet_transfer_events') }}"
+  - "{{ drop_retired_analytics_relations() }}"
 
 models:
   evm_wallet_search:
