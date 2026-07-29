@@ -61,9 +61,11 @@ Filters staged transfers to configured wallets using `(chain_id, wallet_address)
 - `transaction_target_relation`: `token_contract`, `transfer_sender`, `transfer_recipient`, `other`, or `unknown`, based only on address equality between top-level transaction `to`, the emitting token, and Transfer participants.
 - `is_indirect`: true for an observed `transaction_from_address != from_address`, false for an observed match, and null when transaction-sender evidence is unavailable.
 
-This is the shared semantic event relation for all dashboard marts. Each mart selects only the
-fields and grain required by its consumer directly from this view; `wallet_events` is not an
-upstream fact table for the other marts.
+This is the shared semantic event relation for all dashboard marts. It is materialized as a table
+so the standalone DuckDB retains complete row-level event and enrichment evidence after the
+build-only HyperIndex and account-evidence attachments are gone. Each mart selects only the fields
+and grain required by its consumer directly from this relation; `wallet_events` is not an upstream
+fact table for the other marts.
 
 ## Marts
 

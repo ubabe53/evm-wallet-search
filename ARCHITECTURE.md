@@ -61,7 +61,9 @@ Rules:
 - HyperIndex Postgres is the ingestion source, not the application query interface.
 - DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. Orchestration owns `ops.pipeline_runs`, while the isolated `app.token_recognition_overrides` table is mutable local product state; dbt models rewrite neither schema.
 - Enrichment joins onto event facts. It may add sourced interpretation but must not rewrite immutable event evidence.
-- `int_wallet_transfer_events` is the shared semantic event view. Dashboard marts are independent,
+- `int_wallet_transfer_events` is the shared, materialized semantic event relation. It keeps the
+  complete row-level evidence inside the standalone DuckDB artifact after build-time source
+  attachments are gone. Dashboard marts are independent,
   purpose-built projections from that view; one serving mart must not become the accidental source
   of fields needed by every other mart.
 - User-facing aggregations operate on eligible semantic event rows and keep token-contract identity
