@@ -74,10 +74,22 @@ class DashboardExportTest(unittest.TestCase):
             connection.execute(
                 """
                 create table token_summary (
+                    chain_id bigint,
+                    wallet_address varchar,
+                    token_address varchar,
+                    token_symbol varchar,
+                    token_name varchar,
+                    recognition_status varchar,
+                    counterparty_account_type varchar,
+                    transfer_count integer,
+                    inbound_transfer_count integer,
+                    outbound_transfer_count integer,
+                    self_transfer_count integer,
                     indirect_inbound_transfer_count integer,
                     indirect_outbound_transfer_count integer,
-                    self_transfer_count integer,
-                    counterparty_account_type varchar
+                    counterparty_count integer,
+                    sender_account_count integer,
+                    recipient_account_count integer
                 )
                 """
             )
