@@ -1,42 +1,56 @@
-with self_event as (
-  select *
+with invalid_self_events as (
+  select chain_id, transaction_hash, log_index
+  from {{ ref('int_wallet_transfer_events') }}
+  where (
+    from_address = wallet_address
+    and to_address = wallet_address
+    and (
+      direction is distinct from 'self'
+      or counterparty_address is distinct from wallet_address
+      or counterparty_account_type is distinct from 'unknown'
+      or counterparty_evidence_fetch_status is distinct from 'not_fetched'
+    )
+  )
+  or (
+    direction = 'self'
+    and (
+      from_address is distinct from wallet_address
+      or to_address is distinct from wallet_address
+      or counterparty_address is distinct from wallet_address
+    )
+  )
+)
+
+select 'invalid_self_event' as failure
+from invalid_self_events
+
+{% if var('use_fixture', true) %}
+union all
+
+select 'missing_fixture_self_event' as failure
+where not exists (
+  select 1
   from {{ ref('int_wallet_transfer_events') }}
   where chain_id = 1
     and transaction_hash = '0xself'
     and log_index = 0
-),
-
-self_token_summary as (
-  select *
-  from {{ ref('token_summary') }}
-  where token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-)
-
-select 'event_direction' as failure
-where not exists (
-  select 1
-  from self_event
-  where direction = 'self'
-    and from_address = wallet_address
-    and to_address = wallet_address
-    and counterparty_address = wallet_address
-    and counterparty_account_type = 'unknown'
-    and counterparty_evidence_fetch_status = 'not_fetched'
+    and direction = 'self'
 )
 
 union all
 
-select 'token_summary_reconciliation' as failure
+select 'fixture_token_summary_reconciliation' as failure
 where not exists (
   select 1
-  from self_token_summary
-  where self_transfer_count = 1
+  from {{ ref('token_summary') }}
+  where token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    and self_transfer_count = 1
     and transfer_count = inbound_transfer_count + outbound_transfer_count + self_transfer_count
 )
 
 union all
 
-select 'timeline_direction' as failure
+select 'fixture_timeline_direction' as failure
 where not exists (
   select 1
   from {{ ref('timeline_daily') }}
@@ -44,3 +58,4 @@ where not exists (
     and token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
     and transfer_count = 1
 )
+{% endif %}
