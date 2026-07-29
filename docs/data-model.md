@@ -12,7 +12,7 @@ Deduplicates wallet-relevant Transfer-signature entities by the canonical `(chai
 
 ### `stg_wallets`
 
-Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` and `label` values remain pinned project configuration for presentation and snapshot labeling; they are not live ENS-resolution evidence and are not copied into event facts. The MVP contains one target:
+Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` value remains pinned project configuration for presentation and snapshot labeling; it is not live ENS-resolution evidence and is not copied into event facts. The MVP contains one target:
 
 - `vitalik.eth`
 - `0xd8da6bf26964af9d7eed9e03e53415d37aa96045`

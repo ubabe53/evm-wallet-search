@@ -29,6 +29,8 @@ models:
 seeds:
   evm_wallet_search:
     +quote_columns: false
+    wallets:
+      +full_refresh: true
     raw_transfer_events_fixture:
       +column_types:
         chain_id: integer
