@@ -132,12 +132,17 @@ models:
           - accepted_values:
               arguments:
                 values: ["token-quality-v1"]
-  - name: stg_counterparty_metadata
-    description: Locally cached, pinned-block bytecode evidence for distinct nonzero, nonself Ethereum event counterparties. Safe and ERC-4337 evidence are not collected.
+  - name: stg_account_evidence
+    description: One retained pinned-block bytecode observation per (chain_id, address) from the local account-evidence cache. Safe- and ERC-4337-specific evidence are not collected.
     columns:
+      - name: chain_id
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
       - name: address
         tests:
-          - unique
           - not_null
       - name: account_type
         tests:
@@ -160,7 +165,25 @@ models:
       - name: observation_block_number
         tests:
           - not_null
+      - name: observation_block_hash
+        tests:
+          - not_null
+      - name: observation_block_timestamp
+        tests:
+          - not_null
+      - name: finality_policy
+        tests:
+          - not_null
+      - name: reason_code
+        tests:
+          - not_null
       - name: evidence_schema_version
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["account-evidence-v2"]
+      - name: fetched_at
         tests:
           - not_null
   - name: int_token_reputation
