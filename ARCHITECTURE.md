@@ -125,17 +125,17 @@ The loopback-only FastAPI service:
 
 - own DuckDB connections and limit writes to `app.token_recognition_overrides`;
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
-- compute filters, counts, rankings, timeline buckets, graph compatibility pages, event pages, and time ranges on demand;
+- compute filters, counts, rankings, timeline buckets, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
 - expose only the event identity, display, classification, and count fields consumed by the dashboard while retaining exact raw values, token decimals, and detailed provenance in the complete DuckDB intermediate relation;
-- return self-transfers as the explicit `self` event direction while excluding the tracked wallet from counterparty counts and graph relationships;
+- return self-transfers as the explicit `self` event direction while excluding the tracked wallet from counterparty counts;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
-- apply manual token-recognition overrides before every filter, count, ranking, timeline bucket, graph compatibility page, and event page;
+- apply manual token-recognition overrides before every filter, count, ranking, timeline bucket, and event page;
 - expose only `recognition=all|recognized|other` as the public token-classification control while retaining factual source evidence internally;
-- treat recognition as inclusive counterparty-cohort membership for counterparty and graph compatibility rankings, then rank eligible addresses by their complete activity inside the remaining account/search/time scope;
+- treat recognition as inclusive counterparty-cohort membership for counterparty rankings, then rank eligible addresses by their complete activity inside the remaining account/search/time scope;
 - keep secrets and database paths server-side.
 
-The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Graph compatibility rows and counterparty rows share one address grain and ordering contract. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves exact totals, requests a stable yearly overview or one selected year's monthly buckets plus bounded token/counterparty rows, applies selected year/month UTC periods through half-open API filters, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override. It no longer requests or renders the graph compatibility endpoint.
+The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves exact totals, requests a stable yearly overview or one selected year's monthly buckets plus bounded token/counterparty rows, applies selected year/month UTC periods through half-open API filters, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override.
 
 ## Known implementation gaps
 
