@@ -60,6 +60,7 @@ except ImportError:
 
 REQUIREMENTS = ANALYTICS_DIR / "requirements.txt"
 HYPERINDEX_DSN_ENV = "DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN"
+DBT_DOCS_SUBCOMMANDS = {"generate", "serve"}
 
 
 def ensure_python_dependencies() -> None:
@@ -83,6 +84,13 @@ def run_dbt(
     extra_env: dict[str, str] | None = None,
 ) -> None:
     """Execute dbt against the database dedicated to the selected source mode."""
+
+    if command == "docs":
+        if not extra_args or extra_args[0] not in DBT_DOCS_SUBCOMMANDS:
+            supported = ", ".join(sorted(DBT_DOCS_SUBCOMMANDS))
+            raise SystemExit(f"dbt docs requires one of these subcommands: {supported}")
+        if use_hyperindex:
+            raise SystemExit("dbt docs commands support fixture mode only")
 
     env = os.environ.copy()
     env["DBT_PROFILES_DIR"] = str(ANALYTICS_DIR)
@@ -109,14 +117,23 @@ def run_dbt(
         dbt_candidate = scripts_dir / "dbt"
         dbt_executable = str(dbt_candidate)
 
+    if command == "docs":
+        # `docs` is a dbt command group, so its generate/serve subcommand must
+        # precede the project and profile options accepted by that subcommand.
+        command_args = [command, extra_args[0]]
+        remaining_args = extra_args[1:]
+    else:
+        command_args = [command]
+        remaining_args = extra_args
+
     args = [
         dbt_executable,
-        command,
+        *command_args,
         "--project-dir",
         str(ANALYTICS_DIR),
         "--profiles-dir",
         str(ANALYTICS_DIR),
-        *extra_args,
+        *remaining_args,
     ]
     subprocess.run(args, check=True, cwd=ANALYTICS_DIR, env=env)
 
@@ -143,7 +160,7 @@ def requests_hyperindex(extra_args: list[str]) -> bool:
 
 def main() -> None:
     command = sys.argv[1] if len(sys.argv) > 1 else "build"
-    if command not in {"build", "test", "seed", "run"}:
+    if command not in {"build", "test", "seed", "run", "docs"}:
         raise SystemExit(f"Unsupported dbt command: {command}")
 
     ensure_python_dependencies()

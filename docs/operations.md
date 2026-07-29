@@ -49,6 +49,24 @@ The seven fixture transfer rows live in `analytics/seeds/raw_transfer_events_fix
 
 `bun run analytics:build` remains an alias for `analytics:build:fixture` so existing CI and contributor commands stay deterministic. The exporter reads only the fixture database and may overwrite only the ignored files under `public/data/`.
 
+## dbt Data Catalog
+
+Generate the deterministic field-level catalog after building the fixture artifact:
+
+```sh
+bun run analytics:docs:generate
+```
+
+This runs `dbt docs generate`, then fails if any project model, seed, source, or catalog column lacks a description, or if a resource omits its grain, primary key, provenance, or consumers. The generated catalog under `analytics/target/` is ignored build output; the reviewed source of truth is the layer-owned YAML in `analytics/models/`, `analytics/seeds/_seeds.yml`, and the reusable semantic definitions in `analytics/docs/data_contracts.md`.
+
+Inspect the catalog locally at `http://127.0.0.1:8081`:
+
+```sh
+bun run analytics:docs:serve
+```
+
+The supported documentation workflow always uses the deterministic fixture artifact and strips any ambient HyperIndex DSN. It documents the same schemas, lineage, materializations, and semantic contracts used by live builds, but its catalog row counts and observed values are fixture data—not live freshness or finalized coverage evidence. Stop the server with Ctrl-C. Use `bun run analytics:docs:check` in automation when the fixture artifact has already been built.
+
 ## Token Registry
 
 Ordinary analytics builds use the checked-in registry without internet access. Refresh it explicitly with:

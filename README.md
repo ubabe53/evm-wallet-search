@@ -21,6 +21,8 @@ bun install
 python3 -m pip install -r requirements-dev.txt
 bun run indexer:dev
 bun run analytics:build:hyperindex
+bun run analytics:docs:generate
+bun run analytics:docs:serve
 bun run api:dev
 bun run analytics:build:fixture
 bun run labels:sync

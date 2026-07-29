@@ -37,6 +37,79 @@ class ArtifactPathsTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "Live HyperIndex mode requires"):
             run_dbt.run_dbt("build", [], use_hyperindex=True, hyperindex_dsn=None)
 
+    @patch("scripts.run_dbt.subprocess.run")
+    @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
+    def test_docs_generate_uses_nested_command_order_and_fixture_database(
+        self, _which, run
+    ) -> None:
+        with patch.dict(os.environ, {run_dbt.HYPERINDEX_DSN_ENV: "postgresql://secret"}):
+            run_dbt.run_dbt(
+                "docs",
+                ["generate", "--static"],
+                use_hyperindex=False,
+                hyperindex_dsn="postgresql://secret",
+            )
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "/usr/bin/dbt",
+                "docs",
+                "generate",
+                "--project-dir",
+                str(run_dbt.ANALYTICS_DIR),
+                "--profiles-dir",
+                str(run_dbt.ANALYTICS_DIR),
+                "--static",
+            ],
+        )
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(FIXTURE_DB_PATH))
+        self.assertNotIn(run_dbt.HYPERINDEX_DSN_ENV, environment)
+
+    @patch("scripts.run_dbt.subprocess.run")
+    @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
+    def test_docs_serve_preserves_options_after_nested_subcommand(
+        self, _which, run
+    ) -> None:
+        run_dbt.run_dbt(
+            "docs",
+            ["serve", "--no-browser", "--host", "127.0.0.1", "--port", "8081"],
+            use_hyperindex=False,
+            hyperindex_dsn=None,
+        )
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "/usr/bin/dbt",
+                "docs",
+                "serve",
+                "--project-dir",
+                str(run_dbt.ANALYTICS_DIR),
+                "--profiles-dir",
+                str(run_dbt.ANALYTICS_DIR),
+                "--no-browser",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8081",
+            ],
+        )
+
+    def test_docs_requires_a_supported_subcommand(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "dbt docs requires"):
+            run_dbt.run_dbt("docs", [], use_hyperindex=False, hyperindex_dsn=None)
+
+    def test_docs_rejects_live_mode(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "fixture mode only"):
+            run_dbt.run_dbt(
+                "docs",
+                ["generate"],
+                use_hyperindex=True,
+                hyperindex_dsn="postgresql://secret",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
