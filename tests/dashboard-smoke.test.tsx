@@ -272,34 +272,18 @@ const metadata = {
   timeline_row_count: 1,
   first_event_at: "2023-11-14T22:15:00+00:00",
   last_event_at: "2023-11-14T22:15:00+00:00",
-  status_counts: {
-    trusted: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    unverified: { transfer_count: 0, token_count: 0, counterparty_count: 0 },
-    spam: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    "trusted+unverified": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    "trusted+spam": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
-    "unverified+spam": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    "trusted+unverified+spam": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
+  recognition_counts: {
+    recognized: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
+    other: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
+    "recognized+other": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
   },
-  quality_counts: {
-    high_confidence: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    listed: { transfer_count: 0, token_count: 0, counterparty_count: 0 },
-    unknown: { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-  },
-  status_quality_counts: {
-    "trusted+unverified|high_confidence": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    "trusted|high_confidence": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    "unverified|high_confidence": { transfer_count: 0, token_count: 0, counterparty_count: 0 },
-    "trusted+unverified+spam|high_confidence": { transfer_count: 1, token_count: 1, counterparty_count: 1 },
-    "trusted+unverified+spam|high_confidence+unknown": { transfer_count: 2, token_count: 2, counterparty_count: 2 },
-  },
-  status_quality_account_counts: {
-    "trusted+unverified|high_confidence+listed+unknown|eoa_candidate+contract": {
+  recognition_account_counts: {
+    "recognized|eoa_candidate+contract": {
       transfer_count: 1,
       token_count: 1,
       counterparty_count: 1,
     },
-    "trusted+unverified+suspected_spam+spam|high_confidence+listed+unknown|eoa_candidate+contract": {
+    "recognized+other|eoa_candidate+contract": {
       transfer_count: 2,
       token_count: 2,
       counterparty_count: 2,
@@ -310,21 +294,20 @@ const metadata = {
   exported_token_summary_count: 2,
   exported_counterparty_summary_count: 2,
   exported_timeline_row_count: 1,
-  status_quality_account_evidence_cell_count: 2,
-  event_export_limit_per_status_quality_account_evidence: 1000,
-  graph_interaction_export_limit_per_status_quality_account_evidence: 250,
-  token_summary_ranking_limit_per_status_quality_account_selection: 500,
-  token_summary_ranking_selection_count: 315,
+  recognition_account_evidence_cell_count: 2,
+  event_export_limit_per_recognition_account_evidence: 1000,
+  graph_interaction_export_limit_per_recognition_account_evidence: 250,
+  token_summary_ranking_limit_per_recognition_account_selection: 500,
+  token_summary_ranking_selection_count: 9,
   token_summary_ranking_candidate_token_count: 2,
   token_summary_rankings_exact_for_all_filter_selections: true,
-  counterparty_ranking_limit_per_status_quality_account_selection: 50,
-  counterparty_token_status_combination_count: 15,
-  counterparty_token_quality_combination_count: 7,
+  counterparty_ranking_limit_per_recognition_account_selection: 50,
+  counterparty_recognition_combination_count: 3,
   counterparty_account_filter_combination_count: 3,
-  counterparty_ranking_selection_count: 315,
+  counterparty_ranking_selection_count: 9,
   counterparty_ranking_candidate_address_count: 2,
   counterparty_rankings_exact_for_all_filter_selections: true,
-  timeline_row_export_limit_per_status_quality_account_evidence: 5000,
+  timeline_row_export_limit_per_recognition_account_evidence: 5000,
   is_sampled: false,
 };
 

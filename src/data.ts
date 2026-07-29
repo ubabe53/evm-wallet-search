@@ -252,22 +252,12 @@ export type PipelineMetadata = {
   timeline_row_count: number;
   first_event_at: string | null;
   last_event_at: string | null;
-  status_counts: Record<string, {
+  recognition_counts: Record<string, {
     transfer_count: number;
     token_count: number;
     counterparty_count: number;
   }>;
-  quality_counts: Record<string, {
-    transfer_count: number;
-    token_count: number;
-    counterparty_count: number;
-  }>;
-  status_quality_counts: Record<string, {
-    transfer_count: number;
-    token_count: number;
-    counterparty_count: number;
-  }>;
-  status_quality_account_counts: Record<string, {
+  recognition_account_counts: Record<string, {
     transfer_count: number;
     token_count: number;
     counterparty_count: number;
@@ -277,21 +267,20 @@ export type PipelineMetadata = {
   exported_token_summary_count: number;
   exported_counterparty_summary_count: number;
   exported_timeline_row_count: number;
-  status_quality_account_evidence_cell_count: number;
-  event_export_limit_per_status_quality_account_evidence: number;
-  graph_interaction_export_limit_per_status_quality_account_evidence: number;
-  token_summary_ranking_limit_per_status_quality_account_selection: number;
+  recognition_account_evidence_cell_count: number;
+  event_export_limit_per_recognition_account_evidence: number;
+  graph_interaction_export_limit_per_recognition_account_evidence: number;
+  token_summary_ranking_limit_per_recognition_account_selection: number;
   token_summary_ranking_selection_count: number;
   token_summary_ranking_candidate_token_count: number;
   token_summary_rankings_exact_for_all_filter_selections: boolean;
-  counterparty_ranking_limit_per_status_quality_account_selection: number;
-  counterparty_token_status_combination_count: number;
-  counterparty_token_quality_combination_count: number;
+  counterparty_ranking_limit_per_recognition_account_selection: number;
+  counterparty_recognition_combination_count: number;
   counterparty_account_filter_combination_count: number;
   counterparty_ranking_selection_count: number;
   counterparty_ranking_candidate_address_count: number;
   counterparty_rankings_exact_for_all_filter_selections: boolean;
-  timeline_row_export_limit_per_status_quality_account_evidence: number;
+  timeline_row_export_limit_per_recognition_account_evidence: number;
   is_sampled: boolean;
 };
 

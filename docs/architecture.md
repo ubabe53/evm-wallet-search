@@ -72,7 +72,7 @@ Runtime settings resolve from shell environment first, git-ignored `config.yaml`
 
 GitHub Pages is a portfolio demonstration, not the complete application runtime. Its generated JSON must come from deterministic fixture data, remain small enough for static hosting, and display its fixture provenance and sampling boundaries prominently. It may demonstrate filters and interactions without claiming complete live-wallet rankings or history.
 
-The exporter still contains legacy candidate-union logic that evaluates the equivalent of 315 status-quality-account selections. That design belongs only to deterministic fixture-demo compatibility and must not be expanded. Complete local counts and rankings now use on-demand DuckDB API queries.
+The exporter evaluates the nine non-empty recognition/address-evidence selections needed by the deterministic fixture demo. Complete local counts and rankings use on-demand DuckDB API queries.
 
 Docker is the intended distribution mechanism for the local product, not for GitHub Pages. Before adding it, define separate services for indexing, transformation, API, and frontend as needed; persist Postgres and DuckDB deliberately; keep secrets outside images; add health and readiness behavior; and ensure fixture-demo commands cannot overwrite live local artifacts.
 

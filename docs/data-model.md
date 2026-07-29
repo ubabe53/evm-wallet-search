@@ -149,7 +149,7 @@ Event responses distinguish `complete_matching_count` from `returned_count`, `li
 
 The React live adapter sends the same recognition, account, and search predicates to every endpoint, displays summary counts from the complete matching set, and distinguishes those totals from bounded token, counterparty, and event rows. `All years` requests yearly buckets without a date predicate. Selecting a year—through the dropdown or its bar—requests that year's monthly buckets while sending its exact half-open UTC range to summary, event, token, and counterparty requests. Selecting a month narrows those endpoints again; clearing the month returns to the selected year, while `All years` clears the time scope. The timeline request omits the active date predicate so all buckets in the current navigation scope remain available. Event expansion follows `next_cursor`; it never infers completeness from the current browser array. The static adapter remains separate, reads only generated fixture JSON, permits year/month timeline navigation, and does not claim that its bounded rows support dashboard period cross-filtering.
 
-The current transitional exporter also records exact transfer/token/counterparty statistics for all 315 combinations of 15 non-empty status selections, 7 non-empty quality selections, and 3 non-empty EOA/Contract selections. The full account selection includes unresolved internal rows. This candidate-union contract is legacy behavior and is not the target serving model.
+The fixture exporter records exact transfer/token/counterparty statistics for the nine combinations of three non-empty recognition selections and three non-empty EOA/Contract selections. The full account selection includes unresolved internal rows. Live serving computes only the requested selection.
 
 ## Tests
 
@@ -177,4 +177,4 @@ dbt tests enforce:
 - Exact EIP-7702 code remains internal code state under an EOA-candidate primary type.
 - Successful cached observations cannot be overwritten automatically, while failed code reads remain retryable.
 - Fixture builds contain no account-evidence rows and keep their provenance bounds null.
-- The fixture export's legacy 315-selection token/counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains. This is deterministic demo compatibility coverage, not the live serving contract, and should be simplified rather than expanded.
+- The fixture export's nine recognition/address-evidence token and counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains.

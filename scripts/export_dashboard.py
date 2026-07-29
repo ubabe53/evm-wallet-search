@@ -29,13 +29,12 @@ DB_PATH = FIXTURE_DB_PATH
 PUBLIC_DATA = ROOT / "public" / "data"
 
 # Static JSON stays intentionally bounded; DuckDB remains the complete artifact.
-EVENT_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE = 1_000
-GRAPH_INTERACTION_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE = 250
-TOKEN_SUMMARY_RANKING_LIMIT_PER_STATUS_QUALITY_ACCOUNT_SELECTION = 500
-COUNTERPARTY_RANKING_LIMIT_PER_STATUS_QUALITY_ACCOUNT_SELECTION = 50
-TIMELINE_ROW_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE = 5_000
-TOKEN_STATUSES = ("trusted", "unverified", "suspected_spam", "spam")
-TOKEN_QUALITIES = ("high_confidence", "listed", "unknown")
+EVENT_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 1_000
+GRAPH_INTERACTION_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 250
+TOKEN_SUMMARY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION = 500
+COUNTERPARTY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION = 50
+TIMELINE_ROW_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 5_000
+RECOGNITION_STATUSES = ("recognized", "other")
 ACCOUNT_FILTERS = ("eoa_candidate", "contract")
 REQUIRED_EXPORT_COLUMNS = {
     "wallet_events": {
@@ -233,15 +232,14 @@ def graph_rows(connection: Any) -> tuple[list[dict[str, Any]], list[dict[str, An
           interaction_id,
           row_number() over (
             partition by
-              max(token_status),
-              max(token_quality),
+              max(recognition_status),
               max(counterparty_account_type)
             order by max(transfer_count) desc, max(last_seen_at) desc, interaction_id
           ) as status_rank
         from graph_edges
         group by interaction_id
       )
-      where status_rank <= {GRAPH_INTERACTION_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE}
+      where status_rank <= {GRAPH_INTERACTION_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE}
     """
     edges = query_rows(
         connection,
@@ -276,20 +274,15 @@ def graph_rows(connection: Any) -> tuple[list[dict[str, Any]], list[dict[str, An
 
 def token_summary_rows(
     connection: Any,
-    statuses: tuple[str, ...] = TOKEN_STATUSES,
-    qualities: tuple[str, ...] = TOKEN_QUALITIES,
+    recognition_statuses: tuple[str, ...] = RECOGNITION_STATUSES,
     account_filters: tuple[str, ...] = ACCOUNT_FILTERS,
-    ranking_limit: int = TOKEN_SUMMARY_RANKING_LIMIT_PER_STATUS_QUALITY_ACCOUNT_SELECTION,
+    ranking_limit: int = TOKEN_SUMMARY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION,
 ) -> list[dict[str, Any]]:
     """Export per-cell rows for the exact token top-N union of every filter selection."""
 
-    status_case = "case " + " ".join(
-        f"when token_status = '{value}' then {1 << index}"
-        for index, value in enumerate(statuses)
-    ) + " else 0 end"
-    quality_case = "case " + " ".join(
-        f"when token_quality = '{value}' then {1 << index}"
-        for index, value in enumerate(qualities)
+    recognition_case = "case " + " ".join(
+        f"when recognition_status = '{value}' then {1 << index}"
+        for index, value in enumerate(recognition_statuses)
     ) + " else 0 end"
     account_bits = " + ".join(
         f"case when counterparty_account_type = '{value}' then {1 << index} else 0 end"
@@ -301,39 +294,34 @@ def token_summary_rows(
           with classified as (
             select
               *,
-              {status_case} as status_bit,
-              {quality_case} as quality_bit,
+              {recognition_case} as recognition_bit,
               {account_bits} as account_bits
             from token_summary
           ),
           selections as (
-            select status_mask, quality_mask, account_mask
-            from range(1, {1 << len(statuses)}) as statuses(status_mask)
-            cross join range(1, {1 << len(qualities)}) as qualities(quality_mask)
+            select recognition_mask, account_mask
+            from range(1, {1 << len(recognition_statuses)}) as recognition(recognition_mask)
             cross join range(1, {1 << len(account_filters)}) as accounts(account_mask)
           ),
           ranked as (
             select
-              selections.status_mask,
-              selections.quality_mask,
+              selections.recognition_mask,
               selections.account_mask,
               classified.token_address,
               sum(classified.transfer_count) as selected_transfer_count
             from selections
             inner join classified
-              on (classified.status_bit & selections.status_mask) != 0
-              and (classified.quality_bit & selections.quality_mask) != 0
+              on (classified.recognition_bit & selections.recognition_mask) != 0
               and (
                 (classified.account_bits & selections.account_mask) != 0
                 or selections.account_mask = {(1 << len(account_filters)) - 1}
               )
             group by
-              selections.status_mask,
-              selections.quality_mask,
+              selections.recognition_mask,
               selections.account_mask,
               classified.token_address
             qualify row_number() over (
-              partition by selections.status_mask, selections.quality_mask, selections.account_mask
+              partition by selections.recognition_mask, selections.account_mask
               order by selected_transfer_count desc, classified.token_address
             ) <= {ranking_limit}
           )
@@ -361,25 +349,19 @@ def token_summary_rows(
 
 def counterparty_rows(
     connection: Any,
-    statuses: tuple[str, ...] = TOKEN_STATUSES,
-    qualities: tuple[str, ...] = TOKEN_QUALITIES,
+    recognition_statuses: tuple[str, ...] = RECOGNITION_STATUSES,
     account_filters: tuple[str, ...] = ACCOUNT_FILTERS,
-    ranking_limit: int = COUNTERPARTY_RANKING_LIMIT_PER_STATUS_QUALITY_ACCOUNT_SELECTION,
+    ranking_limit: int = COUNTERPARTY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION,
 ) -> list[dict[str, Any]]:
     """Export the exact top-N candidate union for every non-empty filter selection.
 
-    Each summary row is encoded as status, quality, and inclusive account-membership
-    bitsets. DuckDB ranks all selection masks in one proof-equivalent query, avoiding
-    315 Python/SQL round trips without weakening the top-N guarantee.
+    Each summary row is encoded as recognition and inclusive account-membership
+    bitsets. DuckDB ranks all nine selection masks in one proof-equivalent query.
     """
 
-    status_case = "case " + " ".join(
-        f"when token_status = '{value}' then {1 << index}"
-        for index, value in enumerate(statuses)
-    ) + " else 0 end"
-    quality_case = "case " + " ".join(
-        f"when token_quality = '{value}' then {1 << index}"
-        for index, value in enumerate(qualities)
+    recognition_case = "case " + " ".join(
+        f"when recognition_status = '{value}' then {1 << index}"
+        for index, value in enumerate(recognition_statuses)
     ) + " else 0 end"
     account_bits = " + ".join(
         f"case when account_type = '{value}' then {1 << index} else 0 end"
@@ -391,40 +373,35 @@ def counterparty_rows(
           with classified as (
             select
               *,
-              {status_case} as status_bit,
-              {quality_case} as quality_bit,
+              {recognition_case} as recognition_bit,
               {account_bits} as account_bits
             from counterparty_summary
           ),
           selections as (
-            select status_mask, quality_mask, account_mask
-            from range(1, {1 << len(statuses)}) as statuses(status_mask)
-            cross join range(1, {1 << len(qualities)}) as qualities(quality_mask)
+            select recognition_mask, account_mask
+            from range(1, {1 << len(recognition_statuses)}) as recognition(recognition_mask)
             cross join range(1, {1 << len(account_filters)}) as accounts(account_mask)
           ),
           ranked as (
             select
-              selections.status_mask,
-              selections.quality_mask,
+              selections.recognition_mask,
               selections.account_mask,
               classified.counterparty_address,
               sum(classified.transfer_count) as selected_transfer_count,
               max(classified.last_seen_at) as selected_last_seen_at
             from selections
             inner join classified
-              on (classified.status_bit & selections.status_mask) != 0
-              and (classified.quality_bit & selections.quality_mask) != 0
+              on (classified.recognition_bit & selections.recognition_mask) != 0
               and (
                 (classified.account_bits & selections.account_mask) != 0
                 or selections.account_mask = {(1 << len(account_filters)) - 1}
               )
             group by
-              selections.status_mask,
-              selections.quality_mask,
+              selections.recognition_mask,
               selections.account_mask,
               classified.counterparty_address
             qualify row_number() over (
-              partition by selections.status_mask, selections.quality_mask, selections.account_mask
+              partition by selections.recognition_mask, selections.account_mask
               order by
                 selected_transfer_count desc,
                 selected_last_seen_at desc,
@@ -448,7 +425,7 @@ def counterparty_rows(
           select *
           from counterparty_summary
           where counterparty_address in ({placeholders})
-          order by transfer_count desc, last_seen_at desc, counterparty_address, token_status, token_quality
+          order by transfer_count desc, last_seen_at desc, counterparty_address, recognition_status
         """,
         ordered_addresses,
     )
@@ -458,8 +435,8 @@ def values_for_mask(values: tuple[str, ...], mask: int) -> tuple[str, ...]:
     return tuple(value for index, value in enumerate(values) if mask & (1 << index))
 
 
-def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
-    """Return complete metrics for all 315 non-empty composed filter selections."""
+def recognition_account_counts(connection: Any) -> dict[str, dict[str, int]]:
+    """Return complete metrics for all nine non-empty composed filter selections."""
 
     rows_by_selection = query_rows(
         connection,
@@ -471,32 +448,22 @@ def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
               counterparty_address,
               wallet_address,
               case
-                when token_status = 'trusted' then 1
-                when token_status = 'unverified' then 2
-                when token_status = 'suspected_spam' then 4
-                when token_status = 'spam' then 8
+                when recognition_status = 'recognized' then 1
+                when recognition_status = 'other' then 2
                 else 0
-              end as status_bit,
-              case
-                when token_quality = 'high_confidence' then 1
-                when token_quality = 'listed' then 2
-                when token_quality = 'unknown' then 4
-                else 0
-              end as quality_bit,
+              end as recognition_bit,
               case when counterparty_account_type = 'eoa_candidate' then 1 else 0 end
                 + case when counterparty_account_type = 'contract' then 2 else 0 end
                 as account_bits
             from wallet_events
           ),
           selections as (
-            select status_mask, quality_mask, account_mask
-            from range(1, {1 << len(TOKEN_STATUSES)}) as statuses(status_mask)
-            cross join range(1, {1 << len(TOKEN_QUALITIES)}) as qualities(quality_mask)
+            select recognition_mask, account_mask
+            from range(1, {1 << len(RECOGNITION_STATUSES)}) as recognition(recognition_mask)
             cross join range(1, {1 << len(ACCOUNT_FILTERS)}) as accounts(account_mask)
           )
           select
-            selections.status_mask,
-            selections.quality_mask,
+            selections.recognition_mask,
             selections.account_mask,
             count(classified.transfer_id) as transfer_count,
             count(distinct classified.token_address) as token_count,
@@ -505,22 +472,22 @@ def status_quality_account_counts(connection: Any) -> dict[str, dict[str, int]]:
             ) as counterparty_count
           from selections
           left join classified
-            on (classified.status_bit & selections.status_mask) != 0
-            and (classified.quality_bit & selections.quality_mask) != 0
+            on (classified.recognition_bit & selections.recognition_mask) != 0
             and (
               (classified.account_bits & selections.account_mask) != 0
               or selections.account_mask = {(1 << len(ACCOUNT_FILTERS)) - 1}
             )
-          group by selections.status_mask, selections.quality_mask, selections.account_mask
+          group by selections.recognition_mask, selections.account_mask
         """,
     )
 
     result: dict[str, dict[str, int]] = {}
     for row in rows_by_selection:
-        status_key = "+".join(values_for_mask(TOKEN_STATUSES, row["status_mask"]))
-        quality_key = "+".join(values_for_mask(TOKEN_QUALITIES, row["quality_mask"]))
+        recognition_key = "+".join(
+            values_for_mask(RECOGNITION_STATUSES, row["recognition_mask"])
+        )
         account_key = "+".join(values_for_mask(ACCOUNT_FILTERS, row["account_mask"]))
-        result[f"{status_key}|{quality_key}|{account_key}"] = {
+        result[f"{recognition_key}|{account_key}"] = {
             "transfer_count": row["transfer_count"],
             "token_count": row["token_count"],
             "counterparty_count": row["counterparty_count"],
@@ -541,15 +508,15 @@ def main() -> None:
         events = query_rows(
             connection,
             f"""
-              select * exclude (status_rank)
+              select * exclude (recognition_rank)
               from (
                 select *, row_number() over (
-                  partition by token_status, token_quality, counterparty_account_type
+                  partition by recognition_status, counterparty_account_type
                   order by block_timestamp desc, transaction_hash, log_index
-                ) as status_rank
+                ) as recognition_rank
                 from wallet_events
               )
-              where status_rank <= {EVENT_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE}
+              where recognition_rank <= {EVENT_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE}
               order by block_timestamp desc, transaction_hash, log_index
             """,
         )
@@ -558,15 +525,15 @@ def main() -> None:
         timeline = query_rows(
             connection,
             f"""
-              select * exclude (status_quality_rank)
+              select * exclude (recognition_rank)
               from (
                 select *, row_number() over (
-                  partition by token_status, token_quality, counterparty_account_type
+                  partition by recognition_status, counterparty_account_type
                   order by block_date desc, token_symbol, direction, token_address
-                ) as status_quality_rank
+                ) as recognition_rank
                 from timeline_daily
               )
-              where status_quality_rank <= {TIMELINE_ROW_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE}
+              where recognition_rank <= {TIMELINE_ROW_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE}
               order by block_date, token_symbol, direction
             """,
         )
@@ -583,15 +550,15 @@ def main() -> None:
                 (select count(*) from counterparty_summary) as counterparty_summary_row_count,
                 (
                   select count(*) from (
-                    select distinct token_status, token_quality, counterparty_account_type
+                    select distinct recognition_status, counterparty_account_type
                     from wallet_events
                   )
-                ) as status_quality_account_evidence_cell_count
+                ) as recognition_account_evidence_cell_count
             """,
         )[0]
 
-        status_counts: dict[str, dict[str, int]] = {}
-        for selected in non_empty_subsets(TOKEN_STATUSES):
+        recognition_counts: dict[str, dict[str, int]] = {}
+        for selected in non_empty_subsets(RECOGNITION_STATUSES):
             placeholders = ", ".join("?" for _ in selected)
             metrics = query_rows(
                 connection,
@@ -603,94 +570,47 @@ def main() -> None:
                       where counterparty_address != wallet_address
                     ) as counterparty_count
                   from wallet_events
-                  where token_status in ({placeholders})
+                  where recognition_status in ({placeholders})
                 """,
                 selected,
             )[0]
-            status_counts["+".join(selected)] = metrics
+            recognition_counts["+".join(selected)] = metrics
 
-        quality_counts: dict[str, dict[str, int]] = {}
-        for selected in non_empty_subsets(TOKEN_QUALITIES):
-            placeholders = ", ".join("?" for _ in selected)
-            metrics = query_rows(
-                connection,
-                f"""
-                  select
-                    count(*) as transfer_count,
-                    count(distinct token_address) as token_count,
-                    count(distinct counterparty_address) filter (
-                      where counterparty_address != wallet_address
-                    ) as counterparty_count
-                  from wallet_events
-                  where token_quality in ({placeholders})
-                """,
-                selected,
-            )[0]
-            quality_counts["+".join(selected)] = metrics
-
-        status_quality_counts: dict[str, dict[str, int]] = {}
-        for selected_statuses in non_empty_subsets(TOKEN_STATUSES):
-            status_placeholders = ", ".join("?" for _ in selected_statuses)
-            for selected_qualities in non_empty_subsets(TOKEN_QUALITIES):
-                quality_placeholders = ", ".join("?" for _ in selected_qualities)
-                metrics = query_rows(
-                    connection,
-                    f"""
-                      select
-                        count(*) as transfer_count,
-                        count(distinct token_address) as token_count,
-                        count(distinct counterparty_address) filter (
-                          where counterparty_address != wallet_address
-                        ) as counterparty_count
-                      from wallet_events
-                      where token_status in ({status_placeholders})
-                        and token_quality in ({quality_placeholders})
-                    """,
-                    [*selected_statuses, *selected_qualities],
-                )[0]
-                key = f"{'+'.join(selected_statuses)}|{'+'.join(selected_qualities)}"
-                status_quality_counts[key] = metrics
-
-        composed_filter_counts = status_quality_account_counts(connection)
+        composed_filter_counts = recognition_account_counts(connection)
 
         meta = {
             **metadata[0],
             **complete_export_counts,
-            "status_counts": status_counts,
-            "quality_counts": quality_counts,
-            "status_quality_counts": status_quality_counts,
-            "status_quality_account_counts": composed_filter_counts,
+            "recognition_counts": recognition_counts,
+            "recognition_account_counts": composed_filter_counts,
             "exported_event_count": len(events),
             "exported_interaction_count": len({edge["interaction_id"] for edge in edges}),
             "exported_token_summary_count": len(token_summaries),
             "exported_counterparty_summary_count": len(counterparty_summaries),
             "exported_timeline_row_count": len(timeline),
-            "event_export_limit_per_status_quality_account_evidence": EVENT_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE,
-            "graph_interaction_export_limit_per_status_quality_account_evidence": GRAPH_INTERACTION_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE,
-            "token_summary_ranking_limit_per_status_quality_account_selection": TOKEN_SUMMARY_RANKING_LIMIT_PER_STATUS_QUALITY_ACCOUNT_SELECTION,
+            "event_export_limit_per_recognition_account_evidence": EVENT_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE,
+            "graph_interaction_export_limit_per_recognition_account_evidence": GRAPH_INTERACTION_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE,
+            "token_summary_ranking_limit_per_recognition_account_selection": TOKEN_SUMMARY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION,
             "token_summary_ranking_selection_count": (
-                len(non_empty_subsets(TOKEN_STATUSES))
-                * len(non_empty_subsets(TOKEN_QUALITIES))
+                len(non_empty_subsets(RECOGNITION_STATUSES))
                 * len(non_empty_subsets(ACCOUNT_FILTERS))
             ),
             "token_summary_ranking_candidate_token_count": len({
                 row["token_address"] for row in token_summaries
             }),
             "token_summary_rankings_exact_for_all_filter_selections": True,
-            "counterparty_ranking_limit_per_status_quality_account_selection": COUNTERPARTY_RANKING_LIMIT_PER_STATUS_QUALITY_ACCOUNT_SELECTION,
-            "counterparty_token_status_combination_count": len(non_empty_subsets(TOKEN_STATUSES)),
-            "counterparty_token_quality_combination_count": len(non_empty_subsets(TOKEN_QUALITIES)),
+            "counterparty_ranking_limit_per_recognition_account_selection": COUNTERPARTY_RANKING_LIMIT_PER_RECOGNITION_ACCOUNT_SELECTION,
+            "counterparty_recognition_combination_count": len(non_empty_subsets(RECOGNITION_STATUSES)),
             "counterparty_account_filter_combination_count": len(non_empty_subsets(ACCOUNT_FILTERS)),
             "counterparty_ranking_selection_count": (
-                len(non_empty_subsets(TOKEN_STATUSES))
-                * len(non_empty_subsets(TOKEN_QUALITIES))
+                len(non_empty_subsets(RECOGNITION_STATUSES))
                 * len(non_empty_subsets(ACCOUNT_FILTERS))
             ),
             "counterparty_ranking_candidate_address_count": len({
                 row["counterparty_address"] for row in counterparty_summaries
             }),
             "counterparty_rankings_exact_for_all_filter_selections": True,
-            "timeline_row_export_limit_per_status_quality_account_evidence": TIMELINE_ROW_LIMIT_PER_STATUS_QUALITY_ACCOUNT_EVIDENCE,
+            "timeline_row_export_limit_per_recognition_account_evidence": TIMELINE_ROW_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE,
         }
         meta["is_sampled"] = export_is_sampled(meta)
 
