@@ -71,6 +71,38 @@ class FakeBlockClient:
 
 
 class CounterpartyTypeTest(unittest.TestCase):
+    def test_account_evidence_table_has_exact_contract(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "account_evidence.duckdb"
+            ensure_evidence_store(path)
+            with duckdb.connect(str(path), read_only=True) as connection:
+                actual = [
+                    (row[1], row[2], bool(row[3]), bool(row[5]))
+                    for row in connection.execute(
+                        "pragma table_info('account_evidence')"
+                    ).fetchall()
+                ]
+
+        self.assertEqual(
+            actual,
+            [
+                ("chain_id", "INTEGER", True, True),
+                ("address", "VARCHAR", True, True),
+                ("account_type", "VARCHAR", True, False),
+                ("code_state", "VARCHAR", True, False),
+                ("code_size_bytes", "BIGINT", False, False),
+                ("observation_block_number", "BIGINT", True, False),
+                ("observation_block_hash", "VARCHAR", False, False),
+                ("observation_block_timestamp", "TIMESTAMP WITH TIME ZONE", True, False),
+                ("eip7702_delegation_target", "VARCHAR", False, False),
+                ("fetch_status", "VARCHAR", True, False),
+                ("reason_code", "VARCHAR", True, False),
+                ("finality_policy", "VARCHAR", True, False),
+                ("evidence_schema_version", "VARCHAR", True, False),
+                ("fetched_at", "TIMESTAMP WITH TIME ZONE", True, False),
+            ],
+        )
+
     def test_decodes_public_eoa_contract_and_internal_delegation(self) -> None:
         target = "11" * 20
         self.assertEqual(

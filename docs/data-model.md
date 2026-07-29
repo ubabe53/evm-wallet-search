@@ -102,7 +102,7 @@ Token addresses remain part of the mart grain so fixture search and token filter
 
 ### `pipeline_metadata`
 
-One row per `(chain_id, wallet_address)` containing the pinned `configured_wallet_label`, fixture-versus-HyperIndex source, generation time, complete captured-event count, observed event block/time extrema, and account-evidence coverage metadata. The label is project configuration, not a live ENS resolution. Live rows also carry the completed snapshot run ID, cumulative start block, finalized end block and hash, `ethereum_finalized` policy, and semantic scope version. Those snapshot fields describe verified scan coverage; `event_block_number_min`/`max` and `first_event_at`/`last_event_at` describe only observed rows and can never establish continuity. Fixture snapshot fields are null even though fixture event extrema are populated.
+One row per `(chain_id, wallet_address)` containing the pinned `configured_wallet_label`, fixture-versus-HyperIndex source, generation time, complete captured-event count, observed event block/time extrema, and account-evidence coverage metadata. `configured_wallet_label` is derived from the pinned `stg_wallets.ens`, falling back to the wallet address; it is project configuration, not a live ENS resolution. Live rows also carry the completed snapshot run ID, cumulative start block, finalized end block and hash, `ethereum_finalized` policy, and semantic scope version. Those snapshot fields describe verified scan coverage; `event_block_number_min`/`max` and `first_event_at`/`last_event_at` describe only observed rows and can never establish continuity. Fixture snapshot fields are null even though fixture event extrema are populated.
 
 Account-evidence coverage uses `distinct_nonzero_nonself_event_counterparties` as its population scope. At the address grain, `eligible = classified + failed + not_checked`; the event-weighted fields apply the same statuses to captured Transfer-signature rows. Rates are deliberately not stored because they are exactly derivable from these reconciled counts. Observation block/time bounds and the schema version are derived only from successfully classified addresses. Fixture builds therefore report their eligible address/event populations as not checked while leaving successful-observation provenance null.
 
@@ -110,15 +110,61 @@ The mart does not store token, counterparty, recognition, timeline-cell, or othe
 
 ## Operational and application-owned local state
 
+These tables are created and owned by Python application/orchestration code rather than dbt, so they do not appear in the generated dbt catalog. Their exact physical column order, types, nullability, and keys are enforced by Python tests alongside the owning DDL.
+
+### `account_evidence.account_evidence`
+
+The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read-only under the `account_evidence` catalog during live dbt builds. Its grain and primary key are one retained observation per `(chain_id, address)`. Successful observations are preserved; failed attempts can be replaced by a later successful result.
+
+| Column | Physical contract | Semantics |
+| --- | --- | --- |
+| `chain_id` | `INTEGER NOT NULL`, primary key | EVM chain identifier; constrained by the collector to Ethereum mainnet. |
+| `address` | `VARCHAR NOT NULL`, primary key | Lowercase observed account address. |
+| `account_type` | `VARCHAR NOT NULL` | `eoa_candidate`, `contract`, or retryable `unknown`. |
+| `code_state` | `VARCHAR NOT NULL` | `no_code`, `eip7702_delegated`, `contract_code`, or `unknown`. |
+| `code_size_bytes` | nullable `BIGINT` | Exact observed bytecode size; null when no usable response exists. |
+| `observation_block_number` | `BIGINT NOT NULL` | Concrete block used for `eth_getCode`. |
+| `observation_block_hash` | nullable `VARCHAR` | Canonical hash for that block. The storage column remains nullable for historical compatibility, but the current collector always writes it and `stg_account_evidence` requires it. |
+| `observation_block_timestamp` | `TIMESTAMPTZ NOT NULL` | UTC chain timestamp of the observation block. |
+| `eip7702_delegation_target` | nullable `VARCHAR` | Exact lowercase target decoded only from 23-byte EIP-7702 delegation code. |
+| `fetch_status` | `VARCHAR NOT NULL` | `complete` or retryable `failed`. |
+| `reason_code` | `VARCHAR NOT NULL` | Singular machine-readable explanation for the classification or failure. |
+| `finality_policy` | `VARCHAR NOT NULL` | `safe` or the explicit confirmed-head fallback used to pin the block. |
+| `evidence_schema_version` | `VARCHAR NOT NULL` | Account-evidence contract version, currently `account-evidence-v2`. |
+| `fetched_at` | `TIMESTAMPTZ NOT NULL` | UTC pipeline time when the RPC attempt completed. |
+
 ### `ops.pipeline_runs`
 
-The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. The row records the pinned configured label, inclusive interval, finalized end-block hash, number of matching events found in that interval, `running|completed|failed` status, completion time, and semantic scope version.
+The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. Retries may repeat an interval with a new run ID after a failed attempt. `wallet_label` is derived from the pinned configured ENS value, falling back to the wallet address.
+
+| Column | Physical contract | Semantics |
+| --- | --- | --- |
+| `run_id` | `VARCHAR NOT NULL`, primary key | UUID identifying one attempted run. |
+| `chain_id` | `INTEGER NOT NULL` | EVM chain identifier, constrained to `1`. |
+| `wallet_address` | `VARCHAR NOT NULL` | Lowercase configured wallet scanned by the run. |
+| `wallet_label` | `VARCHAR NOT NULL` | Pinned project display label; not a live ENS-resolution claim. |
+| `from_block` | `BIGINT NOT NULL` | Inclusive interval start. |
+| `to_block` | `BIGINT NOT NULL` | Inclusive finalized interval end. |
+| `to_block_hash` | `VARCHAR NOT NULL` | Lowercase canonical hash pinned for `to_block`. |
+| `events_found` | nullable `BIGINT` | Matching captured-event count; populated only when the run completes successfully. |
+| `status` | `VARCHAR NOT NULL` | `running`, `completed`, or `failed`. |
+| `completed_at` | nullable `TIMESTAMPTZ` | UTC pipeline completion/failure time; null while running. |
+| `scope_version` | `VARCHAR NOT NULL` | Version of the indexed semantic scope. |
 
 The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance the next start to the previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. Rebuilding transformations while already current reuses the latest completed run rather than creating a false scan interval.
 
 ### `app.token_recognition_overrides`
 
-The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain and primary key are `(chain_id, token_address)`. `chain_id` is currently constrained to `1`, `status` is `recognized` or `other`, and `updated_at` records the latest mutation time. A row overrides automatic `wallet_events.recognition_status`; no row means automatic classification. Normal in-place dbt builds preserve the table, while deleting or replacing the DuckDB file loses this local-only state.
+The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain and primary key are `(chain_id, token_address)`.
+
+| Column | Physical contract | Semantics |
+| --- | --- | --- |
+| `chain_id` | `INTEGER NOT NULL`, primary key | EVM chain identifier, constrained to `1`. |
+| `token_address` | `VARCHAR NOT NULL`, primary key | Lowercase emitting contract address present in the current snapshot. |
+| `status` | `VARCHAR NOT NULL` | Manual `recognized` or `other` result. |
+| `updated_at` | `TIMESTAMPTZ NOT NULL`, defaults to current time | UTC time of the latest manual mutation. |
+
+A row overrides automatic `wallet_events.recognition_status`; no row means automatic classification. Normal in-place dbt builds preserve the table, while deleting or replacing the DuckDB file loses this local-only state.
 
 ## Local API contract
 
@@ -144,6 +190,7 @@ dbt tests enforce:
 
 - No duplicate staged transfer logs at canonical `(chain_id, transaction_hash, log_index)` grain.
 - An exact 16-relation `main`-schema inventory, including each relation's table/view materialization, so retired or accidentally introduced analytics relations cannot remain hidden in an existing DuckDB artifact.
+- Exact physical column, type, nullability, and key contracts for the Python-owned account-evidence, snapshot-run, and recognition-override tables.
 - Non-null wallet, counterparty, and token addresses in dashboard marts.
 - Valid `direction` values.
 - Valid metadata-availability values throughout enrichment and serving models.
