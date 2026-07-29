@@ -23,8 +23,8 @@ try:
         database_path,
     )
     from .enrich_counterparty_types import ensure_evidence_store
-    from .project_config import resolved_runtime
     from .enrich_token_metadata import JsonRpcClient
+    from .project_config import resolved_runtime
     from .snapshot_runs import (
         SnapshotAlreadyCurrent,
         dbt_snapshot_environment,
@@ -44,8 +44,8 @@ except ImportError:
         database_path,
     )
     from enrich_counterparty_types import ensure_evidence_store
-    from project_config import resolved_runtime
     from enrich_token_metadata import JsonRpcClient
+    from project_config import resolved_runtime
     from snapshot_runs import (
         SnapshotAlreadyCurrent,
         dbt_snapshot_environment,

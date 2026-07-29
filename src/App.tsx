@@ -12,7 +12,6 @@ import {
   Moon,
   Network,
   Repeat2,
-  RotateCcw,
   Search,
   Sun,
   type LucideIcon,

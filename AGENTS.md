@@ -88,13 +88,15 @@ Do not update documentation mechanically when behavior did not change. Do block 
 - Do not hand-edit generated JSON or build output; regenerate through repository commands.
 - Preserve unrelated changes in a dirty worktree.
 - Do not claim a check passed unless that command actually ran.
-- No repository-wide linter is currently configured.
+- Keep mandatory static analysis fast and deterministic: Oxlint for JavaScript/TypeScript,
+  Ruff for Python, `tsc` for TypeScript types, and Pyright for Python types.
 
 ## Validation
 
-- React/TypeScript: `bunx tsc --noEmit` and `bun run test:js`
+- Static analysis: `bun run static:check`
+- React/TypeScript: `bun run typecheck:ts` and `bun run test:js`
 - Dashboard presentation/build: `bun run dashboard:build`
-- Python/enrichment: `bun run test:labels`
+- Python/enrichment: `bun run typecheck:py` and `bun run test:labels`
 - Local API: `bun run test:api`
 - dbt models or seeds: `bun run analytics:build`. Use `bun run test:analytics` only after the relevant models have been built when a separate dbt-test pass is useful; it does not materialize changed SQL.
 - Fixture export contract: `bun run export:dashboard` before export-shape tests
@@ -124,6 +126,7 @@ bun run api:dev
 bun run dashboard:dev
 bun run dashboard:dev:fixture
 bun run dashboard:build
+bun run static:check
 bun run test
 bun run review:staged
 ```

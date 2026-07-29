@@ -15,7 +15,6 @@ from typing import Any, Iterable
 
 import duckdb
 
-
 ACCOUNT_FILTERS = (
     "eoa_candidate",
     "contract",
@@ -64,7 +63,7 @@ def rows(connection: Any, sql: str, parameters: Iterable[Any] = ()) -> list[dict
     result = connection.execute(sql, list(parameters))
     columns = [column[0] for column in result.description]
     return [
-        {column: json_value(value) for column, value in zip(columns, row)}
+        {column: json_value(value) for column, value in zip(columns, row, strict=True)}
         for row in result.fetchall()
     ]
 

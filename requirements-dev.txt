@@ -1,0 +1,3 @@
+-r analytics/requirements.txt
+
+ruff==0.16.0

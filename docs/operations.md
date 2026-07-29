@@ -170,14 +170,21 @@ The exporter still contains legacy candidate-union logic across 315 composed fil
 ## Verification
 
 ```sh
+bun run static:check
 bun run test
 ```
+
+The static gate runs Oxlint and Ruff before generating the local Envio handler types,
+checking TypeScript with `tsc`, and checking Python with Pyright. Install
+`requirements-dev.txt` in addition to `bun install` before running it locally. These
+tools are pinned and configured for high-signal checks so the gate stays fast and
+avoids repository-wide style churn.
 
 The full test command builds `analytics/artifacts/fixture.duckdb`, exports fixture JSON, runs JS tests, and runs dbt tests against that fixture artifact. It can overwrite ignored fixture JSON under `public/data`, but it does not modify `analytics/artifacts/live.duckdb` or attach HyperIndex.
 
 ## GitHub CI and Deployment
 
-`.github/workflows/ci.yml` runs the reproducible fixture-demo pipeline and production static build for pull requests and pushes to `main`. It also runs advisory JavaScript and Python dependency audits. The uploaded production build is retained for one day to help diagnose a run; this retention setting does not control how long a deployed site stays online.
+`.github/workflows/ci.yml` runs the fast mandatory static gate, reproducible fixture-demo pipeline, and production static build for pull requests and pushes to `main`. It also runs advisory JavaScript and Python dependency audits. The uploaded production build is retained for one day to help diagnose a run; this retention setting does not control how long a deployed site stays online.
 
 `.github/workflows/deploy.yml` rebuilds the fixture-backed static demo from the exact revision that passed `main` CI and publishes it to GitHub Pages. It does not deploy the complete local database-backed application. Deployment is disabled by default. To enable it when the repository and GitHub plan support Pages:
 

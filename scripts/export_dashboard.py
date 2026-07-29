@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -83,10 +84,10 @@ def json_default(value: Any) -> Any:
     return str(value)
 
 
-def query_rows(connection: Any, query: str, parameters: list[Any] | None = None) -> list[dict[str, Any]]:
+def query_rows(connection: Any, query: str, parameters: Sequence[Any] | None = None) -> list[dict[str, Any]]:
     result = connection.execute(query, parameters or [])
     columns = [column[0] for column in result.description]
-    return [dict(zip(columns, row)) for row in result.fetchall()]
+    return [dict(zip(columns, row, strict=True)) for row in result.fetchall()]
 
 
 def rows(
