@@ -32,7 +32,6 @@ FIELDNAMES = [
     "symbol",
     "name",
     "decimals",
-    "token_status",
     "recognition_status",
     "metadata_source",
     "metadata_source_url",
@@ -146,7 +145,6 @@ def merge_registries(
         rows.append(
             {
                 **preferred,
-                "token_status": "trusted",
                 "recognition_status": "recognized",
                 "metadata_source": "+".join(sources),
                 "metadata_source_url": "|".join(urls),

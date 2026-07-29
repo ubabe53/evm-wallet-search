@@ -1,136 +1,4 @@
 unit_tests:
-  - name: classifies_outbound_initiator_evidence
-    description: The mass-outbound initiator component requires complete matching transaction-sender evidence and ignores unknown or mismatched senders.
-    model: int_wallet_token_interactions
-    given:
-      - input: ref('int_wallet_transfer_events')
-        format: sql
-        rows: |
-          select
-            1 as chain_id,
-            '0xwallet' as wallet_address,
-            evidence.token_address,
-            concat('counterparty-', evidence.token_address, '-', event_number) as counterparty_address,
-            'out' as direction,
-            evidence.is_indirect,
-            evidence.transaction_sender_relation,
-            timestamp '2024-01-01 00:00:00' + event_number * interval '1 minute' as block_timestamp
-          from range(100) as events(event_number)
-          cross join (
-            values
-              ('matched', false, 'transfer_sender'),
-              ('unknown', null, 'unknown'),
-              ('mismatched', true, 'other')
-          ) as evidence(token_address, is_indirect, transaction_sender_relation)
-    expect:
-      format: sql
-      rows: |
-        select * from (
-          values
-            (
-              1, '0xwallet', 'matched', 100, 100, 0, 100, 0, 0, 0, 100, 100,
-              timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
-              100, 'suspicious',
-              'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction; mass_outbound_transaction_sender_matches_wallet',
-              'interaction-legitimacy-v3'
-            ),
-            (
-              1, '0xwallet', 'unknown', 100, 100, 0, 100, 0, 0, 0, 0, 0,
-              timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
-              80, 'suspicious',
-              'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction',
-              'interaction-legitimacy-v3'
-            ),
-            (
-              1, '0xwallet', 'mismatched', 100, 100, 0, 100, 0, 0, 100, 100, 0,
-              timestamp '2024-01-01 00:00:00', timestamp '2024-01-01 01:39:00', 99,
-              80, 'suspicious',
-              'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction',
-              'interaction-legitimacy-v3'
-            )
-        ) as expected(
-          chain_id,
-          wallet_address,
-          token_address,
-          transfer_count,
-          distinct_counterparty_count,
-          inbound_transfer_count,
-          outbound_transfer_count,
-          self_transfer_count,
-          indirect_inbound_transfer_count,
-          indirect_outbound_transfer_count,
-          evidenced_outbound_transfer_count,
-          sender_matched_outbound_transfer_count,
-          first_seen_at,
-          last_seen_at,
-          active_minutes,
-          interaction_legitimacy_score,
-          interaction_legitimacy,
-          interaction_legitimacy_reasons,
-          interaction_legitimacy_version
-        )
-  - name: excludes_self_transfers_from_interaction_signals
-    description: Self-transfers remain in total activity but cannot change external counterparty breadth, direction ratios, or the distribution window.
-    model: int_wallet_token_interactions
-    given:
-      - input: ref('int_wallet_transfer_events')
-        format: sql
-        rows: |
-          select
-            1 as chain_id,
-            '0xwallet' as wallet_address,
-            'token' as token_address,
-            concat('counterparty-', event_number) as counterparty_address,
-            'out' as direction,
-            false as is_indirect,
-            'transfer_sender' as transaction_sender_relation,
-            timestamp '2024-01-01 00:00:00' + event_number * interval '1 minute' as block_timestamp
-          from range(100) as external_events(event_number)
-
-          union all
-
-          select
-            1 as chain_id,
-            '0xwallet' as wallet_address,
-            'token' as token_address,
-            '0xwallet' as counterparty_address,
-            'self' as direction,
-            false as is_indirect,
-            'transfer_sender' as transaction_sender_relation,
-            timestamp '2024-02-01 00:00:00' + event_number * interval '1 minute' as block_timestamp
-          from range(30) as self_events(event_number)
-    expect:
-      format: sql
-      rows: |
-        select * from (
-          values (
-            1, '0xwallet', 'token', 130, 100, 0, 100, 30, 0, 0, 100, 100,
-            timestamp '2024-01-01 00:00:00', timestamp '2024-02-01 00:29:00', 44669,
-            100, 'suspicious',
-            'broad_one_transfer_per_counterparty_spray; short_distribution_window; almost_entirely_one_direction; mass_outbound_transaction_sender_matches_wallet',
-            'interaction-legitimacy-v3'
-          )
-        ) as expected(
-          chain_id,
-          wallet_address,
-          token_address,
-          transfer_count,
-          distinct_counterparty_count,
-          inbound_transfer_count,
-          outbound_transfer_count,
-          self_transfer_count,
-          indirect_inbound_transfer_count,
-          indirect_outbound_transfer_count,
-          evidenced_outbound_transfer_count,
-          sender_matched_outbound_transfer_count,
-          first_seen_at,
-          last_seen_at,
-          active_minutes,
-          interaction_legitimacy_score,
-          interaction_legitimacy,
-          interaction_legitimacy_reasons,
-          interaction_legitimacy_version
-        )
   - name: excludes_failed_rpc_attempts_from_token_enrichment
     description: A failed RPC attempt remains in the observation relation and does not create a resolved token-enrichment row by itself.
     model: int_token_enrichment
@@ -143,7 +11,6 @@ unit_tests:
             null::varchar as symbol,
             null::varchar as name,
             null::integer as decimals,
-            null::varchar as token_status,
             null::varchar as recognition_status,
             null::varchar as metadata_source,
             null::varchar as metadata_source_url
@@ -156,7 +23,7 @@ unit_tests:
             null::varchar as symbol,
             null::varchar as name,
             null::integer as decimals,
-            null::varchar as token_status,
+            null::varchar as recognition_status,
             null::varchar as reason,
             null::varchar as source_url
           where false
@@ -179,21 +46,14 @@ unit_tests:
           null::varchar as symbol,
           null::varchar as name,
           null::integer as decimals,
-          null::varchar as token_status,
           null::varchar as recognition_status,
           null::varchar as recognition_reason,
           null::varchar as recognition_source,
+          null::varchar as recognition_version,
           null::varchar as metadata_source,
           null::varchar as metadata_source_url,
           null::varchar as token_label_reason,
-          null::varchar[] as token_quality_sources,
-          null::integer as token_quality_source_count,
-          null::varchar as token_quality,
-          null::varchar as token_quality_reason,
-          null::varchar as token_quality_provenance,
-          null::varchar as metadata_availability,
-          null::varchar as token_quality_version,
-          null::varchar as recognition_version
+          null::varchar as metadata_availability
         where false
   - name: preserves_partial_rpc_metadata_in_token_enrichment
     description: Usable fields from a partial RPC observation remain eligible for resolved metadata while RPC execution fields stay in the observation relation.
@@ -207,7 +67,6 @@ unit_tests:
             null::varchar as symbol,
             null::varchar as name,
             null::integer as decimals,
-            null::varchar as token_status,
             null::varchar as recognition_status,
             null::varchar as metadata_source,
             null::varchar as metadata_source_url
@@ -220,7 +79,7 @@ unit_tests:
             null::varchar as symbol,
             null::varchar as name,
             null::integer as decimals,
-            null::varchar as token_status,
+            null::varchar as recognition_status,
             null::varchar as reason,
             null::varchar as source_url
           where false
@@ -244,21 +103,14 @@ unit_tests:
             'PART',
             null::varchar,
             18,
-            'unverified',
             'other',
             'no_registry_match',
             'automatic',
+            'token-recognition-v1',
             'ethereum_rpc',
             null::varchar,
             null::varchar,
-            []::varchar[],
-            0,
-            'unknown',
-            'rpc_metadata_only',
-            'ethereum_rpc_block:20000000',
-            'partial',
-            'token-quality-v1',
-            'token-recognition-v1'
+            'partial'
           )
         ) as expected(
           chain_id,
@@ -266,96 +118,12 @@ unit_tests:
           symbol,
           name,
           decimals,
-          token_status,
           recognition_status,
           recognition_reason,
           recognition_source,
+          recognition_version,
           metadata_source,
           metadata_source_url,
           token_label_reason,
-          token_quality_sources,
-          token_quality_source_count,
-          token_quality,
-          token_quality_reason,
-          token_quality_provenance,
-          metadata_availability,
-          token_quality_version,
-          recognition_version
-        )
-  - name: ignores_configured_wallet_text_in_token_reputation
-    description: Token names or symbols matching the configured wallet's pinned ENS or person label do not contribute reputation evidence.
-    model: int_token_reputation
-    given:
-      - input: ref('stg_transfer_events')
-        format: sql
-        rows: |
-          select null::integer as chain_id, null::varchar as token_address
-          where false
-      - input: ref('int_token_enrichment')
-        format: sql
-        rows: |
-          select * from (
-            values
-              (
-                1, '0xens', 'VITALIK', 'vitalik.eth', 'unverified', null::varchar, null::varchar,
-                'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
-                'no_recorded_source', 'token-quality-v1'
-              ),
-              (
-                1, '0xlabel', 'VB', 'Vitalik Buterin', 'unverified', null::varchar, null::varchar,
-                'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
-                'no_recorded_source', 'token-quality-v1'
-              )
-          ) as metadata(
-            chain_id,
-            token_address,
-            symbol,
-            name,
-            token_status,
-            metadata_source,
-            token_label_reason,
-            token_quality,
-            token_quality_sources,
-            token_quality_source_count,
-            token_quality_reason,
-            token_quality_provenance,
-            token_quality_version
-          )
-      - input: ref('token_metadata')
-        format: sql
-        rows: |
-          select
-            null::varchar as token_address,
-            null::varchar as symbol,
-            null::varchar as name,
-            null::varchar as metadata_source
-          where false
-    expect:
-      format: sql
-      rows: |
-        select * from (
-          values
-            (
-              1, '0xens', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
-              'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
-              'no_recorded_source', 'token-quality-v1'
-            ),
-            (
-              1, '0xlabel', 'unverified', 0, 'no_reputation_signal', 'token-reputation-v3',
-              'unknown', []::varchar[], 0, 'no_registry_or_reviewed_approval',
-              'no_recorded_source', 'token-quality-v1'
-            )
-        ) as expected(
-          chain_id,
-          token_address,
-          token_reputation,
-          token_reputation_score,
-          token_reputation_reasons,
-          token_reputation_version,
-          token_quality,
-          token_quality_sources,
-          token_quality_source_count,
-          token_quality_reason,
-          token_quality_provenance,
-          token_quality_version
+          metadata_availability
         )

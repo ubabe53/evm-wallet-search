@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read self-declared ERC20 metadata for high-impact unverified contracts."""
+"""Read self-declared token metadata for high-impact unrecognized contracts."""
 
 from __future__ import annotations
 
@@ -195,7 +195,7 @@ def select_candidates(
             """
             select token_address, count(*) as transfer_count
             from wallet_events
-            where token_status = 'unverified'
+            where recognition_status = 'other'
             group by token_address
             order by transfer_count desc, token_address
             """
@@ -287,7 +287,7 @@ def main() -> None:
     finally:
         connection.close()
     if not addresses:
-        print("No eligible unverified token contracts found")
+        print("No eligible unrecognized token contracts found")
         return
 
     rpc_url = resolved_runtime()["ethereum_rpc_url"]

@@ -31,7 +31,6 @@ class DashboardExportTest(unittest.TestCase):
                 "transaction_sender_relation varchar",
                 "transaction_target_relation varchar",
                 "is_indirect boolean",
-                "token_quality varchar",
                 "counterparty_account_type varchar",
             ):
                 connection.execute(f"alter table wallet_events add column {column}")
@@ -44,17 +43,14 @@ class DashboardExportTest(unittest.TestCase):
             connection.execute(
                 "alter table token_summary add column self_transfer_count integer"
             )
-            for column in (
-                "token_quality varchar",
-                "counterparty_account_type varchar",
-            ):
+            for column in ("counterparty_account_type varchar",):
                 connection.execute(f"alter table token_summary add column {column}")
 
             dashboard_export.validate_export_schema(connection)
         finally:
             connection.close()
 
-    def test_counterparty_candidates_cover_combined_status_rankings(self) -> None:
+    def test_counterparty_candidates_cover_combined_recognition_rankings(self) -> None:
         duckdb = dashboard_export.ensure_duckdb()
         connection = duckdb.connect(":memory:")
         try:
@@ -62,8 +58,7 @@ class DashboardExportTest(unittest.TestCase):
                 """
                 create table counterparty_summary (
                     counterparty_address varchar,
-                    token_status varchar,
-                    token_quality varchar,
+                    recognition_status varchar,
                     account_type varchar,
                     transfer_count integer,
                     last_seen_at timestamp
@@ -71,19 +66,18 @@ class DashboardExportTest(unittest.TestCase):
                 """
             )
             connection.executemany(
-                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?)",
+                "insert into counterparty_summary values (?, ?, ?, ?, ?)",
                 [
-                    ("0xaaa", "trusted", "high_confidence", "contract", 90, "2024-01-01"),
-                    ("0xaaa", "unverified", "listed", "contract", 90, "2024-01-01"),
-                    ("0xbbb", "trusted", "high_confidence", "contract", 100, "2024-01-02"),
-                    ("0xccc", "unverified", "listed", "contract", 100, "2024-01-02"),
+                    ("0xaaa", "recognized", "contract", 90, "2024-01-01"),
+                    ("0xaaa", "other", "contract", 90, "2024-01-01"),
+                    ("0xbbb", "recognized", "contract", 100, "2024-01-02"),
+                    ("0xccc", "other", "contract", 100, "2024-01-02"),
                 ],
             )
 
             exported = dashboard_export.counterparty_rows(
                 connection,
-                statuses=("trusted", "unverified"),
-                qualities=("high_confidence", "listed"),
+                recognition_statuses=("recognized", "other"),
                 ranking_limit=1,
             )
         finally:
@@ -98,17 +92,17 @@ class DashboardExportTest(unittest.TestCase):
             )
         self.assertEqual(max(combined_counts, key=lambda address: combined_counts[address]), "0xaaa")
 
-    def test_counterparty_candidates_cover_all_315_filter_selections_in_one_query(self) -> None:
+    def test_counterparty_candidates_cover_all_nine_filter_selections_in_one_query(self) -> None:
         with patch.object(dashboard_export, "query_rows", return_value=[]) as query:
             self.assertEqual(dashboard_export.counterparty_rows(object()), [])
 
-        status_combinations = dashboard_export.non_empty_subsets(dashboard_export.TOKEN_STATUSES)
-        quality_combinations = dashboard_export.non_empty_subsets(dashboard_export.TOKEN_QUALITIES)
+        recognition_combinations = dashboard_export.non_empty_subsets(
+            dashboard_export.RECOGNITION_STATUSES
+        )
         account_combinations = dashboard_export.non_empty_subsets(dashboard_export.ACCOUNT_FILTERS)
-        self.assertEqual(len(status_combinations), 15)
-        self.assertEqual(len(quality_combinations), 7)
+        self.assertEqual(len(recognition_combinations), 3)
         self.assertEqual(len(account_combinations), 3)
-        self.assertEqual(len(status_combinations) * len(quality_combinations) * len(account_combinations), 315)
+        self.assertEqual(len(recognition_combinations) * len(account_combinations), 9)
         self.assertEqual(query.call_count, 1)
 
     def test_full_binary_selection_retains_internal_unknown_rows(self) -> None:
@@ -119,8 +113,7 @@ class DashboardExportTest(unittest.TestCase):
                 """
                 create table counterparty_summary (
                     counterparty_address varchar,
-                    token_status varchar,
-                    token_quality varchar,
+                    recognition_status varchar,
                     account_type varchar,
                     transfer_count integer,
                     last_seen_at timestamp
@@ -128,17 +121,16 @@ class DashboardExportTest(unittest.TestCase):
                 """
             )
             connection.executemany(
-                "insert into counterparty_summary values (?, ?, ?, ?, ?, ?)",
+                "insert into counterparty_summary values (?, ?, ?, ?, ?)",
                 [
-                    ("0xunknown", "trusted", "high_confidence", "unknown", 200, "2025-01-03"),
-                    ("0xcontract", "trusted", "high_confidence", "contract", 150, "2025-01-02"),
-                    ("0xeoa", "trusted", "high_confidence", "eoa_candidate", 125, "2025-01-01"),
+                    ("0xunknown", "recognized", "unknown", 200, "2025-01-03"),
+                    ("0xcontract", "recognized", "contract", 150, "2025-01-02"),
+                    ("0xeoa", "recognized", "eoa_candidate", 125, "2025-01-01"),
                 ],
             )
             exported = dashboard_export.counterparty_rows(
                 connection,
-                statuses=("trusted",),
-                qualities=("high_confidence",),
+                recognition_statuses=("recognized",),
                 account_filters=("eoa_candidate", "contract"),
                 ranking_limit=1,
             )
@@ -155,8 +147,7 @@ class DashboardExportTest(unittest.TestCase):
                 """
                 create table token_summary (
                     token_address varchar,
-                    token_status varchar,
-                    token_quality varchar,
+                    recognition_status varchar,
                     counterparty_account_type varchar,
                     transfer_count integer,
                     token_symbol varchar
@@ -164,19 +155,18 @@ class DashboardExportTest(unittest.TestCase):
                 """
             )
             connection.executemany(
-                "insert into token_summary values (?, ?, ?, ?, ?, ?)",
+                "insert into token_summary values (?, ?, ?, ?, ?)",
                 [
-                    ("0xaaa", "trusted", "high_confidence", "contract", 60, "A"),
-                    ("0xaaa", "trusted", "high_confidence", "eoa_candidate", 60, "A"),
-                    ("0xbbb", "trusted", "high_confidence", "contract", 100, "B"),
-                    ("0xccc", "trusted", "high_confidence", "eoa_candidate", 100, "C"),
+                    ("0xaaa", "recognized", "contract", 60, "A"),
+                    ("0xaaa", "recognized", "eoa_candidate", 60, "A"),
+                    ("0xbbb", "recognized", "contract", 100, "B"),
+                    ("0xccc", "recognized", "eoa_candidate", 100, "C"),
                 ],
             )
 
             exported = dashboard_export.token_summary_rows(
                 connection,
-                statuses=("trusted",),
-                qualities=("high_confidence",),
+                recognition_statuses=("recognized",),
                 account_filters=("contract", "eoa_candidate"),
                 ranking_limit=1,
             )

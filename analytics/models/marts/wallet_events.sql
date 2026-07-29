@@ -31,7 +31,6 @@ select
   token_symbol,
   token_name,
   token_decimals,
-  token_status,
   recognition_status,
   recognition_reason,
   recognition_source,
@@ -40,19 +39,5 @@ select
   metadata_source_url,
   token_label_reason,
   metadata_availability,
-  token_quality,
-  token_quality_sources,
-  token_quality_source_count,
-  token_quality_reason,
-  token_quality_provenance,
-  token_quality_version,
-  token_reputation,
-  token_reputation_score,
-  token_reputation_reasons,
-  token_reputation_version,
-  interaction_legitimacy,
-  interaction_legitimacy_score,
-  interaction_legitimacy_reasons,
-  interaction_legitimacy_version,
   value_raw
-from {{ ref('int_classified_wallet_transfer_events') }}
+from {{ ref('int_wallet_transfer_events') }}

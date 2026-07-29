@@ -2,8 +2,7 @@ with expected as (
   select
     wallet_address,
     token_address,
-    token_status,
-    token_quality,
+    recognition_status,
     counterparty_account_type,
     count(distinct counterparty_address) filter (
       where counterparty_address != '0x0000000000000000000000000000000000000000'
@@ -20,15 +19,14 @@ with expected as (
         and counterparty_address != wallet_address
     ) as recipient_account_count
   from {{ ref('wallet_events') }}
-  group by wallet_address, token_address, token_status, token_quality, counterparty_account_type
+  group by wallet_address, token_address, recognition_status, counterparty_account_type
 )
 select summaries.*
 from {{ ref('token_summary') }} as summaries
 inner join expected using (
   wallet_address,
   token_address,
-  token_status,
-  token_quality,
+  recognition_status,
   counterparty_account_type
 )
 where summaries.transfer_count != (

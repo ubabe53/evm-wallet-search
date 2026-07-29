@@ -7,12 +7,6 @@ where recognition_version != 'token-recognition-v1'
     and recognition_status != 'recognized'
   )
   or (
-    metadata_source = 'manual'
-    and token_status = 'trusted'
-    and recognition_status != 'recognized'
-  )
-  or (
-    metadata_source = 'manual'
-    and token_status = 'spam'
-    and recognition_status != 'other'
+    recognition_source = 'manual'
+    and recognition_reason not in ('reviewed_manual_recognized', 'reviewed_manual_other')
   )

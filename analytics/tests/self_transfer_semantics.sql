@@ -8,12 +8,6 @@ self_token_summary as (
   select *
   from {{ ref('token_summary') }}
   where token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-),
-
-self_interaction_summary as (
-  select *
-  from {{ ref('int_wallet_token_interactions') }}
-  where token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 )
 
 select 'event_direction' as failure
@@ -36,16 +30,6 @@ where not exists (
   from self_token_summary
   where self_transfer_count = 1
     and transfer_count = inbound_transfer_count + outbound_transfer_count + self_transfer_count
-)
-
-union all
-
-select 'interaction_summary' as failure
-where not exists (
-  select 1
-  from self_interaction_summary
-  where self_transfer_count = 1
-    and interaction_legitimacy_version = 'interaction-legitimacy-v3'
 )
 
 union all

@@ -59,17 +59,17 @@ bun run tokens:refresh
 
 `labels:sync` remains an alias. The command downloads Trust Wallet, Uniswap, CoinGecko, and online Coinbase Exchange Ethereum contract entries; validates exact Ethereum addresses and available token decimals; fails on cross-source decimal conflicts; and rewrites `analytics/seeds/token_metadata.csv` plus `token_metadata_manifest.json`. Naming precedence is Trust Wallet, Uniswap, CoinGecko, then Coinbase. Coinbase trading precision is not used as token decimals, so a Coinbase-only row may have unknown decimals. Manual entries in `token_label_overrides.csv` override every generated source.
 
-Each reviewed manual `trusted` approval or `spam` entry must include a reason and evidence URL. Any exact-address source match is automatically `recognized`; unmatched tokens are `other`. Detailed quality and spam evidence remains internal and independent. After a seed schema change, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
+Each reviewed manual `recognized` or `other` entry must include a reason and evidence URL. Any exact-address source match is automatically `recognized`; unmatched tokens are `other`. After a seed schema change, run one migration build with `python3 scripts/run_dbt.py build --full-refresh`; routine registry content refreshes use the normal build command.
 
-## Spam Classification
+## Token Recognition
 
-Classification runs during every dbt build and makes no network calls. Inspect contract-level evidence in `int_token_reputation`, wallet-token behavior in `int_wallet_token_interactions`, and the effective event status in `wallet_events`. Scores, reason codes, provenance, and classifier versions remain available internally in DuckDB and the typed transitional payload; the dashboard does not expose that evidence.
+Recognition resolution runs during every dbt build and makes no network calls. Builds idempotently remove the retired reputation, interaction-legitimacy, and classified-event views from existing DuckDB artifacts.
 
-The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only. Internal reputation and quality evidence are not shown. To change a classifier rule, update the corresponding model, its version string, dbt tests, and `docs/architecture.md` in the same change.
+The dashboard defaults to `All` and offers `Recognized` and `Other` filters. Live mode also permits a per-token `Automatic`, `Recognized`, or `Other` choice; it persists the override in `app.token_recognition_overrides` and offers Undo for four seconds. The fixture demo renders these controls read-only.
 
 ## RPC Metadata Enrichment
 
-Process the next top 100 unverified contracts by complete wallet transfer count:
+Process the next top 100 `other` contracts by complete wallet transfer count:
 
 ```sh
 bun run labels:enrich --limit 100
@@ -163,7 +163,7 @@ Run this only after the fixture build. It creates:
 
 These files are the static GitHub Pages demonstration contract. They must remain bounded, identify fixture provenance, and never claim to be complete HyperIndex history. Files are replaced atomically so readers never observe a partially written individual JSON file.
 
-The exporter still contains legacy candidate-union logic across 315 composed filter selections. Do not use that behavior for live local data or expand it; the live dashboard now computes only the requested selection through DuckDB-backed API endpoints.
+The exporter bounds its fixture rows across the nine non-empty recognition/address-evidence selections the static dashboard supports. The live dashboard computes only the requested selection through DuckDB-backed API endpoints.
 
 `bun run dashboard:build` always produces the fixture/static build used by CI and Pages. To inspect that exact adapter locally, run `bun run dashboard:dev:fixture`. Do not use the fixture command to validate the live API path.
 

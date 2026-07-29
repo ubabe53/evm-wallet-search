@@ -94,7 +94,6 @@ class TokenRegistryTest(unittest.TestCase):
 
         self.assertEqual(rows[0]["token_address"], address)
         self.assertEqual(rows[0]["metadata_source"], "coingecko")
-        self.assertEqual(rows[0]["token_status"], "trusted")
         self.assertEqual(rows[0]["recognition_status"], "recognized")
 
     def test_adds_online_coinbase_ethereum_contract_without_inventing_decimals(self) -> None:
