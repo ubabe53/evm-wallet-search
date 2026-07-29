@@ -1,10 +1,10 @@
 with token_contracts as (
   select distinct chain_id, token_address
-  from {{ ref('wallet_events') }}
+  from {{ ref('int_wallet_transfer_events') }}
 ),
 eligible_events as (
   select events.*
-  from {{ ref('wallet_events') }} as events
+  from {{ ref('int_wallet_transfer_events') }} as events
   left join token_contracts
     on events.chain_id = token_contracts.chain_id
     and events.counterparty_address = token_contracts.token_address
