@@ -14,11 +14,11 @@ with expected (
 )
 select expected.*
 from expected
-left join {{ ref('wallet_events') }} as actual using (transfer_id)
+left join {{ ref('int_wallet_transfer_events') }} as actual using (transfer_id)
 where actual.transfer_id is null
   or actual.transaction_sender_relation != expected.transaction_sender_relation
   or actual.transaction_target_relation != expected.transaction_target_relation
   or actual.is_indirect is distinct from expected.is_indirect
 {% else %}
-select * from {{ ref('wallet_events') }} where false
+select * from {{ ref('int_wallet_transfer_events') }} where false
 {% endif %}

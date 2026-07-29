@@ -1,5 +1,5 @@
 select transfer_id
-from {{ ref('wallet_events') }}
+from {{ ref('int_wallet_transfer_events') }}
 where
   (token_address = '0x9999999999999999999999999999999999999999'
     and (recognition_status != 'other' or metadata_source != 'ethereum_rpc'

@@ -7,15 +7,8 @@ const token = {
   token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
   token_symbol: "USDC",
   token_name: "USD Coin",
-  token_decimals: 6,
   recognition_status: "recognized",
-  recognition_reason: "registry_match",
-  recognition_source: "registry",
-  recognition_version: "token-recognition-v1",
   recognition_override_status: null,
-  metadata_source: "registry",
-  metadata_source_url: null,
-  metadata_availability: "complete",
   transfer_count: 1,
   inbound_transfer_count: 1,
   outbound_transfer_count: 0,
@@ -24,7 +17,6 @@ const token = {
   counterparty_count: 1,
   sender_account_count: 1,
   recipient_account_count: 0,
-  value_raw_sum: "1000000",
 };
 
 afterEach(() => {
@@ -84,7 +76,6 @@ describe("live token-recognition controls", () => {
           items: [{
             ...token,
             recognition_status: override ?? token.recognition_status,
-            recognition_source: override == null ? "registry" : "manual",
             recognition_override_status: override,
           }],
         }) });
@@ -158,7 +149,6 @@ describe("live token-recognition controls", () => {
     const tokenPayload = (status: "recognized" | "other" | null) => collection([{
       ...token,
       recognition_status: status ?? token.recognition_status,
-      recognition_source: status == null ? "registry" : "manual",
       recognition_override_status: status,
     }]);
 

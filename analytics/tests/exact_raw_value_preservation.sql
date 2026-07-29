@@ -20,7 +20,7 @@ violations as (
 
   select 'events' as relation_name
   from expected
-  left join {{ ref('wallet_events') }} as events
+  left join {{ ref('int_wallet_transfer_events') }} as events
     using (chain_id, transaction_hash, log_index)
   where events.value_raw is distinct from expected.value_raw
 

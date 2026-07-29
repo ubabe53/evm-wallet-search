@@ -22,7 +22,7 @@ with expected as (
     count(*) filter (
       where counterparty_evidence_fetch_status = 'not_fetched'
     ) as not_checked_event_count
-  from {{ ref('wallet_events') }}
+  from {{ ref('int_wallet_transfer_events') }}
   where counterparty_address != '0x0000000000000000000000000000000000000000'
     and counterparty_address != wallet_address
   group by chain_id, wallet_address

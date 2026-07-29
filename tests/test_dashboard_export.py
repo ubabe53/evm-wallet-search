@@ -8,15 +8,42 @@ import scripts.export_dashboard as dashboard_export
 
 
 class DashboardExportTest(unittest.TestCase):
-    def test_export_schema_requires_event_and_direction_evidence(self) -> None:
+    def test_export_schema_requires_the_lean_dashboard_contract(self) -> None:
         duckdb = dashboard_export.ensure_duckdb()
         connection = duckdb.connect(":memory:")
         try:
             connection.execute(
-                "create table wallet_events (from_address varchar, to_address varchar, value_raw varchar)"
+                """
+                create table wallet_events (
+                    chain_id bigint,
+                    wallet_address varchar,
+                    block_number bigint,
+                    block_timestamp timestamp,
+                    transaction_hash varchar,
+                    transaction_index bigint,
+                    log_index bigint,
+                    token_address varchar,
+                    token_symbol varchar,
+                    token_name varchar,
+                    recognition_status varchar,
+                    direction varchar,
+                    is_indirect boolean,
+                    counterparty_address varchar,
+                    counterparty_account_type varchar,
+                    counterparty_code_state varchar,
+                    counterparty_observation_block_number bigint
+                )
+                """
             )
             connection.execute(
-                "create table token_summary (transfer_count integer, value_raw_sum varchar)"
+                """
+                create table token_summary (
+                    indirect_inbound_transfer_count integer,
+                    indirect_outbound_transfer_count integer,
+                    self_transfer_count integer,
+                    counterparty_account_type varchar
+                )
+                """
             )
 
             with self.assertRaisesRegex(
@@ -25,26 +52,9 @@ class DashboardExportTest(unittest.TestCase):
             ):
                 dashboard_export.validate_export_schema(connection)
 
-            for column in (
-                "transaction_from_address varchar",
-                "transaction_to_address varchar",
-                "transaction_sender_relation varchar",
-                "transaction_target_relation varchar",
-                "is_indirect boolean",
-                "counterparty_account_type varchar",
-            ):
-                connection.execute(f"alter table wallet_events add column {column}")
             connection.execute(
-                "alter table token_summary add column indirect_inbound_transfer_count integer"
+                "alter table wallet_events add column counterparty_eip7702_delegation_target varchar"
             )
-            connection.execute(
-                "alter table token_summary add column indirect_outbound_transfer_count integer"
-            )
-            connection.execute(
-                "alter table token_summary add column self_transfer_count integer"
-            )
-            for column in ("counterparty_account_type varchar",):
-                connection.execute(f"alter table token_summary add column {column}")
 
             dashboard_export.validate_export_schema(connection)
         finally:
@@ -57,21 +67,35 @@ class DashboardExportTest(unittest.TestCase):
             connection.execute(
                 """
                 create table counterparty_summary (
+                    chain_id bigint,
+                    wallet_address varchar,
                     counterparty_address varchar,
-                    recognition_status varchar,
                     account_type varchar,
+                    code_state varchar,
+                    observation_block_number bigint,
+                    eip7702_delegation_target varchar,
+                    recognition_status varchar,
                     transfer_count integer,
+                    inbound_transfer_count integer,
+                    outbound_transfer_count integer,
+                    token_count integer,
+                    first_seen_at timestamp,
                     last_seen_at timestamp
                 )
                 """
             )
             connection.executemany(
-                "insert into counterparty_summary values (?, ?, ?, ?, ?)",
+                """
+                insert into counterparty_summary values (
+                    1, '0xwallet', ?, 'contract', 'bytecode_present', 100, null,
+                    ?, ?, ?, ?, 1, '2023-01-01', ?
+                )
+                """,
                 [
-                    ("0xaaa", "recognized", "contract", 90, "2024-01-01"),
-                    ("0xaaa", "other", "contract", 90, "2024-01-01"),
-                    ("0xbbb", "recognized", "contract", 100, "2024-01-02"),
-                    ("0xccc", "other", "contract", 100, "2024-01-02"),
+                    ("0xaaa", "recognized", 90, 45, 45, "2024-01-01"),
+                    ("0xaaa", "other", 90, 45, 45, "2024-01-01"),
+                    ("0xbbb", "recognized", 100, 50, 50, "2024-01-02"),
+                    ("0xccc", "other", 100, 50, 50, "2024-01-02"),
                 ],
             )
 
@@ -112,20 +136,34 @@ class DashboardExportTest(unittest.TestCase):
             connection.execute(
                 """
                 create table counterparty_summary (
+                    chain_id bigint,
+                    wallet_address varchar,
                     counterparty_address varchar,
-                    recognition_status varchar,
                     account_type varchar,
+                    code_state varchar,
+                    observation_block_number bigint,
+                    eip7702_delegation_target varchar,
+                    recognition_status varchar,
                     transfer_count integer,
+                    inbound_transfer_count integer,
+                    outbound_transfer_count integer,
+                    token_count integer,
+                    first_seen_at timestamp,
                     last_seen_at timestamp
                 )
                 """
             )
             connection.executemany(
-                "insert into counterparty_summary values (?, ?, ?, ?, ?)",
+                """
+                insert into counterparty_summary values (
+                    1, '0xwallet', ?, ?, 'not_checked', null, null,
+                    ?, ?, ?, ?, 1, '2023-01-01', ?
+                )
+                """,
                 [
-                    ("0xunknown", "recognized", "unknown", 200, "2025-01-03"),
-                    ("0xcontract", "recognized", "contract", 150, "2025-01-02"),
-                    ("0xeoa", "recognized", "eoa_candidate", 125, "2025-01-01"),
+                    ("0xunknown", "unknown", "recognized", 200, 100, 100, "2025-01-03"),
+                    ("0xcontract", "contract", "recognized", 150, 75, 75, "2025-01-02"),
+                    ("0xeoa", "eoa_candidate", "recognized", 125, 60, 65, "2025-01-01"),
                 ],
             )
             exported = dashboard_export.counterparty_rows(
@@ -146,21 +184,36 @@ class DashboardExportTest(unittest.TestCase):
             connection.execute(
                 """
                 create table token_summary (
+                    chain_id bigint,
+                    wallet_address varchar,
                     token_address varchar,
+                    token_symbol varchar,
+                    token_name varchar,
                     recognition_status varchar,
                     counterparty_account_type varchar,
                     transfer_count integer,
-                    token_symbol varchar
+                    inbound_transfer_count integer,
+                    outbound_transfer_count integer,
+                    self_transfer_count integer,
+                    indirect_inbound_transfer_count integer,
+                    indirect_outbound_transfer_count integer,
+                    counterparty_count integer,
+                    sender_account_count integer,
+                    recipient_account_count integer
                 )
                 """
             )
             connection.executemany(
-                "insert into token_summary values (?, ?, ?, ?, ?)",
+                """
+                insert into token_summary values (
+                    1, '0xwallet', ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 1, 1
+                )
+                """,
                 [
-                    ("0xaaa", "recognized", "contract", 60, "A"),
-                    ("0xaaa", "recognized", "eoa_candidate", 60, "A"),
-                    ("0xbbb", "recognized", "contract", 100, "B"),
-                    ("0xccc", "recognized", "eoa_candidate", 100, "C"),
+                    ("0xaaa", "A", "Token A", "recognized", "contract", 60, 30, 30),
+                    ("0xaaa", "A", "Token A", "recognized", "eoa_candidate", 60, 30, 30),
+                    ("0xbbb", "B", "Token B", "recognized", "contract", 100, 50, 50),
+                    ("0xccc", "C", "Token C", "recognized", "eoa_candidate", 100, 50, 50),
                 ],
             )
 

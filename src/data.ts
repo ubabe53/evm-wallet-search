@@ -49,8 +49,6 @@ export type GraphEdge = {
 export type RecognitionStatus = "recognized" | "other";
 export type RecognitionFilter = "all" | RecognitionStatus;
 export type MetadataAvailability = "complete" | "partial" | "unavailable";
-export type TransactionSenderRelation = "transfer_sender" | "transfer_recipient" | "other" | "unknown";
-export type TransactionTargetRelation = "token_contract" | "transfer_sender" | "transfer_recipient" | "other" | "unknown";
 export type AccountType = "eoa_candidate" | "contract" | "unknown";
 export type AccountFilter = Exclude<AccountType, "unknown">;
 export type CodeState = "no_code" | "eip7702_delegated" | "contract_code" | "unknown";
@@ -60,22 +58,8 @@ export type TransferDirection = "in" | "out" | "self";
 export type AccountEvidence = {
   account_type: AccountType;
   code_state: CodeState;
-  code_size_bytes: number | null;
   observation_block_number: number | null;
-  observation_block_timestamp: string | null;
   eip7702_delegation_target: string | null;
-  evidence_fetch_status: EvidenceFetchStatus;
-  evidence_reason_codes: string;
-  evidence_schema_version: string | null;
-};
-
-export type ClassificationEvidence = {
-  recognition_status: RecognitionStatus;
-  recognition_reason: string;
-  recognition_source: string;
-  recognition_version: "token-recognition-v1";
-  recognition_override_status?: RecognitionStatus | null;
-  metadata_availability: MetadataAvailability;
 };
 
 export type DashboardGraph = {
@@ -89,17 +73,9 @@ export type TokenSummary = {
   token_address: string;
   token_symbol: string;
   token_name: string | null;
-  token_decimals: number | null;
   recognition_status: RecognitionStatus;
-  recognition_reason: string;
-  recognition_source: string;
-  recognition_version: "token-recognition-v1";
   recognition_override_status?: RecognitionStatus | null;
-  metadata_source: string | null;
-  metadata_source_url: string | null;
-  token_label_reason: string | null;
-  metadata_availability: MetadataAvailability;
-  counterparty_account_type: AccountType;
+  counterparty_account_type?: AccountType;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -109,14 +85,13 @@ export type TokenSummary = {
   counterparty_count: number;
   sender_account_count: number;
   recipient_account_count: number;
-  value_raw_sum: string;
 };
 
 export type CounterpartySummary = AccountEvidence & {
   chain_id: number;
   wallet_address: string;
   counterparty_address: string;
-  recognition_status: RecognitionStatus;
+  recognition_status?: RecognitionStatus;
   transfer_count: number;
   inbound_transfer_count: number;
   outbound_transfer_count: number;
@@ -125,56 +100,38 @@ export type CounterpartySummary = AccountEvidence & {
   last_seen_at: string;
 };
 
-export type TimelineRow = ClassificationEvidence & {
+export type TimelineRow = {
   chain_id: number;
   wallet_address: string;
   block_date: string;
   token_address: string;
   token_symbol: string;
-  metadata_source: string | null;
-  metadata_source_url: string | null;
+  recognition_status: RecognitionStatus;
   counterparty_account_type: AccountType;
   direction: TransferDirection;
   transfer_count: number;
-  value_raw_sum: string;
 };
 
-export type WalletEvent = ClassificationEvidence & {
+export type WalletEvent = {
   transfer_id: string;
   chain_id: number;
+  wallet_address: string;
   block_number: number;
   block_timestamp: string;
-  block_date: string;
   transaction_hash: string;
   transaction_index: number;
-  transaction_from_address: string | null;
-  transaction_to_address: string | null;
   log_index: number;
-  wallet_address: string;
-  from_address: string;
-  to_address: string;
+  token_address: string;
+  token_symbol: string | null;
+  token_name: string | null;
+  recognition_status: RecognitionStatus;
   direction: TransferDirection;
-  transaction_sender_relation: TransactionSenderRelation;
-  transaction_target_relation: TransactionTargetRelation;
   is_indirect: boolean | null;
   counterparty_address: string;
   counterparty_account_type: AccountType;
   counterparty_code_state: CodeState;
-  counterparty_code_size_bytes: number | null;
   counterparty_observation_block_number: number | null;
-  counterparty_observation_block_timestamp: string | null;
   counterparty_eip7702_delegation_target: string | null;
-  counterparty_evidence_fetch_status: EvidenceFetchStatus;
-  counterparty_evidence_reason_codes: string;
-  counterparty_evidence_schema_version: string | null;
-  token_address: string;
-  token_symbol: string | null;
-  token_name: string | null;
-  token_decimals: number | null;
-  metadata_source: string | null;
-  metadata_source_url: string | null;
-  token_label_reason: string | null;
-  value_raw: string;
 };
 
 export type PipelineMetadata = {
@@ -465,7 +422,6 @@ export type RecognitionOverrideResponse = {
   chain_id: 1;
   token_address: string;
   automatic_status: RecognitionStatus;
-  automatic_reason: string;
   override_status: RecognitionStatus | null;
   recognition_status: RecognitionStatus;
   recognition_source: "automatic" | "manual";

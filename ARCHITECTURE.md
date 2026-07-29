@@ -127,7 +127,7 @@ The loopback-only FastAPI service:
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, timeline buckets, graph compatibility pages, event pages, and time ranges on demand;
 - return source, generation time, indexed bounds, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
-- return event raw values and per-token raw totals as exact strings while retaining token-decimals metadata separately;
+- expose only the event identity, display, classification, and count fields consumed by the dashboard while retaining exact raw values, token decimals, and detailed provenance in the complete DuckDB intermediate relation;
 - return self-transfers as the explicit `self` event direction while excluding the tracked wallet from counterparty counts and graph relationships;
 - verify that live metadata references exactly one completed finalized snapshot run before serving it;
 - apply manual token-recognition overrides before every filter, count, ranking, timeline bucket, graph compatibility page, and event page;

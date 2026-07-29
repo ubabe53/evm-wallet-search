@@ -1,60 +1,38 @@
 const contractAccountEvidence = {
   account_type: "contract",
   code_state: "contract_code",
-  code_size_bytes: 32,
   observation_block_number: 22_500_000,
-  observation_block_timestamp: "2025-05-17T03:11:47+00:00",
   eip7702_delegation_target: null,
-  evidence_fetch_status: "complete",
-  evidence_reason_codes: "contract_code_observed",
-  evidence_schema_version: "account-evidence-v2",
 } as const;
 
 const eoaAccountEvidence = {
   ...contractAccountEvidence,
   account_type: "eoa_candidate",
   code_state: "no_code",
-  code_size_bytes: 0,
-  evidence_reason_codes: "no_code_observed",
 } as const;
 
 const contractEventEvidence = {
   counterparty_account_type: "contract",
   counterparty_code_state: "contract_code",
-  counterparty_code_size_bytes: 32,
   counterparty_observation_block_number: 22_500_000,
-  counterparty_observation_block_timestamp: "2025-05-17T03:11:47+00:00",
   counterparty_eip7702_delegation_target: null,
-  counterparty_evidence_fetch_status: "complete",
-  counterparty_evidence_reason_codes: "contract_code_observed",
-  counterparty_evidence_schema_version: "account-evidence-v2",
 } as const;
 
 const eoaEventEvidence = {
   ...contractEventEvidence,
   counterparty_account_type: "eoa_candidate",
   counterparty_code_state: "no_code",
-  counterparty_code_size_bytes: 0,
-  counterparty_evidence_reason_codes: "no_code_observed",
 } as const;
 
 const recognizedEvidence = {
   recognition_status: "recognized",
-  recognition_reason: "registry_match",
-  recognition_source: "registry",
-  recognition_version: "token-recognition-v1",
   recognition_override_status: null,
-  metadata_availability: "complete",
   counterparty_account_type: "contract",
 } as const;
 
 const otherEvidence = {
   recognition_status: "other",
-  recognition_reason: "no_registry_match",
-  recognition_source: "automatic",
-  recognition_version: "token-recognition-v1",
   recognition_override_status: null,
-  metadata_availability: "complete",
   counterparty_account_type: "eoa_candidate",
 } as const;
 
@@ -66,10 +44,6 @@ export const summaries = {
       token_address: "0x2",
       token_symbol: "USDC",
       token_name: "USD Coin",
-      token_decimals: 6,
-      metadata_source: "manual",
-      metadata_source_url: "https://example.com/usdc",
-      token_label_reason: "Canonical metadata",
       ...recognizedEvidence,
       transfer_count: 1,
       inbound_transfer_count: 1,
@@ -80,18 +54,15 @@ export const summaries = {
       counterparty_count: 1,
       sender_account_count: 1,
       recipient_account_count: 0,
-      value_raw_sum: "125000000",
     },
     {
       chain_id: 1, wallet_address: "0x1", token_address: "0x3", token_symbol: "OTHER",
-      token_name: "Other Token", token_decimals: 18, metadata_source: "manual",
-      metadata_source_url: "https://example.com/other", token_label_reason: "Test other",
+      token_name: "Other Token",
       ...otherEvidence,
       transfer_count: 1, inbound_transfer_count: 1, outbound_transfer_count: 0,
       self_transfer_count: 0,
       indirect_inbound_transfer_count: 0, indirect_outbound_transfer_count: 0,
       counterparty_count: 1, sender_account_count: 1, recipient_account_count: 0,
-      value_raw_sum: "1000000000000000000",
     },
   ],
   counterparties: [
@@ -114,53 +85,37 @@ export const summaries = {
   ],
 };
 
-export const timeline = [{ ...recognizedEvidence, chain_id: 1, wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", metadata_source: "manual", metadata_source_url: "https://example.com/usdc", direction: "in", transfer_count: 1, value_raw_sum: "125000000" }];
+export const timeline = [{ ...recognizedEvidence, chain_id: 1, wallet_address: "0x1", block_date: "2023-11-14", token_address: "0x2", token_symbol: "USDC", direction: "in", transfer_count: 1 }];
 
 const events = [
   {
     ...contractEventEvidence,
     transfer_id: "1-0xaaa-0",
     chain_id: 1,
+    wallet_address: "0x1",
     block_number: 17_000_001,
     block_timestamp: "2023-11-14T22:15:00+00:00",
-    block_date: "2023-11-14",
     transaction_hash: "0xaaa",
     transaction_index: 2,
-    transaction_from_address: "0x1",
-    transaction_to_address: "0x2",
     log_index: 0,
-    wallet_address: "0x1",
-    from_address: "0x1111111111111111111111111111111111111111",
-    to_address: "0x1",
     direction: "in",
-    transaction_sender_relation: "transfer_recipient",
-    transaction_target_relation: "token_contract",
     is_indirect: true,
     counterparty_address: "0x1111111111111111111111111111111111111111",
     token_address: "0x2",
     token_symbol: "USDC",
     token_name: "USD Coin",
-    token_decimals: 6,
-    metadata_source: "manual",
-    metadata_source_url: "https://example.com/usdc",
-    token_label_reason: "Canonical metadata",
     ...recognizedEvidence,
-    value_raw: "125000000",
   },
   {
     ...eoaEventEvidence,
     transfer_id: "1-0xother-0", chain_id: 1, block_number: 17_000_002,
-    block_timestamp: "2023-11-14T22:16:00+00:00", block_date: "2023-11-14",
+    block_timestamp: "2023-11-14T22:16:00+00:00",
     transaction_hash: "0xother", transaction_index: 3, log_index: 0,
-    transaction_from_address: null, transaction_to_address: null,
     wallet_address: "0x1", direction: "in",
-    from_address: "0x2222222222222222222222222222222222222222", to_address: "0x1",
-    transaction_sender_relation: "unknown", transaction_target_relation: "unknown", is_indirect: null,
+    is_indirect: null,
     counterparty_address: "0x2222222222222222222222222222222222222222", token_address: "0x3",
-    token_symbol: "OTHER", token_name: "Other Token", token_decimals: 18,
-    metadata_source: "manual", metadata_source_url: "https://example.com/other", token_label_reason: "Test other",
+    token_symbol: "OTHER", token_name: "Other Token",
     ...otherEvidence,
-    value_raw: "1000000000000000000",
   },
 ];
 
@@ -174,8 +129,6 @@ export const dashboardEvents = [
     ...(index === 8 ? {
       transfer_id: "1-0xself-0",
       transaction_hash: "0xself",
-      from_address: "0x1",
-      to_address: "0x1",
       direction: "self",
       is_indirect: false,
       counterparty_address: "0x1",

@@ -77,16 +77,72 @@ describe("dashboard export shape", () => {
     expect(metadata.exported_counterparty_summary_count).toBeLessThanOrEqual(metadata.counterparty_summary_row_count);
     expect(metadata.exported_timeline_row_count).toBeLessThanOrEqual(metadata.timeline_row_count);
     expect(graph.edges.length).toBe(metadata.exported_interaction_count * 2);
-    expect(typeof summaries.tokens[0].value_raw_sum).toBe("string");
-    expect(events.find((event: { transfer_id: string }) => event.transfer_id === "1-0xeee-0")?.value_raw).toBe(
-      "115792089237316195423570985008687907853269984665640564039457584007913129639935",
-    );
-    expect(summaries.tokens.find(
-      (token: { token_address: string }) =>
-        token.token_address === "0x9999999999999999999999999999999999999999",
-    )?.value_raw_sum).toBe(
-      "115792089237316195423570985008687907853269984665640564039457584007913129639935",
-    );
+    expect(Object.keys(events[0]).sort()).toEqual([
+      "block_number",
+      "block_timestamp",
+      "chain_id",
+      "counterparty_account_type",
+      "counterparty_address",
+      "counterparty_code_state",
+      "counterparty_eip7702_delegation_target",
+      "counterparty_observation_block_number",
+      "direction",
+      "is_indirect",
+      "log_index",
+      "recognition_status",
+      "token_address",
+      "token_name",
+      "token_symbol",
+      "transaction_hash",
+      "transaction_index",
+      "transfer_id",
+      "wallet_address",
+    ]);
+    expect(Object.keys(summaries.tokens[0]).sort()).toEqual([
+      "chain_id",
+      "counterparty_account_type",
+      "counterparty_count",
+      "inbound_transfer_count",
+      "indirect_inbound_transfer_count",
+      "indirect_outbound_transfer_count",
+      "outbound_transfer_count",
+      "recipient_account_count",
+      "recognition_status",
+      "self_transfer_count",
+      "sender_account_count",
+      "token_address",
+      "token_name",
+      "token_symbol",
+      "transfer_count",
+      "wallet_address",
+    ]);
+    expect(Object.keys(summaries.counterparties[0]).sort()).toEqual([
+      "account_type",
+      "chain_id",
+      "code_state",
+      "counterparty_address",
+      "eip7702_delegation_target",
+      "first_seen_at",
+      "inbound_transfer_count",
+      "last_seen_at",
+      "observation_block_number",
+      "outbound_transfer_count",
+      "recognition_status",
+      "token_count",
+      "transfer_count",
+      "wallet_address",
+    ]);
+    expect(Object.keys(timeline[0]).sort()).toEqual([
+      "block_date",
+      "chain_id",
+      "counterparty_account_type",
+      "direction",
+      "recognition_status",
+      "token_address",
+      "token_symbol",
+      "transfer_count",
+      "wallet_address",
+    ]);
     expect(["recognized", "other"]).toContain(summaries.tokens[0].recognition_status);
     expect(summaries.tokens.every((row: {
       transfer_count: number;
@@ -138,27 +194,16 @@ describe("dashboard export shape", () => {
     expect(new Set(summaries.counterparties.map((row: { account_type: string }) => row.account_type))).toEqual(
       new Set(["unknown"]),
     );
-    expect(summaries.counterparties.every((row: { evidence_fetch_status: string }) =>
-      row.evidence_fetch_status === "not_fetched")).toBe(true);
     expect(events.every((event: {
-      from_address: string;
-      to_address: string;
-      transaction_from_address: string | null;
-      transaction_to_address: string | null;
-      transaction_sender_relation: string;
-      transaction_target_relation: string;
+      transfer_id: string;
+      transaction_hash: string;
+      transaction_index: number;
+      log_index: number;
       is_indirect: boolean | null;
     }) =>
-      typeof event.from_address === "string" &&
-      typeof event.to_address === "string" &&
-      ["transfer_sender", "transfer_recipient", "other", "unknown"].includes(event.transaction_sender_relation) &&
-      ["token_contract", "transfer_sender", "transfer_recipient", "other", "unknown"].includes(event.transaction_target_relation) &&
-      (event.transaction_from_address == null
-        ? event.transaction_sender_relation === "unknown" && event.is_indirect == null
-        : event.transaction_sender_relation !== "unknown" && typeof event.is_indirect === "boolean") &&
-      (event.transaction_to_address == null
-        ? event.transaction_target_relation === "unknown"
-        : event.transaction_target_relation !== "unknown"))).toBe(true);
+      event.transfer_id === `1-${event.transaction_hash}-${event.log_index}` &&
+      Number.isInteger(event.transaction_index) &&
+      (event.is_indirect == null || typeof event.is_indirect === "boolean"))).toBe(true);
     expect(graph.edges.every((edge: { data: { transferCount: number; counterpartyTransferCount: number } }) =>
       edge.data.counterpartyTransferCount >= edge.data.transferCount)).toBe(true);
     expect(graph.edges.every((edge: { data: { counterpartyAccountType: string } }) =>

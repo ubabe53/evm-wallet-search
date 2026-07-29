@@ -37,7 +37,7 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
-        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v13")
+        self.assertEqual(metadata["api_schema_version"], "dashboard-api-v14")
         self.assertNotIn("wallet_id", metadata)
         self.assertEqual(metadata["chain_id"], 1)
         self.assertEqual(metadata["ens"], "vitalik.eth")
@@ -122,27 +122,37 @@ class DashboardApiTest(unittest.TestCase):
         value = Decimal("12345678901234567890.123456789012345678")
         self.assertEqual(json_value(value), "12345678901234567890.123456789012345678")
 
-    def test_raw_uint256_value_is_exact_in_event_and_token_responses(self) -> None:
-        expected = (
-            "115792089237316195423570985008687907853269984665640564039457"
-            "584007913129639935"
-        )
+    def test_event_response_is_the_lean_dashboard_contract(self) -> None:
         event_payload = self.client.get(
             "/api/v1/events",
             params={"q": "0xeee", "limit": 1},
         ).json()
-        token_payload = self.client.get(
-            "/api/v1/tokens",
-            params={"q": "0x9999999999999999999999999999999999999999", "limit": 1},
-        ).json()
-
         event = event_payload["items"][0]
-        self.assertEqual(event["value_raw"], expected)
-        self.assertNotIn("wallet_id", event)
-        self.assertNotIn("ens", event)
-        self.assertNotIn("amount_decimal", event)
-        self.assertEqual(token_payload["items"][0]["value_raw_sum"], expected)
-        self.assertNotIn("amount_decimal_sum", token_payload["items"][0])
+        self.assertEqual(event["transfer_id"], "1-0xeee-0")
+        self.assertEqual(
+            set(event),
+            {
+                "transfer_id",
+                "chain_id",
+                "wallet_address",
+                "block_number",
+                "block_timestamp",
+                "transaction_hash",
+                "transaction_index",
+                "log_index",
+                "token_address",
+                "token_symbol",
+                "token_name",
+                "recognition_status",
+                "direction",
+                "is_indirect",
+                "counterparty_address",
+                "counterparty_account_type",
+                "counterparty_code_state",
+                "counterparty_observation_block_number",
+                "counterparty_eip7702_delegation_target",
+            },
+        )
 
     def test_summary_uses_every_matching_row(self) -> None:
         default = self.client.get("/api/v1/summary").json()
@@ -212,7 +222,6 @@ class DashboardApiTest(unittest.TestCase):
         ).json()
         overridden = next(item for item in filtered["items"] if item["token_address"] == token_address)
         self.assertEqual(overridden["recognition_status"], "other")
-        self.assertEqual(overridden["recognition_source"], "manual")
         self.assertEqual(overridden["recognition_override_status"], "other")
 
         reopened = QueryService(self.database_path, require_live=False)
@@ -392,8 +401,7 @@ class DashboardApiTest(unittest.TestCase):
         ).json()
 
         self.assertEqual(event["direction"], "self")
-        self.assertEqual(event["from_address"], event["wallet_address"])
-        self.assertEqual(event["to_address"], event["wallet_address"])
+        self.assertEqual(event["counterparty_address"], event["wallet_address"])
         self.assertEqual(token["self_transfer_count"], 1)
         self.assertEqual(
             token["transfer_count"],
@@ -423,28 +431,24 @@ class DashboardApiTest(unittest.TestCase):
 
     def test_counterparty_and_graph_rank_the_same_inclusive_recognition_cohort(self) -> None:
         mixed_address = "0x1111111111111111111111111111111111111111"
-        inserted_transfer_id = "fixture-mixed-recognition"
+        inserted_transaction_hash = "0x" + "f" * 64
         with self.service.connect() as connection:
             connection.execute(
                 """
                 insert into wallet_events
                 select * replace (
-                  ? as transfer_id,
                   17000010 as block_number,
                   ? as transaction_hash,
                   10 as transaction_index,
                   10 as log_index,
-                  ? as from_address,
                   ? as counterparty_address,
-                  'other' as recognition_status,
-                  'no_registry_match' as recognition_reason,
-                  'automatic' as recognition_source
+                  'other' as recognition_status
                 )
                 from wallet_events
                 where recognition_status = 'other'
                 limit 1
                 """,
-                [inserted_transfer_id, "0x" + "f" * 64, mixed_address, mixed_address],
+                [inserted_transaction_hash, mixed_address],
             )
 
         try:
@@ -468,7 +472,10 @@ class DashboardApiTest(unittest.TestCase):
                     self.assertNotIn("direction", graph["items"][0])
         finally:
             with self.service.connect() as connection:
-                connection.execute("delete from wallet_events where transfer_id = ?", [inserted_transfer_id])
+                connection.execute(
+                    "delete from wallet_events where transaction_hash = ?",
+                    [inserted_transaction_hash],
+                )
 
     def test_live_api_rejects_a_fixture_database(self) -> None:
         client = TestClient(create_app(QueryService(FIXTURE_DB_PATH)))

@@ -160,82 +160,95 @@ models:
         tests:
           - not_null
   - name: wallet_events
-    description: Dashboard event table, one row per wallet-relevant Transfer-signature log interpreted by ERC20-oriented models; token standard is not proven by the source signature.
+    description: Lean dashboard event projection at one row per configured wallet and captured Transfer-signature log; full row-level evidence remains in int_wallet_transfer_events.
+    meta:
+      grain: one row per configured wallet and captured Transfer-signature log
+      primary_key:
+        - chain_id
+        - wallet_address
+        - transaction_hash
+        - log_index
+      consumers:
+        - local_api
+        - fixture_exporter
     columns:
-      - name: transfer_id
-        tests:
-          - unique
-          - not_null
-      - name: block_hash
-        description: Lowercase canonical block hash preserved from transfer-event staging.
+      - name: chain_id
+        description: EVM chain identifier; currently always Ethereum mainnet (1).
         tests:
           - not_null
+          - accepted_values:
+              arguments:
+                values: [1]
       - name: wallet_address
+        description: Lowercase configured wallet relative to which direction and counterparty are defined.
         tests:
           - not_null
-      - name: from_address
+      - name: block_number
+        description: Canonical event block number used for stable ordering and cursor pagination.
         tests:
           - not_null
-      - name: to_address
+      - name: block_timestamp
+        description: Event block timestamp used for display and UTC period filtering.
         tests:
           - not_null
-      - name: counterparty_address
+      - name: transaction_hash
+        description: Lowercase transaction hash from the captured event identity.
+        tests:
+          - not_null
+      - name: transaction_index
+        description: Transaction position within the block, retained for deterministic event ordering.
+        tests:
+          - not_null
+      - name: log_index
+        description: Log position within the transaction and part of the canonical event key.
         tests:
           - not_null
       - name: token_address
+        description: Lowercase emitting contract address; the shared signature does not prove token standard.
         tests:
           - not_null
-      - name: value_raw
-        description: Exact emitted third value preserved from staging without decimal normalization.
-        tests:
-          - not_null
-      - name: direction
-        tests:
-          - accepted_values:
-              arguments:
-                values: ["in", "out", "self"]
-      - name: transaction_sender_relation
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["transfer_sender", "transfer_recipient", "other", "unknown"]
-      - name: transaction_target_relation
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["token_contract", "transfer_sender", "transfer_recipient", "other", "unknown"]
+      - name: token_symbol
+        description: Nullable sourced token symbol used only for display.
+      - name: token_name
+        description: Nullable sourced token name used only for display and literal token search.
       - name: recognition_status
+        description: Automatic exact-address registry classification before any local API override.
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["recognized", "other"]
-      - name: recognition_version
+      - name: direction
+        description: Wallet-relative emitted-event direction; self is evaluated before inbound or outbound.
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ["token-recognition-v1"]
-      - name: metadata_availability
+                values: ["in", "out", "self"]
+      - name: is_indirect
+        description: True when observed transaction sender differs from emitted Transfer sender; null when envelope evidence is unavailable.
+      - name: counterparty_address
+        description: Other emitted participant for inbound/outbound events; equals the tracked wallet for self events.
         tests:
           - not_null
-          - accepted_values:
-              arguments:
-                values: ["complete", "partial", "unavailable"]
       - name: counterparty_account_type
+        description: Observed-at account classification used by the dashboard filter.
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["eoa_candidate", "contract", "unknown"]
-      - name: counterparty_evidence_fetch_status
+      - name: counterparty_code_state
+        description: Observed bytecode state supporting the public account classification.
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ["complete", "failed", "not_fetched"]
+                values: ["no_code", "eip7702_delegated", "contract_code", "unknown"]
+      - name: counterparty_observation_block_number
+        description: Nullable pinned block at which successful account bytecode evidence was observed.
+      - name: counterparty_eip7702_delegation_target
+        description: Nullable exact EIP-7702 delegation target retained for account-type tooltip context.
   - name: graph_nodes
     columns:
       - name: node_id
