@@ -346,6 +346,12 @@ describe("App", () => {
     expect(styles).toMatch(/th\s*\{[^}]*text-transform:\s*none;/s);
   });
 
+  it("gives the activity timeline the full dashboard width", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+
+    expect(styles).toMatch(/\.workspace\s*\{[^}]*grid-template-columns:\s*1fr;/s);
+  });
+
   it("exposes binary account filters while retaining unresolved rows in the all selection", () => {
     expect(accountMatches("eoa_candidate", ["eoa_candidate"])).toBe(true);
     expect(accountMatches("contract", ["eoa_candidate"])).toBe(false);
@@ -606,8 +612,20 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText(
-      "Transfer Event Analytics for vitalik.eth, based on emitted Transfer(address,address,uint256) events.",
+      "Transfer Event Analytics based on emitted Transfer(address,address,uint256) events.",
     )).toBeInTheDocument());
+    expect(screen.getByRole("region", { name: "Analysis context" })).toHaveTextContent(
+      "Analyzing0x1vitalik.ethEthereum mainnetExample wallet",
+    );
+    expect(screen.getByRole("link", { name: "0x1" })).toHaveAttribute(
+      "href",
+      "https://etherscan.io/address/0x1",
+    );
+    expect(screen.getByText("vitalik.eth")).toHaveAttribute(
+      "title",
+      "Configured project label; not a live ENS resolution.",
+    );
+    expect(screen.getByText("Current selection")).toBeInTheDocument();
     expect(screen.getAllByText("USDC").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "USDC" })[0]).toHaveAttribute(
       "href",
@@ -645,9 +663,8 @@ describe("App", () => {
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
-    expect(screen.getByText("Data snapshot").parentElement).toHaveTextContent(
-      "Data snapshotCoverage not recorded",
-    );
+    expect(screen.getByText("Coverage not recorded")).toBeInTheDocument();
+    expect(screen.getByText(/Generated Nov 14, 2023, 10:15 PM UTC/)).toBeInTheDocument();
     expect(screen.getByText("Activity Timeline")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Timeline year" })).toHaveValue("");
     expect(screen.getByRole("option", { name: "2023" })).toBeInTheDocument();

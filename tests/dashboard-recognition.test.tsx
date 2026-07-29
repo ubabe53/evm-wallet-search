@@ -116,6 +116,9 @@ describe("live token-recognition controls", () => {
     const { App } = await import("../src/App");
     render(<App />);
     const control = await screen.findByRole("combobox", { name: "Recognition for USDC" });
+    expect(screen.getByText("Configured wallet")).toBeInTheDocument();
+    expect(screen.getByText("HyperIndex data")).toBeInTheDocument();
+    expect(screen.getByText("Current selection")).toBeInTheDocument();
 
     fireEvent.change(control, { target: { value: "other" } });
     expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
