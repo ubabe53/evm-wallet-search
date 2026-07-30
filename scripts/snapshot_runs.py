@@ -23,7 +23,6 @@ except ImportError:
 CHAIN_ID = 1
 FINALITY_POLICY = "ethereum_finalized"
 SCOPE_VERSION = "wallet-transfer-signature-v1"
-DEFAULT_HYPERINDEX_GRAPHQL_URL = "http://127.0.0.1:8080/v1/graphql"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-f]{40}$")
 HASH_PATTERN = re.compile(r"^0x[0-9a-f]{64}$")
 WALLETS_PATH = ANALYTICS_DIR / "seeds" / "wallets.csv"
