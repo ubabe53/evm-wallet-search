@@ -64,8 +64,6 @@ presentation checks, but its fixture badge, bounded payload, and unrecorded scan
 of the contract—not caveats to hide.
 
 No checked-in screenshot currently matches the dashboard contract closely enough to embed here.
-The retired graph-era captures are preserved under
-[`docs/images/legacy/`](docs/images/legacy/), and
 [`docs/images/README.md`](docs/images/README.md) defines the verified slot and refresh procedure
 for the next current overview image without leaving a broken link in this README.
 
@@ -97,7 +95,7 @@ fixture quick start as a production workflow.
 | [`server/`](server/README.md) | Loopback API validation, exact bounded queries, and local recognition overrides |
 | [`src/`](src/README.md) | React presentation and separate live/static data adapters |
 | [`scripts/`](scripts/README.md) | Explicit orchestration, enrichment, export, and review entry points |
-| [`tests/`](tests/) | API, UI, export, enrichment, snapshot, and indexer contract tests |
+| [`tests/`](tests/README.md) | API, UI, export, enrichment, snapshot, and indexer contract tests |
 | [`docs/`](docs/README.md) | Detailed architecture, data-model, operations, and image guidance |
 | [`public/data/`](public/data/) | Ignored generated fixture JSON; never hand-edit |
 

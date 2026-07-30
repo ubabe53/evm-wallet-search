@@ -5,8 +5,8 @@ This directory is the documentation-owned home for dashboard captures.
 ## Current screenshot slot
 
 The intended overview image is `dashboard-overview.png`. It is deliberately absent today:
-the existing captures predate the current timeline, analysis-context, provenance, recognition,
-account-evidence, and table contracts.
+no checked-in screenshot currently matches the timeline, analysis-context, provenance,
+recognition, account-evidence, and table contracts.
 
 When refreshing it:
 
@@ -18,16 +18,3 @@ When refreshing it:
 5. Add `dashboard-overview.png` here and embed it from the root README in the same commit.
 
 This procedure makes the empty slot intentional without publishing a broken image link.
-
-## Legacy captures
-
-[`legacy/`](legacy/) preserves four initial-project screenshots for historical reference:
-
-- `dashboard-mvp.png`
-- `dashboard-theme-filter.png`
-- `dashboard-pan-light.png`
-- `dashboard-pan-dark.png`
-
-All show the retired interaction-graph/token-flow interface and must not be presented as the
-current product. They can be removed in a separately reviewed asset-cleanup change once no
-historical reference is needed.
