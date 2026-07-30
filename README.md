@@ -35,7 +35,7 @@ flowchart LR
     indexer --> postgres["HyperIndex Postgres<br/>ingestion persistence"]
     postgres --> dbt["dbt transformations<br/>analytics/"]
     enrich["Offline token inputs +<br/>local account evidence"] --> dbt
-    dbt --> live["live.duckdb<br/>complete local snapshot"]
+    dbt --> live["live.duckdb<br/>finalized-range snapshot"]
     live --> api["Loopback FastAPI<br/>server/"]
     api --> dashboard["React dashboard<br/>src/"]
 
@@ -45,9 +45,9 @@ flowchart LR
 ```
 
 The two delivery paths are deliberately separate. Local development queries complete matching
-rows from `live.duckdb` through the API. The static build reads only bounded fixture JSON and
-cannot establish live HyperIndex coverage. See [ARCHITECTURE.md](ARCHITECTURE.md) for dependency
-rules, trust boundaries, and known gaps.
+rows within the recorded `live.duckdb` coverage through the API. The static build reads only
+bounded fixture JSON and cannot establish live HyperIndex coverage. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for dependency rules, trust boundaries, and known gaps.
 
 ## Dashboard and demo
 
@@ -69,11 +69,12 @@ for the next current overview image without leaving a broken link in this README
 
 ## Quick start
 
-Requirements: [Bun](https://bun.sh/) and Python 3. The wrapper installs the pinned analytics
-requirements into the active Python environment when needed.
+Requirements: [Bun](https://bun.sh/) and Python 3. Install the reviewed Python dependency ranges
+explicitly; the dbt wrapper's limited bootstrap is only a fallback when dbt is absent.
 
 ```sh
 bun install
+python3 -m pip install -r requirements-dev.txt
 bun run analytics:build:fixture
 bun run export:dashboard
 bun run dashboard:dev:fixture
@@ -82,9 +83,10 @@ bun run dashboard:dev:fixture
 Open the local URL printed by Vite. This runs only the deterministic fixture path; it does not
 start HyperIndex or produce live-wallet analytics.
 
-For the primary local product, Docker and Envio/Ethereum credentials are also required. Follow
-the [live setup and recovery guide](docs/operations.md#local-setup) rather than treating the
-fixture quick start as a production workflow.
+For the primary local product, Docker, an Envio token, and the HyperIndex Postgres DSN are also
+required; Ethereum RPC can use the configured public fallback. Follow the
+[live setup and recovery guide](docs/operations.md#local-setup) rather than treating the fixture
+quick start as a production workflow.
 
 ## Repository map
 

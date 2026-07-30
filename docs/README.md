@@ -33,6 +33,6 @@ boundary, model contract, command, API shape, export shape, or visible dashboard
 
 ## Images
 
-Screenshot placement and legacy-image status are documented in
+Screenshot placement and verification are documented in
 [`images/README.md`](images/README.md). Do not link an expected filename from a public README
 until the corresponding verified image exists.

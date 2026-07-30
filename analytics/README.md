@@ -43,9 +43,9 @@ bun run analytics:docs:serve
 bun run test:analytics
 ```
 
-`test:analytics` tests an already materialized target; build the relevant models first. The
-fixture build is deterministic. The live build requires HyperIndex progress, a Postgres DSN, and
-Ethereum finality evidence, and records attempted intervals in `ops.pipeline_runs`.
+`test:analytics` tests the already materialized fixture artifact; build the fixture models first.
+The fixture build is deterministic. The live build requires HyperIndex progress, a Postgres DSN,
+and Ethereum finality evidence, and records attempted intervals in `ops.pipeline_runs`.
 
 ## Contracts
 
