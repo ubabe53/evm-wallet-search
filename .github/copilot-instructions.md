@@ -1,66 +1,36 @@
-# Copilot instructions
+# Copilot review instructions
 
-## Project context
+## Sources of truth
 
-This repository is a locally run Ethereum wallet analytics application. Envio
-HyperIndex captures the ERC-20-intended `Transfer(address,address,uint256)`
-signature without currently disambiguating ERC-721, dbt transforms rows into DuckDB marts, and the
-local FastAPI service executes bounded queries over the isolated live artifact and
-may mutate only its application-owned token-recognition override table.
-The React/Vite dashboard selects the API adapter in local development and the
-generated-JSON adapter only for the GitHub Pages fixture demo. Fixture tests and
-demo builds must remain offline and reproducible; never enable both adapters together.
+Read [AGENTS.md](../AGENTS.md) first and follow its workflow, semantic invariants, validation,
+and change-routing rules. Use [ARCHITECTURE.md](../ARCHITECTURE.md) for the current system map and
+boundaries, then consult the relevant detailed contract under [`docs/`](../docs/README.md).
+When narrative and implementation disagree, verify behavior from the nearest code and tests and
+flag material documentation drift.
 
-Use these commands when validating changes:
+## Review guidance
 
-```sh
-bun install --frozen-lockfile
-python -m pip install -r requirements-dev.txt
-bun run static:check
-bun run test
-bun run dashboard:build
-```
+- Report only concrete correctness, security, data-integrity, regression, portability,
+  materially missing-test, or material documentation-drift problems. Avoid subjective style
+  comments.
+- Explain the failure mode, point to the smallest relevant location, and suggest a correction
+  when one is clear.
+- Preserve the narrow evidence claim: a captured `Transfer(address,address,uint256)` log does not
+  prove ERC-20 compliance, intent, ownership, legitimacy, transaction initiation, or historical
+  account type.
+- The current public token classification is only `Recognized` or `Other`, resolved from
+  exact-address registry evidence and optional local manual overrides. Neither result is a
+  reputation or safety claim; names, symbols, registry absence, RPC metadata, and wallet activity
+  must not become trust signals.
+- Check that live DuckDB/API results remain distinct from bounded fixture-demo output and that
+  provenance, limits, complete matching counts, and sampling state remain honest.
+- Reject changes that expose credentials, private RPC URLs, ignored configuration, DuckDB files,
+  generated dashboard JSON, or indexer state.
+- Ordinary fixture builds and deterministic tests must remain offline and must not require
+  Docker, RPC, Envio credentials, or HyperIndex Postgres.
+- For cross-layer changes, use the routing table in
+  [AGENTS.md](../AGENTS.md#change-routing) to verify that owning contracts and nearest tests move
+  with the implementation.
 
-## Review priorities
-
-- Focus on correctness, security, data provenance, regression risk, and missing
-  tests. Avoid comments that are only stylistic or subjective.
-- Never expose secrets, private RPC URLs, database credentials, `.env` files,
-  `config.yaml`, DuckDB files, generated dashboard JSON, or indexer state.
-- Ordinary tests and fixture analytics builds must not require internet access,
-  Docker, an RPC provider, Envio credentials, or HyperIndex Postgres.
-- Treat Ethereum addresses as case-insensitive exact identifiers. Never infer a
-  token identity or trust status from only its name or symbol.
-- Exact-address registry membership may supply display metadata and automatic
-  `recognized` classification, but it is not a security guarantee. RPC metadata
-  is self-declared and must never establish recognition. Absence from a registry
-  remains the neutral public `other` state.
-- Only a reviewed reputation override may assign final internal `spam`.
-  Automated rules may assign internal `suspected_spam` only when their evidence
-  and reason codes are preserved for audit. Neither internal status is exposed
-  as a dashboard filter or badge.
-- When classifier thresholds or reason rules change, require matching tests,
-  classifier-version updates, and documentation changes.
-- When a dbt mart or seed schema changes, verify the related dbt tests,
-  `docs/data-model.md`, local API contract, frontend client types, fixture-demo
-  exporter, and frontend tests as applicable.
-- Treat material documentation drift as a correctness problem. Use `AGENTS.md`
-  to route changes and `ARCHITECTURE.md` for system boundaries. When code shifts
-  behavior, commands, architecture, data contracts, semantics, setup, or
-  operations, require the owning document to change in the same PR. Do not
-  demand documentation for behavior-preserving implementation details.
-- DuckDB marts retain the complete local dataset. Local API queries must be
-  bounded and paginated while returning complete matching counts and provenance.
-  The production API must read only `analytics/artifacts/live.duckdb`, reject
-  fixture provenance, use parameterized filters, and bind to loopback by default.
-  Static JSON is a fixture-only demo and must report its provenance and limits in
-  `meta.json`; do not expand full-history static precomputation.
-- Dashboard changes must preserve accessibility, loading/error behavior, the
-  default `All` recognition selection, the public `Recognized`/`Other` contract,
-  and both light and dark themes.
-- Documentation must not claim behavior or architecture contradicted by the
-  implementation.
-
-When reviewing a pull request, explain the concrete failure mode and point to the
-smallest relevant code location. Suggest a correction when one is clear. Do not
-approve or merge changes automatically.
+Do not approve, merge, or otherwise mutate a pull request. Review comments should stay scoped to
+the proposed diff and its direct consequences.
