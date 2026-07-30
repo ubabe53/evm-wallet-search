@@ -1,10 +1,8 @@
 export type RecognitionStatus = "recognized" | "other";
 export type RecognitionFilter = "all" | RecognitionStatus;
-export type MetadataAvailability = "complete" | "partial" | "unavailable";
 export type AccountType = "eoa_candidate" | "contract" | "unknown";
 export type AccountFilter = Exclude<AccountType, "unknown">;
 export type CodeState = "no_code" | "eip7702_delegated" | "contract_code" | "unknown";
-export type EvidenceFetchStatus = "complete" | "failed" | "not_fetched";
 export type TransferDirection = "in" | "out" | "self";
 
 export type AccountEvidence = {
