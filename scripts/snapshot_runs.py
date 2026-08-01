@@ -73,6 +73,12 @@ class SnapshotRun:
     to_block_hash: str
     scope_version: str
     generation_id: str
+    original_input: str = ""
+    normalized_name: str | None = None
+    resolver_source: str = "legacy-configured-wallet"
+    observation_block_number: int = 0
+    observation_block_hash: str = ""
+    observation_timestamp: datetime = datetime.min.replace(tzinfo=timezone.utc)
 
 
 def read_configured_wallets(path: Path = WALLETS_PATH) -> list[ConfiguredWallet]:
@@ -243,6 +249,12 @@ def ensure_run_table(connection: Any) -> None:
           status varchar not null check (status in ('running', 'completed', 'failed')),
           completed_at timestamptz,
           scope_version varchar not null,
+          original_input varchar,
+          normalized_name varchar,
+          resolver_source varchar,
+          observation_block_number bigint,
+          observation_block_hash varchar,
+          observation_timestamp timestamptz,
           unique (generation_id, chain_id, wallet_address),
           check (from_block <= to_block)
         )
@@ -311,6 +323,17 @@ def ensure_run_table(connection: Any) -> None:
             "update ops.pipeline_runs set generation_id = ? where run_id = ?",
             [generation_id, run_id],
         )
+    for column, definition in (
+        ("original_input", "varchar"),
+        ("normalized_name", "varchar"),
+        ("resolver_source", "varchar"),
+        ("observation_block_number", "bigint"),
+        ("observation_block_hash", "varchar"),
+        ("observation_timestamp", "timestamptz"),
+    ):
+        connection.execute(
+            f"alter table ops.pipeline_runs add column if not exists {column} {definition}"
+        )
 
 
 def next_run_start(
@@ -346,12 +369,14 @@ def start_snapshot_run(
     wallet: ConfiguredWallet,
     metadata: HyperIndexMetadata,
     finalized_block: FinalizedBlock,
+    scan_input: Any | None = None,
 ) -> SnapshotRun:
     return start_snapshot_runs(
         database_path=database_path,
         wallets=[wallet],
         metadata=metadata,
         finalized_block=finalized_block,
+        scan_input=scan_input,
     )[0]
 
 
@@ -361,6 +386,7 @@ def start_snapshot_runs(
     wallets: list[ConfiguredWallet],
     metadata: HyperIndexMetadata,
     finalized_block: FinalizedBlock,
+    scan_input: Any | None = None,
 ) -> list[SnapshotRun]:
     """Create independent finalized generations and runs for wallets that need coverage."""
 
@@ -412,6 +438,26 @@ def start_snapshot_runs(
                 raise RuntimeError(f"Snapshot run {active_run[0]} is already running")
             generation_id = str(uuid.uuid4())
             from_block = from_blocks[wallet.address]
+            if scan_input is None:
+                provenance = (
+                    wallet.label,
+                    wallet.label.lower() if wallet.label.lower().endswith(".eth") else None,
+                    "legacy-configured-wallet",
+                    finalized_block.number,
+                    finalized_block.block_hash,
+                    datetime.now(timezone.utc),
+                )
+            else:
+                if scan_input.resolved_address != wallet.address:
+                    raise RuntimeError("Resolved scan input does not match the configured wallet")
+                provenance = (
+                    scan_input.original_input,
+                    scan_input.normalized_name,
+                    scan_input.resolver_source,
+                    scan_input.observation_block_number,
+                    scan_input.observation_block_hash,
+                    scan_input.observed_at,
+                )
             connection.execute(
                 "insert into ops.scan_generations values (?, ?, ?, ?, ?, ?, ?, 'running', ?, null)",
                 [generation_id, CHAIN_ID, wallet.address, from_block, finalized_block.number,
@@ -422,16 +468,23 @@ def start_snapshot_runs(
                 wallet_address=wallet.address, wallet_label=wallet.label,
                 from_block=from_block, to_block=finalized_block.number,
                 to_block_hash=finalized_block.block_hash, scope_version=SCOPE_VERSION,
+                original_input=provenance[0], normalized_name=provenance[1],
+                resolver_source=provenance[2], observation_block_number=provenance[3],
+                observation_block_hash=provenance[4], observation_timestamp=provenance[5],
             )
             connection.execute(
                 """
                 insert into ops.pipeline_runs (
                   run_id, chain_id, generation_id, wallet_address, wallet_label, from_block, to_block,
-                  to_block_hash, events_found, status, completed_at, scope_version
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, null, 'running', null, ?)
+                  to_block_hash, events_found, status, completed_at, scope_version,
+                  original_input, normalized_name, resolver_source, observation_block_number,
+                  observation_block_hash, observation_timestamp
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, null, 'running', null, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [run.run_id, run.chain_id, run.generation_id, run.wallet_address, run.wallet_label,
-                 run.from_block, run.to_block, run.to_block_hash, run.scope_version],
+                 run.from_block, run.to_block, run.to_block_hash, run.scope_version,
+                 run.original_input, run.normalized_name, run.resolver_source,
+                 run.observation_block_number, run.observation_block_hash, run.observation_timestamp],
             )
             runs.append(run)
     return runs
@@ -460,7 +513,8 @@ def latest_completed_snapshot_run(
         row = connection.execute(
             """
             select run_id, chain_id, generation_id, wallet_address, wallet_label, from_block, to_block,
-              to_block_hash, scope_version
+              to_block_hash, scope_version, original_input, normalized_name, resolver_source,
+              observation_block_number, observation_block_hash, observation_timestamp
             from ops.pipeline_runs
             where chain_id = ? and wallet_address = ? and scope_version = ? and status = 'completed'
             order by to_block desc
@@ -482,6 +536,12 @@ def latest_completed_snapshot_run(
         to_block=int(row[6]),
         to_block_hash=str(row[7]),
         scope_version=str(row[8]),
+        original_input=str(row[9] or row[4]),
+        normalized_name=None if row[10] is None else str(row[10]),
+        resolver_source=str(row[11] or "legacy-configured-wallet"),
+        observation_block_number=int(row[12] or row[6]),
+        observation_block_hash=str(row[13] or row[7]),
+        observation_timestamp=row[14] or datetime.now(timezone.utc),
     )
 
 

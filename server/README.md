@@ -19,6 +19,7 @@ artifact.
 | [`../scripts/run_api.py`](../scripts/run_api.py) | Dependency bootstrap and loopback server launcher |
 | [`../tests/api_test.py`](../tests/api_test.py) | API behavior and response contract |
 | [`../tests/test_run_api.py`](../tests/test_run_api.py) | Launcher behavior |
+| [`ens.py`](ens.py) | Address/ENS normalization, finalized-block resolution, and scan-input provenance |
 
 ## Commands
 
@@ -39,6 +40,15 @@ dashboard after the build completes.
 - [Application behavior and filter semantics](../docs/architecture.md#local-application-contract)
 - [Runtime and recovery procedure](../docs/operations.md#local-setup)
 - [System delivery boundary](../ARCHITECTURE.md#local-api-boundary)
+
+## Scan input boundary
+
+`server.ens.resolve_scan_input` accepts a `0x` address or a conservative ASCII ENS name. ENS names
+are resolved through the pinned Ethereum mainnet ENS registry and its returned resolver using
+`eth_call` at one `finalized` block. The result is a typed `ResolvedScanInput`; callers must carry
+it into `ops.pipeline_runs` before starting a scan. An unrecognized or unsupported name raises
+`ENSNotRecognizedError` and has no resolved index target. This boundary does not start an indexer,
+reindex history, or expose an HTTP dashboard route.
 
 Do not add ingestion, general database writes, fixture serving, public binding, or browser-held
 credentials without an explicit architecture and data-contract decision.

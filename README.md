@@ -7,7 +7,8 @@ dashboard.
 
 The current target is Ethereum mainnet (`chain_id = 1`) and the pinned address
 `0xd8da6bf26964af9d7eed9e03e53415d37aa96045`. Its `vitalik.eth` label is project configuration,
-not a live ENS-resolution claim.
+not a live ENS-resolution claim unless a scan job explicitly resolves it through the server-side
+ENS input boundary at a finalized block.
 
 > [!IMPORTANT]
 > The event source is ERC-20-intended, not standards-proof. ERC-721 uses the same `Transfer`
