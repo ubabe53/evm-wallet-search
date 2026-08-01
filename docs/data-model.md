@@ -52,7 +52,7 @@ The normalized fields are:
 
 Tokens without a registry match or manual recognition remain in event marts as `other`. Sourced token `decimals` remain nullable metadata; they never alter the exact emitted raw value.
 
-Raw RPC observations remain separate in `token_rpc_metadata` (or `token_rpc_metadata_fixture` for deterministic fixture builds) at one row per attempted token address. That relation preserves the returned `name`, `symbol`, and `decimals` alongside `rpc_block_number`, `fetched_at`, `fetch_status`, and `error_code`. The resolved enrichment consumes complete or partial metadata and excludes failed-only attempts, but it does not copy RPC execution fields into every resolved token row.
+Raw RPC observations remain separate in `token_rpc_metadata` (or `token_rpc_metadata_fixture` for deterministic fixture builds) at one row per attempted Ethereum token address, shared by every tracked wallet. The current mainnet-only seed contract uses `token_address` as its key. That relation preserves the returned `name`, `symbol`, and `decimals` alongside `rpc_block_number`, `fetched_at`, `fetch_status`, and `error_code`. The resolved enrichment consumes complete or partial metadata and excludes failed-only attempts, but it does not copy RPC execution fields into every resolved token row. Adding a wallet can introduce new token candidates, while normal enrichment skips existing rows; explicit retry or refresh modes may query failed or selected cached rows again.
 
 ### `int_wallet_transfer_events`
 
@@ -120,7 +120,7 @@ These tables are created and owned by Python application/orchestration code rath
 
 ### `account_evidence.account_evidence`
 
-The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read-only under the `account_evidence` catalog during live dbt builds. Its grain and primary key are one retained observation per `(chain_id, address)`. Successful observations are preserved; failed attempts can be replaced by a later successful result.
+The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read-only under the `account_evidence` catalog during live dbt builds. Its grain and primary key are one retained observation per `(chain_id, address)`, shared across every tracked wallet. Successful observations are preserved; failed attempts can be replaced by a later successful result. A new wallet reuses successful observations for counterparties already present in this cache and only collects addresses without a successful observation; failed observations remain retryable.
 
 | Column | Physical contract | Semantics |
 | --- | --- | --- |

@@ -131,6 +131,19 @@ class CounterpartyTypeTest(unittest.TestCase):
         self.assertEqual(select_candidates(connection, {"0x2"}, limit=1), ["0x1"])
         self.assertEqual(connection.params, [ZERO_ADDRESS])
 
+    def test_shared_address_cache_is_reused_across_wallets(self) -> None:
+        import duckdb
+
+        with duckdb.connect(":memory:") as connection:
+            connection.execute(
+                "create table wallet_events (chain_id integer, wallet_address varchar, counterparty_address varchar)"
+            )
+            connection.executemany(
+                "insert into wallet_events values (1, ?, ?)",
+                [("0xwallet-a", "0xshared"), ("0xwallet-b", "0xshared"), ("0xwallet-b", "0xnew")],
+            )
+            self.assertEqual(select_candidates(connection, {"0xshared"}), ["0xnew"])
+
     def test_retries_only_unresolved_code_calls(self) -> None:
         client = FakeBatchClient({"0x1": 1, "0x2": 3})
         results = fetch_code_batch(client, ["0x1", "0x2", "0x3"], "0x64", max_retries=2)
