@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import base64
 import binascii
 import json
@@ -20,7 +21,10 @@ ACCOUNT_FILTERS = (
     "contract",
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
-DEFAULT_WALLET_ADDRESS = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+DEFAULT_WALLET_ADDRESS = os.environ.get(
+    "EVM_WALLET_SCAN_ADDRESS",
+    "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+).strip().lower()
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
 API_SCHEMA_VERSION = "dashboard-api-v16"
 PIPELINE_METADATA_COLUMNS = """

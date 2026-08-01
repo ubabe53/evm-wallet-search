@@ -1,6 +1,6 @@
 # EVM Wallet Search
 
-An evidence-first Ethereum wallet interaction dashboard for one configured wallet. The project
+An evidence-first Ethereum wallet interaction dashboard for one selected configured wallet. The project
 indexes wallet-relevant `Transfer(address,address,uint256)` logs with Envio HyperIndex, builds
 reproducible DuckDB analytics with dbt, and serves them through a loopback FastAPI API to a React
 dashboard.
@@ -49,6 +49,12 @@ rows within the recorded `live.duckdb` coverage through the API. The static buil
 bounded fixture JSON and cannot establish live HyperIndex coverage. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for dependency rules, trust boundaries, and known gaps.
 
+The wallet seed may contain more than one target, but each live build selects exactly one with
+`EVM_WALLET_SCAN_ADDRESS`; when it is unset, exactly one configured wallet is required. The live
+artifact is a single-wallet projection. It does not merge separate wallet builds or claim combined
+persistence; a later dashboard merge worker requires an explicit architecture and data-contract
+decision.
+
 ## Dashboard and demo
 
 The local dashboard exposes:
@@ -86,7 +92,8 @@ start HyperIndex or produce live-wallet analytics.
 For the primary local product, Docker, an Envio token, and the HyperIndex Postgres DSN are also
 required; Ethereum RPC can use the configured public fallback. Follow the
 [live setup and recovery guide](docs/operations.md#local-setup) rather than treating the fixture
-quick start as a production workflow.
+quick start as a production workflow. When selecting a wallet other than the pinned default, set
+`EVM_WALLET_SCAN_ADDRESS` for both the live build and the local API process.
 
 ## Repository map
 

@@ -12,7 +12,7 @@ Deduplicates wallet-relevant Transfer-signature entities by the canonical `(chai
 
 ### `stg_wallets`
 
-Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` value remains pinned project configuration for presentation and snapshot labeling; it is not live ENS-resolution evidence and is not copied into event facts. The fixture/demo seed remains single-wallet-compatible, while live mode accepts multiple targets:
+Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` value remains pinned project configuration for presentation and snapshot labeling; it is not live ENS-resolution evidence and is not copied into event facts. The seed may contain multiple targets, but each live dbt build selects exactly one with `EVM_WALLET_SCAN_ADDRESS` (or requires one target when the variable is unset), and `stg_wallets` is the selected-wallet projection used by that build. Separate live wallet projections are not merged into one artifact:
 
 - `vitalik.eth`
 - `0xd8da6bf26964af9d7eed9e03e53415d37aa96045`

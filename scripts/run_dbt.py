@@ -26,6 +26,7 @@ try:
     from .enrich_token_metadata import JsonRpcClient
     from .project_config import resolved_runtime
     from .snapshot_runs import (
+        ConfiguredWallet,
         SnapshotAlreadyCurrent,
         dbt_snapshot_environment,
         fetch_hyperindex_metadata,
@@ -47,6 +48,7 @@ except ImportError:
     from enrich_token_metadata import JsonRpcClient
     from project_config import resolved_runtime
     from snapshot_runs import (
+        ConfiguredWallet,
         SnapshotAlreadyCurrent,
         dbt_snapshot_environment,
         fetch_hyperindex_metadata,
@@ -60,6 +62,7 @@ except ImportError:
 
 REQUIREMENTS = ANALYTICS_DIR / "requirements.txt"
 HYPERINDEX_DSN_ENV = "DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN"
+EVM_WALLET_SCAN_ADDRESS_ENV = "EVM_WALLET_SCAN_ADDRESS"
 DBT_DOCS_SUBCOMMANDS = {"generate", "serve"}
 
 
@@ -158,6 +161,22 @@ def requests_hyperindex(extra_args: list[str]) -> bool:
     return False
 
 
+def select_scan_wallet(
+    wallets: list[ConfiguredWallet], configured_address: str | None
+) -> ConfiguredWallet:
+    """Select the one wallet whose source interval this live build will scan."""
+
+    normalized_address = configured_address.strip().lower() if configured_address else None
+    if normalized_address:
+        for wallet in wallets:
+            if wallet.address == normalized_address:
+                return wallet
+        raise RuntimeError(f"No configured wallet matches {normalized_address}")
+    if len(wallets) != 1:
+        raise RuntimeError(f"Set {EVM_WALLET_SCAN_ADDRESS_ENV} to select one configured wallet")
+    return wallets[0]
+
+
 def main() -> None:
     command = sys.argv[1] if len(sys.argv) > 1 else "build"
     if command not in {"build", "test", "seed", "run", "docs"}:
@@ -180,17 +199,21 @@ def main() -> None:
         metadata = fetch_hyperindex_metadata(str(graphql_url))
         finalized_block = resolve_snapshot_target(JsonRpcClient(str(rpc_url)), metadata)
         wallets = read_configured_wallets()
+        selected_wallet = select_scan_wallet(
+            wallets, os.environ.get(EVM_WALLET_SCAN_ADDRESS_ENV)
+        )
         try:
             snapshot_runs = start_snapshot_runs(
-                wallets=wallets,
+                wallets=[selected_wallet],
                 metadata=metadata,
                 finalized_block=finalized_block,
             )
         except SnapshotAlreadyCurrent as current:
             print(current)
             snapshot_runs = [
-                latest_completed_snapshot_run(wallet=wallet, metadata=metadata, finalized_block=finalized_block)
-                for wallet in wallets
+                latest_completed_snapshot_run(
+                    wallet=selected_wallet, metadata=metadata, finalized_block=finalized_block
+                )
             ]
             run_dbt(
                 command,
@@ -200,15 +223,10 @@ def main() -> None:
                 extra_env=dbt_snapshot_environment(
                     snapshot_runs[0],
                     coverage_start_block=metadata.start_block,
-                ),
+                ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
             return
         try:
-            # dbt rebuilds complete configured history for every wallet. Run intervals
-            # are wallet-scoped checkpoints and must never narrow this source bound.
-            coverage_start_block = min(
-                [metadata.start_block, *(snapshot_run.from_block for snapshot_run in snapshot_runs)]
-            )
             run_dbt(
                 command,
                 sys.argv[2:],
@@ -216,8 +234,8 @@ def main() -> None:
                 hyperindex_dsn=str(hyperindex_dsn) if hyperindex_dsn else None,
                 extra_env=dbt_snapshot_environment(
                     snapshot_runs[0],
-                    coverage_start_block=coverage_start_block,
-                ),
+                    coverage_start_block=metadata.start_block,
+                ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
         except BaseException:
             for snapshot_run in snapshot_runs:
