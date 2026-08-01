@@ -21,10 +21,7 @@ ACCOUNT_FILTERS = (
     "contract",
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
-DEFAULT_WALLET_ADDRESS = os.environ.get(
-    "EVM_WALLET_SCAN_ADDRESS",
-    "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-).strip().lower()
+EVM_WALLET_SCAN_ADDRESS_ENV = "EVM_WALLET_SCAN_ADDRESS"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
 API_SCHEMA_VERSION = "dashboard-api-v16"
 PIPELINE_METADATA_COLUMNS = """
@@ -80,7 +77,7 @@ class TokenNotFound(LookupError):
 
 @dataclass(frozen=True)
 class DashboardFilters:
-    wallet_address: str = DEFAULT_WALLET_ADDRESS
+    wallet_address: str
     account_filters: tuple[str, ...] = ACCOUNT_FILTERS
     query: str | None = None
     recognition: str = "all"
@@ -333,7 +330,31 @@ class QueryService:
                 self._schema_ready = True
         return connection
 
-    def metadata(self, wallet_address: str = DEFAULT_WALLET_ADDRESS) -> dict[str, Any]:
+    def active_wallet_address(self) -> str:
+        """Resolve the request default without embedding a wallet in the API."""
+
+        configured = os.environ.get(EVM_WALLET_SCAN_ADDRESS_ENV, "").strip()
+        with self.connect() as connection:
+            metadata_rows = pipeline_metadata_rows(connection)
+        if configured:
+            if not ADDRESS_PATTERN.fullmatch(configured):
+                raise DatabaseUnavailable(
+                    f"{EVM_WALLET_SCAN_ADDRESS_ENV} must be a 20-byte hexadecimal address"
+                )
+            address = configured.lower()
+            if not any(item["wallet_address"] == address for item in metadata_rows):
+                raise DatabaseUnavailable(
+                    f"{EVM_WALLET_SCAN_ADDRESS_ENV} does not match a wallet in the current analytics artifact"
+                )
+            return address
+        if len(metadata_rows) != 1:
+            raise DatabaseUnavailable(
+                f"No active wallet selected; set {EVM_WALLET_SCAN_ADDRESS_ENV}"
+            )
+        return metadata_rows[0]["wallet_address"]
+
+    def metadata(self, wallet_address: str | None = None) -> dict[str, Any]:
+        wallet_address = wallet_address or self.active_wallet_address()
         with self.connect() as connection:
             all_metadata = pipeline_metadata_rows(connection)
             metadata = next((item for item in all_metadata if item["wallet_address"] == wallet_address), None)
@@ -350,7 +371,7 @@ class QueryService:
             "is_sampled": False,
         }
 
-    def provenance(self, connection: Any, wallet_address: str = DEFAULT_WALLET_ADDRESS) -> dict[str, Any]:
+    def provenance(self, connection: Any, wallet_address: str) -> dict[str, Any]:
         metadata_rows = pipeline_metadata_rows(connection)
         metadata = next((item for item in metadata_rows if item["wallet_address"] == wallet_address), None)
         if metadata is None:

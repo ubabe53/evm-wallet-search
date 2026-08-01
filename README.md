@@ -92,8 +92,11 @@ start HyperIndex or produce live-wallet analytics.
 For the primary local product, Docker, an Envio token, and the HyperIndex Postgres DSN are also
 required; Ethereum RPC can use the configured public fallback. Follow the
 [live setup and recovery guide](docs/operations.md#local-setup) rather than treating the fixture
-quick start as a production workflow. When selecting a wallet other than the pinned default, set
-`EVM_WALLET_SCAN_ADDRESS` for both the live build and the local API process.
+quick start as a production workflow. Set `EVM_WALLET_SCAN_ADDRESS` for both the live build and
+the local API process when selecting a wallet. The live API has no hardcoded wallet fallback: if
+the variable is unset, it derives the wallet from the artifact's sole current metadata row and
+fails clearly if no unique wallet is available. The pinned Vitalik target belongs only to
+fixture/demo configuration.
 
 ## Repository map
 
