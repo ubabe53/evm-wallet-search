@@ -1,5 +1,11 @@
 # Architecture
 
+## Local scan jobs
+
+Live local mode exposes `POST /api/v1/scan-jobs` with `{ "wallet": "0x…" | "name.eth" }`, `GET /api/v1/scan-jobs/{job_id}`, and `GET /api/v1/wallets`. The job manager uses the typed server-side ENS resolver at one finalized observation block and serializes work through one local worker. A scan target is always block `0` through that finalized head; the response records bounds, progress, and resolver observation provenance. The current HyperIndex schema remains single-wallet, so `WALLET_SCAN_COMMAND` is the explicit adapter boundary for the multi-wallet/indexer branch. That command receives the wallet, bounds, and resolver provenance and must write a complete selected-wallet DuckDB artifact to `WALLET_SCAN_OUTPUT_PATH`, including the corresponding pipeline-run provenance. The manager does not merge multi-wallet DuckDB state; that remains a future worker responsibility.
+
+Workers write to a temporary sibling artifact. The manager calls `os.replace` only after the worker exits successfully and the artifact exists; failed jobs therefore leave the previously served `live.duckdb` untouched. Existing completed wallet identities remain in the job manager's wallet list, while a completed job causes the dashboard to reload and automatically use the newly replaced artifact. Fixture/static mode does not call these routes and disables scan controls.
+
 The primary product is a locally run, database-backed wallet analytics application. HyperIndex captures a narrow event set, dbt turns those events into DuckDB marts, a local API queries those marts on demand, and React renders the API responses. Static JSON is a separate fixture-only portfolio demo for GitHub Pages.
 
 ## Flow

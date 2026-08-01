@@ -155,6 +155,16 @@ This is an explicit, potentially RPC-intensive operation. Fixture builds and ord
 
 ## HyperIndex Mode
 
+### Live wallet scan jobs
+
+The local API can start a full-history scan from the dashboard in live mode. Configure the future multi-wallet worker command before using it:
+
+```sh
+export WALLET_SCAN_COMMAND='your-multi-wallet-indexer-command'
+```
+
+The command receives `WALLET_SCAN_ADDRESS`, `WALLET_SCAN_LABEL`, `WALLET_SCAN_FROM_BLOCK=0`, `WALLET_SCAN_TO_BLOCK`, `WALLET_SCAN_OUTPUT_PATH`, and (for ENS or direct-address resolution) the finalized observation source/block/hash/timestamp variables. It must build a complete selected-wallet artifact in the output path, persist the selected run's finalized/provenance fields, and exit successfully. Only one job runs at a time. The manager atomically replaces `analytics/artifacts/live.duckdb` after success; a failure never replaces or serves a partial artifact. The command is deliberately an adapter/stub until the multi-wallet merge worker exists; the manager does not claim combined DuckDB persistence.
+
 Run the indexer locally:
 
 ```sh

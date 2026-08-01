@@ -34,6 +34,8 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByText(
       "Transfer Event Analytics based on emitted Transfer(address,address,uint256) events.",
     )).toBeInTheDocument());
+    expect(screen.getByRole("textbox", { name: "Wallet address or ENS" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
     expect(screen.getByRole("region", { name: "Analysis context" })).toHaveTextContent(
       "Analyzing0x1vitalik.ethEthereum mainnetExample wallet",
     );

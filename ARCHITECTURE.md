@@ -10,7 +10,7 @@ Ethereum mainnet
       │ (ERC-20-intended; token standard is not disambiguated)
       ▼
 address/ENS input → server-side finalized ENS resolver
-      │ provenance carried by scan job
+      │ provenance carried through the scan-job adapter to the worker
       ▼
 Envio HyperIndex
       │ normalized Erc20Transfer entities
@@ -111,7 +111,12 @@ Detailed field grains and tests are in `docs/data-model.md`.
 ### Local analytics path
 
 ```text
-address/ENS input → server-side finalized ENS resolver → scan-job provenance in `live.duckdb` → HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
+address/ENS input → server-side finalized ENS resolver → explicit scan-worker adapter → HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
+
+The scan manager does not persist ENS provenance or merge DuckDB artifacts itself. The explicit
+worker adapter receives the typed finalized observation and is responsible for writing the selected
+wallet's run/provenance into its output artifact; combined multi-wallet persistence remains a
+future worker concern.
 ```
 
 The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, selects one configured wallet through `EVM_WALLET_SCAN_ADDRESS`, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for that wallet, and advances coverage only after dbt succeeds. Without the selector, exactly one configured wallet is required. A new selected wallet starts at the configured start block; an existing selected wallet starts at its own latest completed block plus one. The live DuckDB artifact is rebuilt as a projection for that selected wallet; separate wallet projections are not merged, so switching the selector does not preserve a prior wallet's analytics in the same artifact. A future multi-wallet artifact merge requires an explicit data-contract decision. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.

@@ -2,12 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   loadApiDashboardData,
   loadNextApiEvents,
+  createScanJob,
+  loadScanJob,
+  loadWallets,
   resetTokenRecognition,
   setTokenRecognition,
   type DashboardQuery,
 } from "../src/data";
 
 const query: DashboardQuery = {
+  walletAddress: null,
   recognition: "recognized",
   accountFilters: ["contract"],
   query: "usdc",
@@ -25,6 +29,23 @@ function response(payload: unknown) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("live dashboard API adapter", () => {
+  it("uses typed scan-job and wallet-list contracts", async () => {
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/v1/scan-jobs") {
+        expect(init?.method).toBe("POST");
+        expect(init?.body).toBe(JSON.stringify({ wallet: "vitalik.eth" }));
+        return response({ job_id: "job-1", status: "queued", wallet_address: "0x1" });
+      }
+      if (input === "/api/v1/scan-jobs/job-1") return response({ job_id: "job-1", status: "completed" });
+      if (input === "/api/v1/wallets") return response({ items: [{ wallet_address: "0x1", label: "vitalik.eth", chain_id: 1, status: "completed" }] });
+      throw new Error(`Unexpected request ${input}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await createScanJob("vitalik.eth")).job_id).toBe("job-1");
+    expect((await loadScanJob("job-1")).status).toBe("completed");
+    expect((await loadWallets()).items[0].label).toBe("vitalik.eth");
+  });
+
   it("loads exact counts and bounded collections without static fixture files", async () => {
     const fetchMock = vi.fn((input: string) => {
       if (input === "/api/v1/metadata") {

@@ -1,5 +1,11 @@
 # Data Model
 
+## Scan-job contract
+
+`ScanJob` is an orchestration object, not an event fact. Its key is `job_id`; it carries the requested wallet input, canonical `(chain_id=1, wallet_address)`, label, `status` (`queued|running|completed|failed`), integer progress, `from_block=0`, finalized `to_block`, timestamps, failure message, and (when resolved) ENS resolver source plus finalized observation block/hash/timestamp. ENS labels are mutable enrichment: the server-side adapter accepts conservative ASCII ENS names and resolves them through the pinned Ethereum mainnet registry/resolver at one finalized block. The explicit worker must persist that provenance in its output artifact; the manager does not claim combined DuckDB persistence.
+
+The wallet list is a bounded list of completed `(chain_id, wallet_address, label, status)` entries. It is separate from the single-wallet analytics artifact contract and exists to provide a stable handoff to the multi-wallet branch.
+
 The core grain is one row per wallet-relevant `Transfer(address,address,uint256)` log, interpreted by ERC-20-oriented models. The signature alone does not prove ERC-20: ERC-721 uses the same signature, and the current wildcard indexer has no standards-disambiguation step. Until that gap is closed, a captured ERC-721-like token ID can occupy `value_raw` and must not be presented as a proven fungible quantity.
 
 ## Staging

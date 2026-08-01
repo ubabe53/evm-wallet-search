@@ -68,6 +68,12 @@ export function App() {
     undoTokenRecognition,
     updatingToken,
     query,
+    scanError,
+    scanInput,
+    scanJob,
+    setScanInput,
+    startWalletScan,
+    wallets,
   } = useDashboard();
 
   if (error) {
@@ -183,6 +189,43 @@ export function App() {
           </button>
         </div>
       </header>
+
+      <section className="scanPanel" aria-label="Wallet scan">
+        <div>
+          <strong>Scan another wallet</strong>
+          <p>Full Transfer-signature history from block 0 through the finalized head.</p>
+        </div>
+        <form onSubmit={(event) => { event.preventDefault(); void startWalletScan(); }}>
+          <label>
+            <span className="srOnly">Wallet address or ENS</span>
+            <input
+              value={scanInput}
+              onChange={(event) => setScanInput(event.target.value)}
+              placeholder="0x… or name.eth"
+              aria-label="Wallet address or ENS"
+              disabled={dashboardDataMode === "static" || scanJob?.status === "queued" || scanJob?.status === "running"}
+            />
+          </label>
+          <button type="submit" disabled={dashboardDataMode === "static" || !scanInput.trim() || scanJob?.status === "queued" || scanJob?.status === "running"}>
+            {scanJob?.status === "queued" || scanJob?.status === "running" ? "Scanning…" : "Start scan"}
+          </button>
+        </form>
+        {scanJob && (scanJob.status === "queued" || scanJob.status === "running") && (
+          <div className="scanProgress" role="status" aria-live="polite">
+            <span>Scanning {scanJob.wallet_label} · {scanJob.progress}%</span>
+            <progress max="100" value={scanJob.progress}>{scanJob.progress}%</progress>
+          </div>
+        )}
+        {scanJob?.status === "completed" && <p className="scanSuccess" role="status">Scan complete. Switched to {scanJob.wallet_label}.</p>}
+        {(scanError || scanJob?.status === "failed") && <p className="scanError" role="alert">{scanError ?? scanJob?.error}</p>}
+        {wallets.length > 0 && (
+          <div className="walletList" aria-label="Completed wallets">
+            <span>Completed wallets:</span>
+            {wallets.map((wallet) => <span key={wallet.wallet_address} className={wallet.wallet_address === data.metadata.wallet_address ? "currentWallet" : ""}>{wallet.label}</span>)}
+          </div>
+        )}
+        {dashboardDataMode === "static" && <p className="boundedNote">Wallet scanning is available only in live local mode.</p>}
+      </section>
 
       <section className="overviewContext" aria-label="Analysis context">
         <div className="analysisSubject">

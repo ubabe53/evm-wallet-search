@@ -97,6 +97,27 @@ select {
   padding: 8px 0 20px;
 }
 
+.scanPanel {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--panel-bg);
+}
+.scanPanel p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.scanPanel form { display: flex; gap: 0.5rem; }
+.scanPanel form input { flex: 1; min-width: 0; }
+.scanProgress { display: grid; gap: 0.3rem; font-size: 0.85rem; }
+.scanProgress progress { width: 100%; accent-color: var(--accent); }
+.scanSuccess { color: var(--accent) !important; }
+.scanError { color: var(--out) !important; }
+.walletList { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; color: var(--muted); font-size: 0.78rem; }
+.walletList span { padding: 0.18rem 0.4rem; border-radius: 0.3rem; background: var(--subtle-bg); }
+.walletList span:first-child { padding-left: 0; background: transparent; }
+.walletList .currentWallet { color: var(--accent); font-weight: 600; }
+
 h1,
 h2,
 p {

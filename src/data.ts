@@ -173,6 +173,7 @@ export type DashboardData<Metadata extends DashboardMetadata = PipelineMetadata>
 };
 
 export type DashboardQuery = {
+  walletAddress: string | null;
   recognition: RecognitionFilter;
   accountFilters: AccountFilter[];
   query: string;
@@ -218,10 +219,38 @@ export type ApiDashboardData = {
   counterpartyCount: number;
 };
 
+export type ScanJob = {
+  job_id: string;
+  requested_value: string;
+  wallet_address: string;
+  wallet_label: string;
+  status: "queued" | "running" | "completed" | "failed";
+  progress: number;
+  from_block: number;
+  to_block: number;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  resolver_source?: string | null;
+  observation_block_number?: number | null;
+  observation_block_hash?: string | null;
+  observation_timestamp?: string | null;
+};
+
+export type WalletListItem = {
+  chain_id: number;
+  wallet_address: string;
+  label: string;
+  status: "completed";
+};
+
 export const dashboardDataMode = import.meta.env.VITE_DATA_MODE === "api" ? "api" : "static";
 
 function apiQuery(query: DashboardQuery, extra: Record<string, string | number> = {}): string {
   const parameters = new URLSearchParams();
+  if (query.walletAddress) {
+    parameters.set("wallet_address", query.walletAddress);
+  }
   parameters.set("recognition", query.recognition);
   if (query.accountFilters.length === 0) {
     parameters.append("account", "none");
@@ -272,10 +301,13 @@ export async function loadApiDashboardData(
   cachedMetadata?: ApiMetadata,
 ): Promise<ApiDashboardData> {
   const common = apiQuery(query);
+  const metadataPath = query.walletAddress
+    ? `/api/v1/metadata?wallet_address=${encodeURIComponent(query.walletAddress)}`
+    : "/api/v1/metadata";
   // Bound concurrent DuckDB readers: a dashboard refresh must not fan out six
   // analytical scans at once on a developer laptop.
   const [metadata, summary] = await Promise.all([
-    cachedMetadata ?? fetchJson<ApiMetadata>("/api/v1/metadata", signal),
+    cachedMetadata ?? fetchJson<ApiMetadata>(metadataPath, signal),
     fetchJson<DashboardSummary>(`/api/v1/summary?${common}`, signal),
   ]);
   const timelineQuery = { ...query, startDate: null, endDate: null };
@@ -357,4 +389,20 @@ export function resetTokenRecognition(
   return fetchJson(`/api/v1/tokens/${encodeURIComponent(tokenAddress)}/recognition`, signal, {
     method: "DELETE",
   });
+}
+
+export function createScanJob(wallet: string, signal?: AbortSignal): Promise<ScanJob> {
+  return fetchJson<ScanJob>("/api/v1/scan-jobs", signal, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet }),
+  });
+}
+
+export function loadScanJob(jobId: string, signal?: AbortSignal): Promise<ScanJob> {
+  return fetchJson<ScanJob>(`/api/v1/scan-jobs/${encodeURIComponent(jobId)}`, signal);
+}
+
+export function loadWallets(signal?: AbortSignal): Promise<{ items: WalletListItem[] }> {
+  return fetchJson<{ items: WalletListItem[] }>("/api/v1/wallets", signal);
 }
