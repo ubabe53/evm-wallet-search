@@ -117,7 +117,7 @@ class ScanJobsTest(unittest.TestCase):
 
             manager = ScanJobManager(
                 live,
-                scan_input_resolver=lambda _value: observation,
+                scan_input_resolver=lambda value: observation,
                 worker=worker,
             )
             job = manager.create("wallet.eth")
