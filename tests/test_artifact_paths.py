@@ -4,7 +4,12 @@ from unittest.mock import patch
 
 from scripts import run_dbt
 from scripts.artifact_paths import FIXTURE_DB_PATH, LIVE_DB_PATH
-from scripts.snapshot_runs import ConfiguredWallet, FinalizedBlock, HyperIndexMetadata, SnapshotRun
+from scripts.snapshot_runs import (
+    ConfiguredWallet,
+    FinalizedBlock,
+    HyperIndexMetadata,
+    SnapshotRun,
+)
 
 
 WALLET_A = ConfiguredWallet("0x" + "a" * 40, "wallet-a")
@@ -19,6 +24,13 @@ class ArtifactPathsTest(unittest.TestCase):
     def test_multiple_wallets_require_scan_wallet_address(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "EVM_WALLET_SCAN_ADDRESS"):
             run_dbt.select_scan_wallet([WALLET_A, WALLET_B], None)
+
+    def test_scan_wallet_address_must_be_configured(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "No configured wallet matches"):
+            run_dbt.select_scan_wallet([WALLET_A, WALLET_B], "0x" + "c" * 40)
+
+    def test_single_wallet_is_selected_without_scan_wallet_address(self) -> None:
+        self.assertEqual(run_dbt.select_scan_wallet([WALLET_A], None), WALLET_A)
 
     @patch("scripts.run_dbt.finish_snapshot_run")
     @patch("scripts.run_dbt.run_dbt")
