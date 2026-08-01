@@ -28,7 +28,7 @@ class MockRpc:
     def __init__(self) -> None:
         self.calls = []
 
-    def call(self, method, params):
+    def call(self, method, params) -> dict[str, str] | str:
         self.calls.append((method, params))
         if method == "eth_call" and params[0]["to"] == ENS_REGISTRY_ADDRESS:
             return encoded_address(RESOLVER)
