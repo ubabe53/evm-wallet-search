@@ -11,7 +11,6 @@ from scripts.snapshot_runs import (
     SnapshotRun,
 )
 
-
 WALLET_A = ConfiguredWallet("0x" + "a" * 40, "wallet-a")
 WALLET_B = ConfiguredWallet("0x" + "b" * 40, "wallet-b")
 
