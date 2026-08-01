@@ -9,6 +9,9 @@ Ethereum mainnet
       │ Transfer(address,address,uint256) logs involving configured wallet targets
       │ (ERC-20-intended; token standard is not disambiguated)
       ▼
+address/ENS input → server-side finalized ENS resolver
+      │ provenance carried by scan job
+      ▼
 Envio HyperIndex
       │ normalized Erc20Transfer entities
       ▼
@@ -96,6 +99,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
 - Account-evidence coverage is measured against the current snapshot's distinct nonzero, nonself event counterparties. Classified, failed, and not-checked address and event counts must reconcile to that population; cached rows outside it do not count.
 - Live completeness is a contiguous range of completed snapshot runs from the configured HyperIndex start through an Ethereum `finalized` block; event-bearing block extrema do not establish that range.
+- Scan jobs accept only a normalized Ethereum address or a safely normalized ENS name. ENS resolution uses the pinned mainnet registry dependency at a finalized block and records the original input, normalized name, resolved address, resolver source, block number/hash, and observation timestamp in `ops.pipeline_runs`; unresolved names never enter indexing.
 - `pipeline_metadata` keeps cumulative scan bounds separate from observed event block/time extrema and reconciles its complete event count with the semantic and delivery event relations.
 - Token names, symbols, and wallet-token activity patterns are never scored as reputation or legitimacy evidence; the public token labels are only `Recognized` and `Other`.
 - Bounded outputs disclose their complete matching count, returned count, limits, provenance, and sampling state where applicable.
@@ -107,7 +111,7 @@ Detailed field grains and tests are in `docs/data-model.md`.
 ### Local analytics path
 
 ```text
-HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
+address/ENS input → server-side finalized ENS resolver → scan-job provenance in `live.duckdb` → HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
 ```
 
 The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, selects one configured wallet through `EVM_WALLET_SCAN_ADDRESS`, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for that wallet, and advances coverage only after dbt succeeds. Without the selector, exactly one configured wallet is required. A new selected wallet starts at the configured start block; an existing selected wallet starts at its own latest completed block plus one. The live DuckDB artifact is rebuilt as a projection for that selected wallet; separate wallet projections are not merged, so switching the selector does not preserve a prior wallet's analytics in the same artifact. A future multi-wallet artifact merge requires an explicit data-contract decision. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.

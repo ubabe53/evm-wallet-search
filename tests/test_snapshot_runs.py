@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
@@ -21,6 +22,7 @@ from scripts.snapshot_runs import (
     start_snapshot_run,
     start_snapshot_runs,
 )
+from server.ens import ResolvedScanInput
 
 WALLET = ConfiguredWallet(
     address="0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
@@ -79,6 +81,12 @@ class SnapshotRunsTest(unittest.TestCase):
                 ("status", "VARCHAR", True, False),
                 ("completed_at", "TIMESTAMP WITH TIME ZONE", False, False),
                 ("scope_version", "VARCHAR", True, False),
+                ("original_input", "VARCHAR", False, False),
+                ("normalized_name", "VARCHAR", False, False),
+                ("resolver_source", "VARCHAR", False, False),
+                ("observation_block_number", "BIGINT", False, False),
+                ("observation_block_hash", "VARCHAR", False, False),
+                ("observation_timestamp", "TIMESTAMP WITH TIME ZONE", False, False),
             ],
         )
 
@@ -173,6 +181,38 @@ class SnapshotRunsTest(unittest.TestCase):
             ).fetchone()
             self.assertEqual(first_row, (2, "completed"))
 
+    def test_persists_scan_input_resolution_provenance_in_selected_wallet_run(self) -> None:
+        resolved = ResolvedScanInput(
+            " Vitalik.ETH ",
+            "vitalik.eth",
+            WALLET.address,
+            "ens-registry:0xregistry/resolver:0xresolver",
+            75,
+            "0x" + "c" * 64,
+            datetime(2026, 1, 2, tzinfo=timezone.utc),
+        )
+        run = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+            scan_input=resolved,
+        )
+        with duckdb.connect(str(self.database_path)) as connection:
+            row = connection.execute(
+                """
+                select original_input, normalized_name, wallet_address, resolver_source,
+                  observation_block_number, observation_block_hash, observation_timestamp
+                from ops.pipeline_runs where run_id = ?
+                """,
+                [run.run_id],
+            ).fetchone()
+        self.assertEqual(row, (
+            " Vitalik.ETH ", "vitalik.eth", WALLET.address,
+            "ens-registry:0xregistry/resolver:0xresolver", 75, "0x" + "c" * 64,
+            datetime(2026, 1, 2, tzinfo=timezone.utc),
+        ))
+
     def test_first_scan_of_new_wallet_is_independent_from_existing_wallet_progress(self) -> None:
         second_wallet = ConfiguredWallet("0x" + "1" * 40, "second")
         first = start_snapshot_run(
@@ -258,7 +298,10 @@ class SnapshotRunsTest(unittest.TestCase):
             ensure_run_table(connection)
             connection.execute(
                 """
-                insert into ops.pipeline_runs values (
+                insert into ops.pipeline_runs (
+                  run_id, chain_id, generation_id, wallet_address, wallet_label, from_block, to_block,
+                  to_block_hash, events_found, status, completed_at, scope_version
+                ) values (
                   'gap', 1, 'generation-gap', ?, 'vitalik.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
                 )
                 """,

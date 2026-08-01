@@ -14,6 +14,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 try:
     from .artifact_paths import (
         ACCOUNT_EVIDENCE_DB_PATH,
@@ -197,16 +201,21 @@ def main() -> None:
         if not graphql_url or not rpc_url:
             raise SystemExit("Live snapshot builds require HyperIndex GraphQL and Ethereum RPC URLs")
         metadata = fetch_hyperindex_metadata(str(graphql_url))
-        finalized_block = resolve_snapshot_target(JsonRpcClient(str(rpc_url)), metadata)
+        rpc_client = JsonRpcClient(str(rpc_url))
+        finalized_block = resolve_snapshot_target(rpc_client, metadata)
         wallets = read_configured_wallets()
         selected_wallet = select_scan_wallet(
             wallets, os.environ.get(EVM_WALLET_SCAN_ADDRESS_ENV)
         )
+        from server.ens import resolve_scan_input
+
+        scan_input = resolve_scan_input(selected_wallet.label, rpc_client)
         try:
             snapshot_runs = start_snapshot_runs(
                 wallets=[selected_wallet],
                 metadata=metadata,
                 finalized_block=finalized_block,
+                scan_input=scan_input,
             )
         except SnapshotAlreadyCurrent as current:
             print(current)

@@ -153,8 +153,27 @@ The live build wrapper creates this table inside `analytics/artifacts/live.duckd
 | `status` | `VARCHAR NOT NULL` | `running`, `completed`, or `failed`. |
 | `completed_at` | nullable `TIMESTAMPTZ` | UTC pipeline completion/failure time; null while running. |
 | `scope_version` | `VARCHAR NOT NULL` | Version of the indexed semantic scope. |
+| `original_input` | `VARCHAR NOT NULL` | Exact user/configuration input accepted at scan start. |
+| `normalized_name` | nullable `VARCHAR` | Lowercase conservative ASCII ENS name; null for direct addresses. |
+| `resolver_source` | `VARCHAR NOT NULL` | `direct-address` or the pinned ENS registry plus the resolver address used. This is dependency provenance, not a trust claim. |
+| `observation_block_number` | `BIGINT NOT NULL` | Finalized Ethereum block at which the input was resolved or directly observed. |
+| `observation_block_hash` | `VARCHAR NOT NULL` | Canonical hash for `observation_block_number`. |
+| `observation_timestamp` | `TIMESTAMPTZ NOT NULL` | UTC block timestamp for the finalized observation. |
 
 The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance each wallet's next start to that wallet's previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. During a live dbt build, `pipeline_metadata` selects the latest run at the current finalized end independently for each wallet, so one wallet's generation cannot supply another wallet's provenance. Rebuilding transformations while already current reuses each wallet's latest completed run rather than creating a false scan interval.
+
+When an older artifact is opened, the additive schema migration keeps legacy rows readable with
+`legacy-configured-wallet` provenance and their recorded snapshot end block/hash; only new runs
+carry exact ENS observation provenance. A new live build resolves its configured input before it
+can create a run.
+
+Scan input resolution is a server-side boundary before a run is created. It accepts a canonical
+Ethereum address or a conservative lowercase ASCII ENS name, uses the pinned Ethereum ENS registry
+address `0x00000000000c2e074ec69a0dfb2997ba6c7d2e1e`, and calls both registry `resolver(bytes32)` and
+resolver `addr(bytes32)` at one finalized observation block. The original input, normalized name,
+resolved address, registry/resolver source, block number/hash, and block timestamp are copied into
+the same `ops.pipeline_runs` row. Invalid, unsupported, or unresolved names raise an
+`ENSNotRecognizedError` before a wallet can become an index target. No separate database is used.
 
 ### `app.token_recognition_overrides`
 

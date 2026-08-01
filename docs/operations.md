@@ -10,6 +10,14 @@ bun run analytics:build:hyperindex
 
 This is the primary local-product data path. `analytics:build:hyperindex` bootstraps Python dbt dependencies from `analytics/requirements.txt` if dbt is not installed in the active Python environment, reads HyperIndex `_meta` through its local GraphQL endpoint, and resolves Ethereum's `finalized` head through RPC. Its target is the newest block covered by both transactional indexer progress and finality, capped by a configured HyperIndex end when present. It pins that target's canonical hash, reads the entity table only through the target, and builds the DuckDB marts in `analytics/artifacts/live.duckdb`.
 
+Before a scan job is created, the server-side scan-input boundary accepts either an address or an
+ENS name. ENS names use the pinned mainnet ENS registry and standard resolver calls at one
+Ethereum `finalized` observation block. The scan run records the original input, normalized name,
+resolved address, resolver source, observation block number/hash, and block timestamp in
+`ops.pipeline_runs`. Unsupported or unresolved names fail with `ENSNotRecognizedError` and are
+never passed to the indexer. This is provenance in the existing live artifact, not a third
+database, and it does not implement a reindex worker.
+
 Start the local API after the live build:
 
 ```sh
