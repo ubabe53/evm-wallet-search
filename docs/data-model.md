@@ -135,7 +135,7 @@ The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read
 
 ### `ops.pipeline_runs`
 
-Live orchestration also owns `ops.wallet_targets` (one durable row per configured `(chain_id, wallet_address)`) and `ops.scan_generations` (one shared finalized block interval, canonical end hash, scope, and lifecycle status for a coordinated wallet scan). Every wallet run below carries the generation ID so shared scan provenance cannot be mistaken for wallet-specific continuity.
+Live orchestration owns `ops.wallet_targets` at exactly one durable row per `(chain_id, wallet_address)`, with that composite key and no synthetic target identity. It also owns `ops.scan_generations` at one wallet-scoped finalized interval, canonical end hash, scope, and lifecycle status per attempted wallet snapshot. A generation and its `pipeline_runs` row never coordinate or imply continuity for another wallet.
 
 The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. Retries may repeat an interval with a new run ID after a failed attempt. `wallet_label` is derived from the pinned configured ENS value, falling back to the wallet address.
 
@@ -143,7 +143,7 @@ The live build wrapper creates this table inside `analytics/artifacts/live.duckd
 | --- | --- | --- |
 | `run_id` | `VARCHAR NOT NULL`, primary key | UUID identifying one attempted run. |
 | `chain_id` | `INTEGER NOT NULL` | EVM chain identifier, constrained to `1`. |
-| `generation_id` | `VARCHAR NOT NULL` | Shared finalized scan-generation identifier. |
+| `generation_id` | `VARCHAR NOT NULL` | UUID identifying the wallet-scoped scan generation for this attempted snapshot. |
 | `wallet_address` | `VARCHAR NOT NULL` | Lowercase configured wallet scanned by the run. |
 | `wallet_label` | `VARCHAR NOT NULL` | Pinned project display label; not a live ENS-resolution claim. |
 | `from_block` | `BIGINT NOT NULL` | Inclusive interval start. |
@@ -154,7 +154,7 @@ The live build wrapper creates this table inside `analytics/artifacts/live.duckd
 | `completed_at` | nullable `TIMESTAMPTZ` | UTC pipeline completion/failure time; null while running. |
 | `scope_version` | `VARCHAR NOT NULL` | Version of the indexed semantic scope. |
 
-The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance the next start to the previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. Rebuilding transformations while already current reuses the latest completed run rather than creating a false scan interval.
+The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance each wallet's next start to that wallet's previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. During a live dbt build, `pipeline_metadata` selects the latest run at the current finalized end independently for each wallet, so one wallet's generation cannot supply another wallet's provenance. Rebuilding transformations while already current reuses each wallet's latest completed run rather than creating a false scan interval.
 
 ### `app.token_recognition_overrides`
 

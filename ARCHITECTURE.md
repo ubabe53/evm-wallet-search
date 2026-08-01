@@ -38,7 +38,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
-| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics, durable wallet targets, shared finalized scan generations, wallet-grained snapshot-run history, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
+| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics, durable wallet targets, wallet-scoped finalized scan generations, wallet-grained snapshot-run history, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
 | Local account evidence store | `analytics/artifacts/account_evidence.duckdb` | Checkpoint one successful pinned bytecode observation per event counterparty, with retryable failures | A checked-in seed, an implicit build-time RPC job, or proof of permanent identity |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
@@ -110,7 +110,7 @@ Detailed field grains and tests are in `docs/data-model.md`.
 HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
 ```
 
-The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, records one attempted interval in `ops.pipeline_runs`, and advances coverage only after dbt succeeds. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
+The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for each wallet that needs coverage, and advances coverage only after dbt succeeds. A new wallet starts at the configured start block independently; an existing wallet starts at its own latest completed block plus one. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
 
 ### Fixture demo path
 

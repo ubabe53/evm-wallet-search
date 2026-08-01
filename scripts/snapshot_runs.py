@@ -182,23 +182,41 @@ def resolve_snapshot_target(
 
 def ensure_run_table(connection: Any) -> None:
     connection.execute("create schema if not exists ops")
+    target_exists = connection.execute(
+        "select count(*) from information_schema.tables where table_schema = 'ops' and table_name = 'wallet_targets'"
+    ).fetchone()[0]
+    target_columns = {
+        row[1] for row in connection.execute("pragma table_info('ops.wallet_targets')").fetchall()
+    } if target_exists else set()
+    if "target_id" in target_columns:
+        connection.execute("alter table ops.wallet_targets rename to wallet_targets_legacy")
     connection.execute(
         """
         create table if not exists ops.wallet_targets (
           chain_id integer not null check (chain_id = 1),
           wallet_address varchar not null,
           wallet_label varchar not null,
-          target_id varchar primary key,
           created_at timestamptz not null default current_timestamp,
-          unique (chain_id, wallet_address)
+          primary key (chain_id, wallet_address)
         )
         """
     )
+    if "target_id" in target_columns:
+        connection.execute(
+            """
+            insert into ops.wallet_targets (chain_id, wallet_address, wallet_label, created_at)
+            select chain_id, wallet_address, wallet_label, created_at
+            from ops.wallet_targets_legacy
+            on conflict (chain_id, wallet_address) do update set wallet_label = excluded.wallet_label
+            """
+        )
+        connection.execute("drop table ops.wallet_targets_legacy")
     connection.execute(
         """
         create table if not exists ops.scan_generations (
           generation_id varchar primary key,
           chain_id integer not null check (chain_id = 1),
+          wallet_address varchar not null,
           from_block bigint not null,
           to_block bigint not null,
           to_block_hash varchar not null,
@@ -234,16 +252,59 @@ def ensure_run_table(connection: Any) -> None:
     if "generation_id" not in columns:
         # Preserve an already-built artifact while allowing new runs to carry generation lineage.
         connection.execute("alter table ops.pipeline_runs add column generation_id varchar")
+    generation_columns = {
+        row[1] for row in connection.execute("pragma table_info('ops.scan_generations')").fetchall()
+    }
+    if "wallet_address" not in generation_columns:
+        connection.execute("alter table ops.scan_generations rename to scan_generations_legacy")
+        connection.execute(
+            """
+            create table ops.scan_generations (
+              generation_id varchar primary key,
+              chain_id integer not null check (chain_id = 1),
+              wallet_address varchar not null,
+              from_block bigint not null,
+              to_block bigint not null,
+              to_block_hash varchar not null,
+              scope_version varchar not null,
+              status varchar not null check (status in ('running', 'completed', 'failed')),
+              started_at timestamptz not null,
+              completed_at timestamptz,
+              check (from_block <= to_block)
+            )
+            """
+        )
+        connection.execute(
+            "update ops.pipeline_runs set generation_id = 'legacy:' || run_id "
+            "where generation_id is not null"
+        )
+        connection.execute(
+            """
+            insert into ops.scan_generations
+            select generation_id, chain_id, wallet_address, from_block, to_block, to_block_hash,
+              scope_version, status, started_at, completed_at
+            from (
+              select r.generation_id, r.chain_id, r.wallet_address, r.from_block, r.to_block,
+                r.to_block_hash, r.scope_version, r.status,
+                coalesce(r.completed_at, current_timestamp) as started_at, r.completed_at,
+                row_number() over (partition by r.generation_id, r.wallet_address order by r.run_id) as rn
+              from ops.pipeline_runs r
+              where r.generation_id is not null
+            )
+            where rn = 1
+            """
+        )
+        connection.execute("drop table ops.scan_generations_legacy")
     legacy_runs = connection.execute(
-        "select run_id, chain_id, from_block, to_block, to_block_hash, scope_version, status, completed_at "
+        "select run_id, chain_id, wallet_address, from_block, to_block, to_block_hash, scope_version, status, completed_at "
         "from ops.pipeline_runs where generation_id is null"
     ).fetchall()
-    for run_id, chain_id, from_block, to_block, block_hash, scope_version, status, completed_at in legacy_runs:
+    for run_id, chain_id, wallet_address, from_block, to_block, block_hash, scope_version, status, completed_at in legacy_runs:
         generation_id = f"legacy:{run_id}"
         connection.execute(
-            "insert into ops.scan_generations values (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "insert into ops.scan_generations values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "on conflict (generation_id) do nothing",
-            [generation_id, chain_id, from_block, to_block, block_hash, scope_version, status,
+            [generation_id, chain_id, wallet_address, from_block, to_block, block_hash, scope_version, status,
              completed_at or datetime.now(timezone.utc), completed_at],
         )
         connection.execute(
@@ -301,7 +362,7 @@ def start_snapshot_runs(
     metadata: HyperIndexMetadata,
     finalized_block: FinalizedBlock,
 ) -> list[SnapshotRun]:
-    """Create one shared finalized generation and one explicit run per target wallet."""
+    """Create independent finalized generations and runs for wallets that need coverage."""
 
     if not wallets:
         raise RuntimeError("At least one configured wallet is required")
@@ -321,40 +382,41 @@ def start_snapshot_runs(
         from_blocks = {}
         for wallet in wallets:
             connection.execute(
-                "insert into ops.wallet_targets (chain_id, wallet_address, wallet_label, target_id) values (?, ?, ?, ?) "
+                "insert into ops.wallet_targets (chain_id, wallet_address, wallet_label) values (?, ?, ?) "
                 "on conflict (chain_id, wallet_address) do update set wallet_label = excluded.wallet_label",
-                [CHAIN_ID, wallet.address, wallet.label, f"{CHAIN_ID}:{wallet.address}"],
+                [CHAIN_ID, wallet.address, wallet.label],
             )
             from_blocks[wallet.address] = next_run_start(
                 connection, chain_id=CHAIN_ID, wallet_address=wallet.address,
                 scope_version=SCOPE_VERSION, configured_start_block=metadata.start_block,
             )
-        if all(from_block > finalized_block.number for from_block in from_blocks.values()):
+        pending_wallets = [
+            wallet for wallet in wallets if from_blocks[wallet.address] <= finalized_block.number
+        ]
+        if not pending_wallets:
             raise SnapshotAlreadyCurrent(
                 f"Snapshot is already finalized through block {finalized_block.number}"
             )
-        if len(set(from_blocks.values())) != 1:
-            raise RuntimeError("Configured wallets do not share a contiguous scan start")
-        from_block = next(iter(from_blocks.values()))
-        active_run = connection.execute(
-            """
-            select run_id
-            from ops.pipeline_runs
-            where chain_id = ? and scope_version = ? and status = 'running'
-            limit 1
-            """,
-            [CHAIN_ID, SCOPE_VERSION],
-        ).fetchone()
-        if active_run is not None:
-            raise RuntimeError(f"Snapshot run {active_run[0]} is already running")
-        generation_id = str(uuid.uuid4())
-        connection.execute(
-            "insert into ops.scan_generations values (?, ?, ?, ?, ?, ?, 'running', ?, null)",
-            [generation_id, CHAIN_ID, from_block, finalized_block.number, finalized_block.block_hash,
-             SCOPE_VERSION, datetime.now(timezone.utc)],
-        )
         runs = []
-        for wallet in wallets:
+        for wallet in pending_wallets:
+            active_run = connection.execute(
+                """
+                select run_id
+                from ops.pipeline_runs
+                where chain_id = ? and wallet_address = ? and scope_version = ? and status = 'running'
+                limit 1
+                """,
+                [CHAIN_ID, wallet.address, SCOPE_VERSION],
+            ).fetchone()
+            if active_run is not None:
+                raise RuntimeError(f"Snapshot run {active_run[0]} is already running")
+            generation_id = str(uuid.uuid4())
+            from_block = from_blocks[wallet.address]
+            connection.execute(
+                "insert into ops.scan_generations values (?, ?, ?, ?, ?, ?, ?, 'running', ?, null)",
+                [generation_id, CHAIN_ID, wallet.address, from_block, finalized_block.number,
+                 finalized_block.block_hash, SCOPE_VERSION, datetime.now(timezone.utc)],
+            )
             run = SnapshotRun(
                 run_id=str(uuid.uuid4()), chain_id=CHAIN_ID, generation_id=generation_id,
                 wallet_address=wallet.address, wallet_label=wallet.label,
@@ -462,14 +524,13 @@ def finish_snapshot_run(
                 [datetime.now(timezone.utc), run.run_id],
             )
         generation_status = connection.execute(
-            "select count(*) filter (where status = 'running'), count(*) filter (where status = 'failed') "
-            "from ops.pipeline_runs where generation_id = ?",
+            "select status from ops.pipeline_runs where generation_id = ?",
             [run.generation_id],
         ).fetchone()
-        if generation_status and generation_status[0] == 0:
+        if generation_status:
             connection.execute(
                 "update ops.scan_generations set status = ?, completed_at = ? where generation_id = ?",
-                ["failed" if generation_status[1] else "completed", datetime.now(timezone.utc), run.generation_id],
+                [generation_status[0], datetime.now(timezone.utc), run.generation_id],
             )
 
 

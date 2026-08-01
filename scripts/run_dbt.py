@@ -204,6 +204,11 @@ def main() -> None:
             )
             return
         try:
+            # dbt rebuilds complete configured history for every wallet. Run intervals
+            # are wallet-scoped checkpoints and must never narrow this source bound.
+            coverage_start_block = min(
+                [metadata.start_block, *(snapshot_run.from_block for snapshot_run in snapshot_runs)]
+            )
             run_dbt(
                 command,
                 sys.argv[2:],
@@ -211,7 +216,7 @@ def main() -> None:
                 hyperindex_dsn=str(hyperindex_dsn) if hyperindex_dsn else None,
                 extra_env=dbt_snapshot_environment(
                     snapshot_runs[0],
-                    coverage_start_block=metadata.start_block,
+                    coverage_start_block=coverage_start_block,
                 ),
             )
         except BaseException:
