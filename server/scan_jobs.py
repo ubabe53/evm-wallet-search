@@ -328,13 +328,20 @@ class ScanJobManager:
                     previous = str(previous_path).replace("'", "''")
                     connection.execute(f"attach '{previous}' as previous_live (read_only)")
                     try:
-                        previous_metadata_exists = connection.execute(
+                        def count_rows(query: str, parameters: list[object] | None = None) -> int:
+                            result = connection.execute(query, parameters or [])
+                            row = result.fetchone()
+                            if row is None:
+                                raise RuntimeError("DuckDB count query returned no row")
+                            return int(row[0])
+
+                        previous_metadata_exists = count_rows(
                             """
                             select count(*) from duckdb_tables()
                             where database_name = 'previous_live'
                               and schema_name = 'main' and table_name = 'pipeline_metadata'
                             """
-                        ).fetchone()[0]
+                        )
                         previous_wallets = (
                             {
                                 item[0]
@@ -358,28 +365,26 @@ class ScanJobManager:
                             "token_rpc_metadata",
                             "int_token_enrichment",
                         ):
-                            previous_exists = connection.execute(
+                            previous_exists = count_rows(
                                 """
                                 select count(*) from duckdb_tables()
                                 where database_name = 'previous_live'
                                   and schema_name = 'main' and table_name = ?
                                 """,
-                                [relation],
-                            ).fetchone()[0]
+                                [relation])
                             if not previous_exists:
                                 continue
-                            staged_exists = connection.execute(
+                            staged_exists = count_rows(
                                 """
                                 select count(*) from duckdb_tables()
                                 where schema_name = 'main' and table_name = ?
                                 """,
-                                [relation],
-                            ).fetchone()[0]
+                                [relation])
                             if not staged_exists:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation {relation}")
-                            missing = connection.execute(
+                            missing = count_rows(
                                 f"select count(*) from (select * from previous_live.main.\"{relation}\" except all select * from main.\"{relation}\")"
-                            ).fetchone()[0]
+                            )
                             if missing:
                                 raise RuntimeError(f"Wallet scan artifact dropped rows from {relation}")
 
@@ -388,33 +393,31 @@ class ScanJobManager:
                             "scan_generations",
                             "pipeline_runs",
                         ):
-                            previous_exists = connection.execute(
+                            previous_exists = count_rows(
                                 """
                                 select count(*) from duckdb_tables()
                                 where database_name = 'previous_live'
                                   and schema_name = 'ops' and table_name = ?
                                 """,
-                                [relation],
-                            ).fetchone()[0]
+                                [relation])
                             if not previous_exists:
                                 continue
-                            staged_exists = connection.execute(
+                            staged_exists = count_rows(
                                 """
                                 select count(*) from duckdb_tables()
                                 where schema_name = 'ops' and table_name = ?
                                 """,
-                                [relation],
-                            ).fetchone()[0]
+                                [relation])
                             if not staged_exists:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation ops.{relation}")
-                            missing = connection.execute(
+                            missing = count_rows(
                                 f"select count(*) from (select * from previous_live.ops.\"{relation}\" except all select * from ops.\"{relation}\")",
-                            ).fetchone()[0]
+                            )
                             if missing:
                                 raise RuntimeError(f"Wallet scan artifact dropped rows from ops.{relation}")
 
                         if previous_metadata_exists:
-                            metadata_missing = connection.execute(
+                            metadata_missing = count_rows(
                                 """
                                 select count(*) from (
                                   select * from previous_live.main.pipeline_metadata
@@ -424,8 +427,7 @@ class ScanJobManager:
                                   where wallet_address <> ?
                                 )
                                 """,
-                                [job.wallet_address, job.wallet_address],
-                            ).fetchone()[0]
+                                [job.wallet_address, job.wallet_address])
                             if metadata_missing:
                                 raise RuntimeError("Wallet scan artifact changed existing wallet metadata")
 
@@ -440,38 +442,37 @@ class ScanJobManager:
                         ).fetchall():
                             if schema_name == "main" and relation == "pipeline_metadata":
                                 continue
-                            staged_exists = connection.execute(
+                            staged_exists = count_rows(
                                 """
                                 select count(*) from duckdb_tables()
                                 where schema_name = ? and table_name = ?
                                 """,
-                                [schema_name, relation],
-                            ).fetchone()[0]
+                                [schema_name, relation])
                             if not staged_exists:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation {schema_name}.{relation}")
-                            missing = connection.execute(
+                            missing = count_rows(
                                 f"select count(*) from (select * from previous_live.\"{schema_name}\".\"{relation}\" except all select * from \"{schema_name}\".\"{relation}\")"
-                            ).fetchone()[0]
+                            )
                             if missing:
                                 raise RuntimeError(f"Wallet scan artifact dropped rows from {schema_name}.{relation}")
 
-                        override_exists = connection.execute(
+                        override_exists = count_rows(
                             """
                             select count(*) from duckdb_tables()
                             where database_name = 'previous_live'
                               and schema_name = 'app' and table_name = 'token_recognition_overrides'
                             """
-                        ).fetchone()[0]
+                        )
                         if override_exists:
-                            staged_override_exists = connection.execute(
+                            staged_override_exists = count_rows(
                                 """
                                 select count(*) from duckdb_tables()
                                 where schema_name = 'app' and table_name = 'token_recognition_overrides'
                                 """
-                            ).fetchone()[0]
+                            )
                             if not staged_override_exists:
                                 raise RuntimeError("Wallet scan artifact dropped token-recognition overrides")
-                            override_missing = connection.execute(
+                            override_missing = count_rows(
                                 """
                                 select count(*) from (
                                   select * from previous_live.app.token_recognition_overrides
@@ -479,7 +480,7 @@ class ScanJobManager:
                                   select * from app.token_recognition_overrides
                                 )
                                 """
-                            ).fetchone()[0]
+                            )
                             if override_missing:
                                 raise RuntimeError("Wallet scan artifact dropped token-recognition overrides")
                     finally:

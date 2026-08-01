@@ -133,13 +133,13 @@ class ScanJobsTest(unittest.TestCase):
                         "select wallet_address from pipeline_metadata"
                     ).fetchall()},
                 )
-                self.assertEqual(
-                    connection.execute(
-                        "select status from app.token_recognition_overrides where token_address = ?",
-                        [token],
-                    ).fetchone()[0],
-                    "recognized",
-                )
+                override_row = connection.execute(
+                    "select status from app.token_recognition_overrides where token_address = ?",
+                    [token],
+                ).fetchone()
+                if override_row is None:
+                    self.fail("token override was not preserved")
+                self.assertEqual(override_row[0], "recognized")
             self.assertEqual({row["wallet_address"] for row in manager.list_wallets()}, {wallet_a, wallet_b})
 
     def test_scan_rejects_worker_that_drops_existing_wallet_rows(self) -> None:
@@ -189,7 +189,10 @@ class ScanJobsTest(unittest.TestCase):
             self.assertEqual(failed.status, "failed")
             self.assertIn("dropped rows from wallet_events", failed.error or "")
             with duckdb.connect(str(live), read_only=True) as connection:
-                self.assertEqual(connection.execute("select event_id from wallet_events").fetchone()[0], "event-a")
+                event_row = connection.execute("select event_id from wallet_events").fetchone()
+                if event_row is None:
+                    self.fail("existing event was not preserved")
+                self.assertEqual(event_row[0], "event-a")
 
     def test_failed_worker_leaves_previous_artifact_served(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
