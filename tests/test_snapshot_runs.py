@@ -10,6 +10,7 @@ from scripts.snapshot_runs import (
     HyperIndexMetadata,
     SnapshotAlreadyCurrent,
     SnapshotRun,
+    dbt_snapshot_environment,
     ensure_run_table,
     fetch_hyperindex_metadata,
     finish_snapshot_run,
@@ -19,7 +20,6 @@ from scripts.snapshot_runs import (
     resolve_snapshot_target,
     start_snapshot_run,
     start_snapshot_runs,
-    dbt_snapshot_environment,
 )
 
 WALLET = ConfiguredWallet(
