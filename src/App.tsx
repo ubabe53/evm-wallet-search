@@ -8,7 +8,7 @@ import {
   Search,
   Sun,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { dashboardDataMode } from "./data";
 import { ActivityTimeline } from "./dashboard/ActivityTimeline";
 import { CounterpartyTable } from "./dashboard/CounterpartyTable";
@@ -33,6 +33,7 @@ import { useDashboard } from "./dashboard/useDashboard";
 
 export function App() {
   const [scanOpen, setScanOpen] = useState(false);
+  const touchActivation = useRef(false);
   const {
     apiResult,
     apiResultIsCurrent,
@@ -120,9 +121,13 @@ export function App() {
         <div className="toolbar">
           <div
             className="scanLauncher"
-            onMouseEnter={() => setScanOpen(true)}
+            onMouseEnter={() => {
+              if (!touchActivation.current) setScanOpen(true);
+            }}
             onMouseLeave={() => setScanOpen(false)}
-            onFocus={() => setScanOpen(true)}
+            onFocus={() => {
+              if (!touchActivation.current) setScanOpen(true);
+            }}
             onBlur={(event) => {
               const next = event.relatedTarget as Node | null;
               if (!next || !event.currentTarget.contains(next)) setScanOpen(false);
@@ -131,7 +136,19 @@ export function App() {
             <button
               className="scanLauncherButton"
               type="button"
-              onClick={() => setScanOpen(true)}
+              onPointerDown={(event) => {
+                if (event.pointerType === "touch" || event.pointerType === "pen") {
+                  touchActivation.current = true;
+                }
+              }}
+              onClick={(event) => {
+                if (touchActivation.current) {
+                  touchActivation.current = false;
+                  setScanOpen((open) => !open);
+                } else {
+                  setScanOpen(true);
+                }
+              }}
               aria-expanded={scanOpen}
               aria-controls="wallet-scan-panel"
             >
