@@ -269,15 +269,15 @@ class ScanJobManager:
                 live_path = str(self.live_path).replace("'", "''")
                 connection.execute(f"attach '{live_path}' as previous_live (read_only)")
                 try:
-                    exists = connection.execute(
+                    exists_row = connection.execute(
                         """
                         select count(*)
                         from duckdb_tables()
                         where database_name = 'previous_live'
                           and schema_name = 'app' and table_name = 'token_recognition_overrides'
                         """
-                    ).fetchone()[0]
-                    if not exists:
+                    ).fetchone()
+                    if exists_row is None or not exists_row[0]:
                         return
                     connection.execute("create schema if not exists app")
                     connection.execute("drop table if exists app.token_recognition_overrides")
