@@ -247,6 +247,7 @@ class ScanJobManager:
             with tempfile.TemporaryDirectory(prefix="wallet-scan-", dir=str(self.live_path.parent)) as directory:
                 staging = Path(directory) / "live.duckdb"
                 self.worker(original, staging, lambda value: self._progress(original.job_id, value))
+                self._preserve_token_overrides(staging)
                 self._validate_staged_artifact(original, staging)
                 os.replace(staging, self.live_path)
             self._finish(original.job_id, "completed", 100, None)
@@ -255,6 +256,53 @@ class ScanJobManager:
         finally:
             with self._lock:
                 self._active_job_id = None
+
+    def _preserve_token_overrides(self, staging_path: Path) -> None:
+        """Carry application-owned token overrides across an artifact swap."""
+
+        if not self.live_path.is_file():
+            return
+        try:
+            import duckdb
+
+            with duckdb.connect(str(staging_path)) as connection:
+                live_path = str(self.live_path).replace("'", "''")
+                connection.execute(f"attach '{live_path}' as previous_live (read_only)")
+                try:
+                    exists = connection.execute(
+                        """
+                        select count(*)
+                        from duckdb_tables()
+                        where database_name = 'previous_live'
+                          and schema_name = 'app' and table_name = 'token_recognition_overrides'
+                        """
+                    ).fetchone()[0]
+                    if not exists:
+                        return
+                    connection.execute("create schema if not exists app")
+                    connection.execute("drop table if exists app.token_recognition_overrides")
+                    connection.execute(
+                        """
+                        create table app.token_recognition_overrides (
+                          chain_id integer not null check (chain_id = 1),
+                          token_address varchar not null,
+                          status varchar not null check (status in ('recognized', 'other')),
+                          updated_at timestamptz not null default current_timestamp,
+                          primary key (chain_id, token_address)
+                        )
+                        """
+                    )
+                    connection.execute(
+                        """
+                        insert into app.token_recognition_overrides
+                        select chain_id, token_address, status, updated_at
+                        from previous_live.app.token_recognition_overrides
+                        """
+                    )
+                finally:
+                    connection.execute("detach previous_live")
+        except Exception as error:
+            raise RuntimeError("Could not preserve token-recognition overrides") from error
 
     @staticmethod
     def _validate_staged_artifact(job: ScanJob, staging_path: Path) -> None:

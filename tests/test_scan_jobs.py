@@ -18,6 +18,18 @@ class ScanJobsTest(unittest.TestCase):
             with duckdb.connect(str(live)) as connection:
                 connection.execute("create table marker (value varchar)")
                 connection.execute("insert into marker values ('old')")
+                connection.execute("create schema app")
+                connection.execute(
+                    """
+                    create table app.token_recognition_overrides (
+                      chain_id integer, token_address varchar, status varchar, updated_at timestamptz
+                    )
+                    """
+                )
+                connection.execute(
+                    "insert into app.token_recognition_overrides values (1, ?, 'recognized', current_timestamp)",
+                    ["0x" + "2" * 40],
+                )
 
             def worker(job, staging_path, progress: Callable[[int], None]) -> None:
                 progress(40)
@@ -53,6 +65,10 @@ class ScanJobsTest(unittest.TestCase):
                 row = connection.execute("select value from marker").fetchone()
                 assert row is not None
                 self.assertEqual(row[0], "0x" + "1" * 40)
+                override = connection.execute(
+                    "select chain_id, token_address, status from app.token_recognition_overrides"
+                ).fetchone()
+                self.assertEqual(override, (1, "0x" + "2" * 40, "recognized"))
             self.assertEqual(completed.from_block, 0)
             self.assertEqual(completed.to_block, 123)
 

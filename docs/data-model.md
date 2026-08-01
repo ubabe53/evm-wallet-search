@@ -196,7 +196,7 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 | `status` | `VARCHAR NOT NULL` | Manual `recognized` or `other` result. |
 | `updated_at` | `TIMESTAMPTZ NOT NULL`, defaults to current time | UTC time of the latest manual mutation. |
 
-A row overrides automatic `wallet_events.recognition_status`; no row means automatic classification. Normal in-place dbt builds preserve the table, while deleting or replacing the DuckDB file loses this local-only state.
+A row overrides automatic `wallet_events.recognition_status`; no row means automatic classification. Normal in-place dbt builds preserve the table, and the scan-job artifact swap copies it into the staged artifact before replacement. Explicitly deleting the DuckDB file loses this local-only state.
 
 ## Local API contract
 
