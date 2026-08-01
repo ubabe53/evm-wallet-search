@@ -65,6 +65,12 @@ The local dashboard exposes:
 - token and counterparty rankings by captured event count, never cross-token quantity or value;
 - provenance that separates finalized scan coverage from observed event extrema;
 - `All`, `Recognized`, and `Other` token views plus pinned-block `EOA`/`Contract` evidence.
+- live mode wallet/ENS scan submission with progress, failure preservation, automatic switching,
+  and a completed-wallet list; fixture mode keeps these controls disabled.
+
+Scan jobs are exposed by the local API and currently use `WALLET_SCAN_COMMAND` as the explicit
+adapter for the future multi-wallet indexer. The command must produce a block-0-to-finalized
+artifact; the API atomically replaces the served artifact only after success.
 
 The production Vite build is the deterministic fixture demo. It is useful for interaction and
 presentation checks, but its fixture badge, bounded payload, and unrecorded scan coverage are part

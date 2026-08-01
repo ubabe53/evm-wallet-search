@@ -50,5 +50,9 @@ it into `ops.pipeline_runs` before starting a scan. An unrecognized or unsupport
 `ENSNotRecognizedError` and has no resolved index target. This boundary does not start an indexer,
 reindex history, or expose an HTTP dashboard route.
 
+### Scan jobs
+
+Live mode also exposes `POST /api/v1/scan-jobs`, `GET /api/v1/scan-jobs/{job_id}`, and `GET /api/v1/wallets`. These are local orchestration endpoints only. The scan manager enforces one worker, block-0-to-finalized bounds, staging output, and atomic artifact replacement. Fixture mode has no scan controls. `server/scan_jobs.py` is the stable adapter boundary for the future multi-wallet indexer and ENS resolver.
+
 Do not add ingestion, general database writes, fixture serving, public binding, or browser-held
 credentials without an explicit architecture and data-contract decision.

@@ -21,6 +21,7 @@ from server.queries import (
     QueryService,
     TokenNotFound,
 )
+from server.scan_jobs import ScanJobManager
 
 
 class AccountFilter(str, Enum):
@@ -42,6 +43,30 @@ class TimelineInterval(str, Enum):
 
 class RecognitionOverrideRequest(BaseModel):
     status: Literal["recognized", "other"]
+
+
+class ScanJobRequest(BaseModel):
+    wallet: str
+
+
+def scan_job_payload(job) -> dict:
+    return {
+        "job_id": job.job_id,
+        "requested_value": job.requested_value,
+        "wallet_address": job.wallet_address,
+        "wallet_label": job.wallet_label,
+        "status": job.status,
+        "progress": job.progress,
+        "from_block": job.from_block,
+        "to_block": job.to_block,
+        "error": job.error,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "resolver_source": job.resolver_source,
+        "observation_block_number": job.observation_block_number,
+        "observation_block_hash": job.observation_block_hash,
+        "observation_timestamp": job.observation_timestamp,
+    }
 
 
 def dashboard_filters(
@@ -107,8 +132,9 @@ class DashboardFiltersDependency:
         )
 
 
-def create_app(service: QueryService | None = None) -> FastAPI:
+def create_app(service: QueryService | None = None, scan_manager: ScanJobManager | None = None) -> FastAPI:
     query_service = service or QueryService(LIVE_DB_PATH)
+    jobs = scan_manager or ScanJobManager()
     application = FastAPI(
         title="EVM Wallet Search API",
         version="1.0.0",
@@ -137,6 +163,27 @@ def create_app(service: QueryService | None = None) -> FastAPI:
             "generated_at": metadata["generated_at"],
             "api_schema_version": metadata["api_schema_version"],
         }
+
+    @application.get("/api/v1/wallets")
+    def wallets() -> dict:
+        return {"items": jobs.list_wallets()}
+
+    @application.post("/api/v1/scan-jobs", status_code=202)
+    def create_scan_job(request: ScanJobRequest) -> dict:
+        try:
+            return scan_job_payload(jobs.create(request.wallet))
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        except RuntimeError as error:
+            status = 409 if "already running" in str(error) else 503
+            raise HTTPException(status_code=status, detail=str(error)) from error
+
+    @application.get("/api/v1/scan-jobs/{job_id}")
+    def scan_job(job_id: str) -> dict:
+        job = jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Scan job not found")
+        return scan_job_payload(job)
 
     @application.get("/api/v1/metadata")
     def metadata(wallet_address: str | None = None) -> dict:

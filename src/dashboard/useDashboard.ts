@@ -11,10 +11,15 @@ import {
   type TimelineBucket,
   type TimelineInterval,
   type WalletEvent,
+  type ScanJob,
+  type WalletListItem,
   dashboardDataMode,
+  createScanJob,
   loadApiDashboardData,
   loadDashboardData,
   loadNextApiEvents,
+  loadScanJob,
+  loadWallets,
   resetTokenRecognition,
   setTokenRecognition,
 } from "../data";
@@ -56,6 +61,11 @@ export function useDashboard() {
     previousOverride: RecognitionStatus | null;
   } | null>(null);
   const [recognitionActionError, setRecognitionActionError] = useState<string | null>(null);
+  const [scanInput, setScanInput] = useState("");
+  const [scanJob, setScanJob] = useState<ScanJob | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [wallets, setWallets] = useState<WalletListItem[]>([]);
+  const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
   const undoTimerRef = useRef<number | null>(null);
   const [selectedAccountFilters, setSelectedAccountFilters] = useState<AccountFilter[]>(ACCOUNT_FILTERS);
   const [theme, setTheme] = useState<Theme>(() => {
@@ -81,6 +91,34 @@ export function useDashboard() {
   }, []);
 
   useEffect(() => {
+    if (dashboardDataMode !== "api") return;
+    const controller = new AbortController();
+    loadWallets(controller.signal).then((result) => setWallets(result.items)).catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (dashboardDataMode !== "api" || !scanJob || (scanJob.status !== "queued" && scanJob.status !== "running")) return;
+    const controller = new AbortController();
+    const poll = () => loadScanJob(scanJob.job_id, controller.signal).then((next) => {
+      setScanJob(next);
+      if (next.status === "completed") {
+        setSelectedWalletAddress(next.wallet_address);
+        apiMetadataRef.current = undefined;
+        setDataRevision((current) => current + 1);
+        loadWallets(controller.signal).then((result) => setWallets(result.items)).catch(() => undefined);
+      }
+    }).catch((loadError: unknown) => {
+      if (!(loadError instanceof Error && loadError.name === "AbortError")) {
+        setScanError(loadError instanceof Error ? loadError.message : "Could not monitor scan");
+      }
+    });
+    void poll();
+    const timer = window.setInterval(poll, 1500);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [scanJob]);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedQuery(query), 200);
     return () => window.clearTimeout(timeout);
   }, [query]);
@@ -100,6 +138,7 @@ export function useDashboard() {
   }, [selectedMonth, selectedYear]);
 
   const dashboardQuery = useMemo((): DashboardQuery => ({
+    walletAddress: selectedWalletAddress,
     recognition: recognitionFilter,
     accountFilters: selectedAccountFilters,
     query: debouncedQuery,
@@ -116,6 +155,7 @@ export function useDashboard() {
     timelineInterval,
     selectedYear,
     selectedPeriod,
+    selectedWalletAddress,
   ]);
   const dashboardQueryKey = JSON.stringify(dashboardQuery);
   const dashboardQueryKeyRef = useRef(dashboardQueryKey);
@@ -431,6 +471,16 @@ export function useDashboard() {
     }
   }
 
+  async function startWalletScan() {
+    if (dashboardDataMode !== "api" || !scanInput.trim() || scanJob?.status === "queued" || scanJob?.status === "running") return;
+    setScanError(null);
+    try {
+      setScanJob(await createScanJob(scanInput));
+    } catch (actionError) {
+      setScanError(actionError instanceof Error ? actionError.message : "Could not start wallet scan");
+    }
+  }
+
   return {
     apiResult,
     apiResultIsCurrent,
@@ -468,5 +518,11 @@ export function useDashboard() {
     undoTokenRecognition,
     updatingToken,
     query,
+    scanError,
+    scanInput,
+    scanJob,
+    setScanInput,
+    startWalletScan,
+    wallets,
   };
 }

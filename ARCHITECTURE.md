@@ -10,7 +10,7 @@ Ethereum mainnet
       │ (ERC-20-intended; token standard is not disambiguated)
       ▼
 address/ENS input → server-side finalized ENS resolver
-      │ provenance carried by scan job
+      │ provenance carried through the scan-job adapter to the worker
       ▼
 Envio HyperIndex
       │ normalized Erc20Transfer entities
@@ -81,7 +81,7 @@ A captured `Transfer(address,address,uint256)` log establishes that a contract e
 
 ### Enrichment evidence
 
-Token metadata, registry membership, RPC responses, bytecode observations, and ENS names are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The current `vitalik.eth` value remains a configured presentation label, while a live build resolves an ENS-shaped label at one finalized block and records its source and observation provenance on the selected wallet's pipeline run. Non-ENS labels use the canonical configured address as direct-input provenance.
+Token metadata, registry membership, RPC responses, ENS resolution, and bytecode observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The current `vitalik.eth` value remains a configured presentation label, while an explicit live build or scan job resolves an ENS-shaped label at one finalized block and records its source and observation provenance through the selected wallet's run/worker contract. Non-ENS labels use the canonical configured address as direct-input provenance.
 
 ### Delivery boundary
 
@@ -99,7 +99,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
 - Account-evidence coverage is measured against the current snapshot's distinct nonzero, nonself event counterparties. Classified, failed, and not-checked address and event counts must reconcile to that population; cached rows outside it do not count.
 - Live completeness is a contiguous range of completed snapshot runs from the configured HyperIndex start through an Ethereum `finalized` block; event-bearing block extrema do not establish that range.
-- Scan jobs accept only a normalized Ethereum address or a safely normalized ENS name. ENS resolution uses the pinned mainnet registry dependency at a finalized block and records the original input, normalized name, resolved address, resolver source, block number/hash, and observation timestamp in `ops.pipeline_runs`; unresolved names never enter indexing.
+- Scan jobs accept only a normalized Ethereum address or a safely normalized ENS name. ENS resolution uses the pinned mainnet registry dependency at a finalized block; the typed observation is handed to the explicit worker adapter, which owns persistence of the original input, normalized name, resolved address, resolver source, block number/hash, and observation timestamp in the selected wallet's output artifact. Unresolved names never enter indexing.
 - `pipeline_metadata` keeps cumulative scan bounds separate from observed event block/time extrema and reconciles its complete event count with the semantic and delivery event relations.
 - Token names, symbols, and wallet-token activity patterns are never scored as reputation or legitimacy evidence; the public token labels are only `Recognized` and `Other`.
 - Bounded outputs disclose their complete matching count, returned count, limits, provenance, and sampling state where applicable.
@@ -111,7 +111,12 @@ Detailed field grains and tests are in `docs/data-model.md`.
 ### Local analytics path
 
 ```text
-address/ENS input → server-side finalized ENS resolver → scan-job provenance in `live.duckdb` → HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
+address/ENS input → server-side finalized ENS resolver → explicit scan-worker adapter → HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
+
+The scan manager does not persist ENS provenance or merge DuckDB artifacts itself. The explicit
+worker adapter receives the typed finalized observation and is responsible for writing the selected
+wallet's run/provenance into its output artifact; combined multi-wallet persistence remains a
+future worker concern.
 ```
 
 The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, selects one configured wallet through `EVM_WALLET_SCAN_ADDRESS`, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for that wallet, and advances coverage only after dbt succeeds. Without the selector, exactly one configured wallet is required. A new selected wallet starts at the configured start block; an existing selected wallet starts at its own latest completed block plus one. The live DuckDB artifact is rebuilt as a projection for that selected wallet; separate wallet projections are not merged, so switching the selector does not preserve a prior wallet's analytics in the same artifact. A future multi-wallet artifact merge requires an explicit data-contract decision. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.

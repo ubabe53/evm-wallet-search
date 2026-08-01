@@ -1,5 +1,11 @@
 # Data Model
 
+## Scan-job contract
+
+`ScanJob` is an orchestration object, not an event fact. Its key is `job_id`; it carries the requested wallet input, canonical `(chain_id=1, wallet_address)`, label, `status` (`queued|running|completed|failed`), integer progress, `from_block=0`, finalized `to_block`, timestamps, failure message, and (when resolved) ENS resolver source plus finalized observation block/hash/timestamp. ENS labels are mutable enrichment: the server-side adapter accepts conservative ASCII ENS names and resolves them through the pinned Ethereum mainnet registry/resolver at one finalized block. The explicit worker must persist that provenance in its output artifact; the manager does not claim combined DuckDB persistence.
+
+The wallet list is a bounded list of completed `(chain_id, wallet_address, label, status)` entries. It is separate from the single-wallet analytics artifact contract and exists to provide a stable handoff to the multi-wallet branch.
+
 The core grain is one row per wallet-relevant `Transfer(address,address,uint256)` log, interpreted by ERC-20-oriented models. The signature alone does not prove ERC-20: ERC-721 uses the same signature, and the current wildcard indexer has no standards-disambiguation step. Until that gap is closed, a captured ERC-721-like token ID can occupy `value_raw` and must not be presented as a proven fungible quantity.
 
 ## Staging
@@ -165,14 +171,18 @@ The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exac
 When an older artifact is opened, the additive schema migration keeps legacy rows readable with
 `legacy-configured-wallet` provenance and their recorded snapshot end block/hash; only new runs
 carry exact ENS observation provenance. A new live build resolves its configured input before it
-can create a run.
+creates a run; an explicit scan job resolves its input before handing the typed provenance to the
+worker adapter, which is responsible for persisting it in the output artifact.
 
-Scan input resolution is a server-side boundary before a run is created. It accepts a canonical
+Scan input resolution is a server-side boundary before a live run is created or a scan worker is
+started. It accepts a canonical
 Ethereum address or a conservative lowercase ASCII ENS name, uses the pinned Ethereum ENS registry
 address `0x00000000000c2e074ec69a0dfb2997ba6c7d2e1e`, and calls both registry `resolver(bytes32)` and
-resolver `addr(bytes32)` at one finalized observation block. The original input, normalized name,
-resolved address, registry/resolver source, block number/hash, and block timestamp are copied into
-the same `ops.pipeline_runs` row. Invalid, unsupported, or unresolved names raise an
+resolver `addr(bytes32)` at one finalized observation block. For live dbt builds, the original input,
+normalized name, resolved address, registry/resolver source, block number/hash, and block timestamp
+are copied into the same `ops.pipeline_runs` row. Scan jobs carry the same typed fields across the
+explicit worker adapter; the manager does not create a run or claim combined artifact persistence.
+Invalid, unsupported, or unresolved names raise an
 `ENSNotRecognizedError` before a wallet can become an index target. No separate database is used.
 
 ### `app.token_recognition_overrides`
@@ -186,7 +196,7 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 | `status` | `VARCHAR NOT NULL` | Manual `recognized` or `other` result. |
 | `updated_at` | `TIMESTAMPTZ NOT NULL`, defaults to current time | UTC time of the latest manual mutation. |
 
-A row overrides automatic `wallet_events.recognition_status`; no row means automatic classification. Normal in-place dbt builds preserve the table, while deleting or replacing the DuckDB file loses this local-only state.
+A row overrides automatic `wallet_events.recognition_status`; no row means automatic classification. Normal in-place dbt builds preserve the table, and the scan-job artifact swap copies it into the staged artifact before replacement. Explicitly deleting the DuckDB file loses this local-only state.
 
 ## Local API contract
 

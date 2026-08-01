@@ -24,7 +24,7 @@ Start the local API after the live build:
 bun run api:dev
 ```
 
-The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. It owns short-lived DuckDB connections and may write only `app.token_recognition_overrides`. Stop the API before rebuilding `live.duckdb`; the dbt writer and application process must not access the same file concurrently. Normal in-place builds preserve overrides because dbt does not own the `app` schema. Deleting or replacing `live.duckdb` removes them. Restart the API and reload the dashboard after a successful live build so every request and the browser's snapshot metadata use the new artifact.
+The service binds only to `127.0.0.1:8000`, refuses fixture provenance, and exposes readiness at `/api/v1/health` plus interactive OpenAPI documentation at `/docs`. It owns short-lived DuckDB connections and may write only `app.token_recognition_overrides`. Stop the API before rebuilding `live.duckdb`; the dbt writer and application process must not access the same file concurrently. Normal in-place builds preserve overrides because dbt does not own the `app` schema, and the scan-job artifact swap copies the application-owned table into the staged artifact before replacement. Explicitly deleting `live.duckdb` still removes them. Restart the API and reload the dashboard after a successful live build so every request and the browser's snapshot metadata use the new artifact.
 
 In a second terminal, run `bun run dashboard:dev`. Vite selects the live API adapter and proxies `/api` to `127.0.0.1:8000`; it does not load `public/data`. Fixture and live dbt artifacts are isolated, so deterministic validation cannot replace the live database.
 
@@ -154,6 +154,16 @@ Interpretation rules are intentionally strict:
 This is an explicit, potentially RPC-intensive operation. Fixture builds and ordinary dbt runs never invoke it.
 
 ## HyperIndex Mode
+
+### Live wallet scan jobs
+
+The local API can start a full-history scan from the dashboard in live mode. Configure the future multi-wallet worker command before using it:
+
+```sh
+export WALLET_SCAN_COMMAND='your-multi-wallet-indexer-command'
+```
+
+The command receives `WALLET_SCAN_ADDRESS`, `WALLET_SCAN_LABEL`, `WALLET_SCAN_FROM_BLOCK=0`, `WALLET_SCAN_TO_BLOCK`, `WALLET_SCAN_OUTPUT_PATH`, and (for ENS or direct-address resolution) the finalized observation source/block/hash/timestamp variables. It must build a complete selected-wallet artifact in the output path, persist the selected run's finalized/provenance fields, and exit successfully. Only one job runs at a time. The manager atomically replaces `analytics/artifacts/live.duckdb` after success; a failure never replaces or serves a partial artifact. The command is deliberately an adapter/stub until the multi-wallet merge worker exists; the manager does not claim combined DuckDB persistence.
 
 Run the indexer locally:
 

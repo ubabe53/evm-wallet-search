@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from scripts.artifact_paths import FIXTURE_DB_PATH
 from server.app import create_app
 from server.queries import DatabaseUnavailable, QueryService, json_value
+from server.scan_jobs import ScanJobManager, resolve_wallet
 
 
 class DashboardApiTest(unittest.TestCase):
@@ -32,6 +33,28 @@ class DashboardApiTest(unittest.TestCase):
     def setUp(self) -> None:
         with self.service.connect() as connection:
             connection.execute("delete from app.token_recognition_overrides")
+
+    def test_scan_job_and_wallet_list_contracts(self) -> None:
+        manager = ScanJobManager(
+            self.database_path,
+            resolver=resolve_wallet,
+            worker=lambda job, staging_path, progress: (_ for _ in ()).throw(RuntimeError("stub")),
+            finalized_head=lambda: 42,
+        )
+        client = TestClient(create_app(self.service, manager))
+        response = client.post("/api/v1/scan-jobs", json={"wallet": "vitalik.eth"})
+        self.assertEqual(response.status_code, 202)
+        payload = response.json()
+        self.assertEqual(payload["from_block"], 0)
+        self.assertEqual(payload["to_block"], 42)
+        self.assertEqual(payload["wallet_address"], "0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
+        self.assertEqual(client.get(f"/api/v1/scan-jobs/{payload['job_id']}").status_code, 200)
+        self.assertEqual(client.get("/api/v1/wallets").status_code, 200)
+
+    def test_scan_job_rejects_invalid_wallet(self) -> None:
+        manager = ScanJobManager(self.database_path, resolver=resolve_wallet, finalized_head=lambda: 1)
+        client = TestClient(create_app(self.service, manager))
+        self.assertEqual(client.post("/api/v1/scan-jobs", json={"wallet": "not-an-address"}).status_code, 422)
 
     def test_token_recognition_override_table_has_exact_contract(self) -> None:
         with self.service.connect() as connection:
