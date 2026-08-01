@@ -81,7 +81,7 @@ A captured `Transfer(address,address,uint256)` log establishes that a contract e
 
 ### Enrichment evidence
 
-Token metadata, registry membership, RPC responses, bytecode observations, and ENS names are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The current `vitalik.eth` value remains a configured presentation label, while a live build resolves an ENS-shaped label at one finalized block and records its source and observation provenance on the selected wallet's pipeline run. Non-ENS labels use the canonical configured address as direct-input provenance.
+Token metadata, registry membership, RPC responses, ENS resolution, and bytecode observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The current `vitalik.eth` value remains a configured presentation label, while an explicit live build or scan job resolves an ENS-shaped label at one finalized block and records its source and observation provenance through the selected wallet's run/worker contract. Non-ENS labels use the canonical configured address as direct-input provenance.
 
 ### Delivery boundary
 

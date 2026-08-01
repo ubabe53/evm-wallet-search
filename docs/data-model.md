@@ -171,14 +171,18 @@ The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exac
 When an older artifact is opened, the additive schema migration keeps legacy rows readable with
 `legacy-configured-wallet` provenance and their recorded snapshot end block/hash; only new runs
 carry exact ENS observation provenance. A new live build resolves its configured input before it
-can create a run.
+creates a run; an explicit scan job resolves its input before handing the typed provenance to the
+worker adapter, which is responsible for persisting it in the output artifact.
 
-Scan input resolution is a server-side boundary before a run is created. It accepts a canonical
+Scan input resolution is a server-side boundary before a live run is created or a scan worker is
+started. It accepts a canonical
 Ethereum address or a conservative lowercase ASCII ENS name, uses the pinned Ethereum ENS registry
 address `0x00000000000c2e074ec69a0dfb2997ba6c7d2e1e`, and calls both registry `resolver(bytes32)` and
-resolver `addr(bytes32)` at one finalized observation block. The original input, normalized name,
-resolved address, registry/resolver source, block number/hash, and block timestamp are copied into
-the same `ops.pipeline_runs` row. Invalid, unsupported, or unresolved names raise an
+resolver `addr(bytes32)` at one finalized observation block. For live dbt builds, the original input,
+normalized name, resolved address, registry/resolver source, block number/hash, and block timestamp
+are copied into the same `ops.pipeline_runs` row. Scan jobs carry the same typed fields across the
+explicit worker adapter; the manager does not create a run or claim combined artifact persistence.
+Invalid, unsupported, or unresolved names raise an
 `ENSNotRecognizedError` before a wallet can become an index target. No separate database is used.
 
 ### `app.token_recognition_overrides`

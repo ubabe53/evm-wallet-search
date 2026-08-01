@@ -1,6 +1,7 @@
 import os
 import unittest
-from unittest.mock import patch
+from datetime import datetime, timezone
+from unittest.mock import ANY, patch
 
 from scripts import run_dbt
 from scripts.artifact_paths import FIXTURE_DB_PATH, LIVE_DB_PATH
@@ -10,6 +11,7 @@ from scripts.snapshot_runs import (
     HyperIndexMetadata,
     SnapshotRun,
 )
+from server.ens import ResolvedScanInput
 
 WALLET_A = ConfiguredWallet("0x" + "a" * 40, "wallet-a")
 WALLET_B = ConfiguredWallet("0x" + "b" * 40, "wallet-b")
@@ -32,11 +34,11 @@ class ArtifactPathsTest(unittest.TestCase):
         self.assertEqual(run_dbt.select_scan_wallet([WALLET_A], None), WALLET_A)
 
     @patch("scripts.run_dbt.finish_snapshot_run")
-    @patch("server.ens.resolve_scan_input")
     @patch("scripts.run_dbt.run_dbt")
     @patch("scripts.run_dbt.start_snapshot_runs")
     @patch("scripts.run_dbt.resolve_snapshot_target")
     @patch("scripts.run_dbt.fetch_hyperindex_metadata")
+    @patch("server.ens.resolve_scan_input")
     @patch("scripts.run_dbt.read_configured_wallets", return_value=[WALLET_A, WALLET_B])
     @patch("scripts.run_dbt.ensure_python_dependencies")
     @patch("scripts.run_dbt.resolved_runtime")
@@ -45,12 +47,12 @@ class ArtifactPathsTest(unittest.TestCase):
         runtime,
         _ensure_dependencies,
         _read_wallets,
+        resolve_scan_input,
         fetch_metadata,
         resolve_target,
         start_runs,
         run,
         _finish,
-        resolve_scan_input,
     ) -> None:
         snapshot = SnapshotRun(
             run_id="run-b",
@@ -70,9 +72,16 @@ class ArtifactPathsTest(unittest.TestCase):
         }
         fetch_metadata.return_value = HyperIndexMetadata(3, 100, None, True)
         resolve_target.return_value = FinalizedBlock(100, "0x" + "c" * 64)
+        resolve_scan_input.return_value = ResolvedScanInput(
+            WALLET_B.address,
+            None,
+            WALLET_B.address,
+            "direct-address",
+            100,
+            "0x" + "c" * 64,
+            datetime(2026, 1, 2, tzinfo=timezone.utc),
+        )
         start_runs.return_value = [snapshot]
-        resolve_scan_input.return_value = object()
-
         with patch.dict(
             os.environ,
             {run_dbt.EVM_WALLET_SCAN_ADDRESS_ENV: WALLET_B.address.upper()},
@@ -82,6 +91,7 @@ class ArtifactPathsTest(unittest.TestCase):
         ):
             run_dbt.main()
 
+        resolve_scan_input.assert_called_once_with(WALLET_B.address, ANY)
         self.assertEqual(start_runs.call_args.kwargs["wallets"], [WALLET_B])
         self.assertEqual(
             run.call_args.kwargs["extra_env"][run_dbt.EVM_WALLET_SCAN_ADDRESS_ENV], WALLET_B.address
