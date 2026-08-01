@@ -141,7 +141,7 @@ export function App() {
                   touchActivation.current = true;
                 }
               }}
-              onClick={(event) => {
+              onClick={() => {
                 if (touchActivation.current) {
                   touchActivation.current = false;
                   setScanOpen((open) => !open);
