@@ -32,7 +32,7 @@ class ArtifactPathsTest(unittest.TestCase):
         self.assertEqual(run_dbt.select_scan_wallet([WALLET_A], None), WALLET_A)
 
     @patch("scripts.run_dbt.finish_snapshot_run")
-    @patch("scripts.run_dbt.resolve_scan_input")
+    @patch("server.ens.resolve_scan_input")
     @patch("scripts.run_dbt.run_dbt")
     @patch("scripts.run_dbt.start_snapshot_runs")
     @patch("scripts.run_dbt.resolve_snapshot_target")
