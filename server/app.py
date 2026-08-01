@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, time, timezone
 from enum import Enum
 from typing import Annotated, Literal
@@ -44,6 +45,8 @@ class RecognitionOverrideRequest(BaseModel):
 
 
 def dashboard_filters(
+    wallet_address: str | None = None,
+    active_wallet_address: str | None = None,
     recognition: RecognitionFilter = RecognitionFilter.all,
     account: Annotated[list[AccountFilter] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=128)] = None,
@@ -61,13 +64,47 @@ def dashboard_filters(
     if start is not None and end is not None and start >= end:
         raise HTTPException(status_code=422, detail="start must be before exclusive end")
     normalized_query = q.strip() if q and q.strip() else None
+    selected_wallet = wallet_address or active_wallet_address
+    if selected_wallet is None:
+        raise DatabaseUnavailable("No active wallet selected; set EVM_WALLET_SCAN_ADDRESS")
+    if not re.fullmatch(r"0x[0-9a-fA-F]{40}", selected_wallet):
+        raise HTTPException(status_code=422, detail="wallet_address must be a 20-byte hexadecimal address")
     return DashboardFilters(
         account_filters=selected,
+        wallet_address=selected_wallet.lower(),
         query=normalized_query,
         recognition=recognition.value,
         start_at=datetime.combine(start, time.min, timezone.utc) if start else None,
         end_before=datetime.combine(end, time.min, timezone.utc) if end else None,
     )
+
+
+class DashboardFiltersDependency:
+    """Bind request filter parsing to the service that owns active-wallet resolution."""
+
+    def __init__(self, query_service: QueryService) -> None:
+        self.query_service = query_service
+
+    def __call__(
+        self,
+        wallet_address: str | None = None,
+        recognition: RecognitionFilter = RecognitionFilter.all,
+        account: Annotated[list[AccountFilter] | None, Query()] = None,
+        q: Annotated[str | None, Query(max_length=128)] = None,
+        start: date | None = None,
+        end: date | None = None,
+    ) -> DashboardFilters:
+        return dashboard_filters(
+            wallet_address=wallet_address,
+            active_wallet_address=(
+                None if wallet_address else self.query_service.active_wallet_address()
+            ),
+            recognition=recognition,
+            account=account,
+            q=q,
+            start=start,
+            end=end,
+        )
 
 
 def create_app(service: QueryService | None = None) -> FastAPI:
@@ -77,6 +114,7 @@ def create_app(service: QueryService | None = None) -> FastAPI:
         version="1.0.0",
         description="Complete calculations and local token-recognition overrides over the live DuckDB artifact.",
     )
+    request_filters = DashboardFiltersDependency(query_service)
 
     @application.exception_handler(DatabaseUnavailable)
     async def database_unavailable(_request, error: DatabaseUnavailable) -> JSONResponse:
@@ -101,16 +139,16 @@ def create_app(service: QueryService | None = None) -> FastAPI:
         }
 
     @application.get("/api/v1/metadata")
-    def metadata() -> dict:
-        return query_service.metadata()
+    def metadata(wallet_address: str | None = None) -> dict:
+        return query_service.metadata(wallet_address.lower() if wallet_address else None)
 
     @application.get("/api/v1/summary")
-    def summary(filters: Annotated[DashboardFilters, Depends(dashboard_filters)]) -> dict:
+    def summary(filters: DashboardFilters = Depends(request_filters)) -> dict:  # noqa: B008
         return query_service.summary(filters)
 
     @application.get("/api/v1/events")
     def events(
-        filters: Annotated[DashboardFilters, Depends(dashboard_filters)],
+        filters: DashboardFilters = Depends(request_filters),  # noqa: B008
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
         cursor: str | None = None,
     ) -> dict:
@@ -121,7 +159,7 @@ def create_app(service: QueryService | None = None) -> FastAPI:
 
     @application.get("/api/v1/tokens")
     def tokens(
-        filters: Annotated[DashboardFilters, Depends(dashboard_filters)],
+        filters: DashboardFilters = Depends(request_filters),  # noqa: B008
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
     ) -> dict:
         return query_service.tokens(filters, limit=limit)
@@ -136,7 +174,7 @@ def create_app(service: QueryService | None = None) -> FastAPI:
 
     @application.get("/api/v1/timeline")
     def timeline(
-        filters: Annotated[DashboardFilters, Depends(dashboard_filters)],
+        filters: DashboardFilters = Depends(request_filters),  # noqa: B008
         interval: TimelineInterval = TimelineInterval.year,
         year: Annotated[int | None, Query(ge=1970, le=9999)] = None,
     ) -> dict:
@@ -148,7 +186,7 @@ def create_app(service: QueryService | None = None) -> FastAPI:
 
     @application.get("/api/v1/counterparties")
     def counterparties(
-        filters: Annotated[DashboardFilters, Depends(dashboard_filters)],
+        filters: DashboardFilters = Depends(request_filters),  # noqa: B008
         limit: Annotated[int, Query(ge=1, le=100)] = 10,
     ) -> dict:
         return query_service.counterparties(filters, limit=limit)

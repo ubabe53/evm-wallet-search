@@ -6,7 +6,7 @@ This file is the high-level system map for humans and agents. It records what ex
 
 ```text
 Ethereum mainnet
-      │ Transfer(address,address,uint256) logs involving the configured wallet
+      │ Transfer(address,address,uint256) logs involving configured wallet targets
       │ (ERC-20-intended; token standard is not disambiguated)
       ▼
 Envio HyperIndex
@@ -38,7 +38,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
-| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics, finalized snapshot-run history, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
+| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics, durable wallet targets, wallet-scoped finalized scan generations, wallet-grained snapshot-run history, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
 | Local account evidence store | `analytics/artifacts/account_evidence.duckdb` | Checkpoint one successful pinned bytecode observation per event counterparty, with retryable failures | A checked-in seed, an implicit build-time RPC job, or proof of permanent identity |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
@@ -110,7 +110,7 @@ Detailed field grains and tests are in `docs/data-model.md`.
 HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
 ```
 
-The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, records one attempted interval in `ops.pipeline_runs`, and advances coverage only after dbt succeeds. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
+The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, selects one configured wallet through `EVM_WALLET_SCAN_ADDRESS`, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for that wallet, and advances coverage only after dbt succeeds. Without the selector, exactly one configured wallet is required. A new selected wallet starts at the configured start block; an existing selected wallet starts at its own latest completed block plus one. The live DuckDB artifact is rebuilt as a projection for that selected wallet; separate wallet projections are not merged, so switching the selector does not preserve a prior wallet's analytics in the same artifact. A future multi-wallet artifact merge requires an explicit data-contract decision. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
 
 ### Fixture demo path
 
@@ -121,6 +121,7 @@ checked-in fixtures → dbt → DuckDB → bounded JSON exporter → React/stati
 This path is deterministic and suitable for CI and GitHub Pages. It is not proof of live-source integration behavior. Fixture builds write only `analytics/artifacts/fixture.duckdb` and deliberately remove the HyperIndex DSN from dbt's environment. Live builds write only `analytics/artifacts/live.duckdb`; fixture validation cannot overwrite that cache.
 
 ## Local API boundary
+
 
 The loopback-only FastAPI service:
 
@@ -136,7 +137,7 @@ The loopback-only FastAPI service:
 - treat recognition as inclusive counterparty-cohort membership for counterparty rankings, then rank eligible addresses by their complete activity inside the remaining account/search/time scope;
 - keep secrets and database paths server-side.
 
-The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It exposes an explicit `dashboard-api-v16` metadata projection instead of forwarding the internal mart with `select *`, then lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves exact totals, requests a stable yearly overview or one selected year's monthly buckets plus bounded token/counterparty rows, applies selected year/month UTC periods through half-open API filters, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override.
+The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It resolves an omitted wallet from request-time `EVM_WALLET_SCAN_ADDRESS` or the artifact's sole current metadata row; zero or multiple metadata wallets fail clearly and require the selector. It exposes an explicit `dashboard-api-v16` metadata projection instead of forwarding the internal mart with `select *`, then lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves exact totals, requests a stable yearly overview or one selected year's monthly buckets plus bounded token/counterparty rows, applies selected year/month UTC periods through half-open API filters, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override.
 
 ## Known implementation gaps
 

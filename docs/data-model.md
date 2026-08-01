@@ -12,7 +12,7 @@ Deduplicates wallet-relevant Transfer-signature entities by the canonical `(chai
 
 ### `stg_wallets`
 
-Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` value remains pinned project configuration for presentation and snapshot labeling; it is not live ENS-resolution evidence and is not copied into event facts. The MVP contains one target:
+Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` value remains pinned project configuration for presentation and snapshot labeling; it is not live ENS-resolution evidence and is not copied into event facts. The seed may contain multiple targets, but each live dbt build selects exactly one with `EVM_WALLET_SCAN_ADDRESS` (or requires one target when the variable is unset), and `stg_wallets` is the selected-wallet projection used by that build. Separate live wallet projections are not merged into one artifact:
 
 - `vitalik.eth`
 - `0xd8da6bf26964af9d7eed9e03e53415d37aa96045`
@@ -135,12 +135,15 @@ The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read
 
 ### `ops.pipeline_runs`
 
+Live orchestration owns `ops.wallet_targets` at exactly one durable row per `(chain_id, wallet_address)`, with that composite key and no synthetic target identity. It also owns `ops.scan_generations` at one wallet-scoped finalized interval, canonical end hash, scope, and lifecycle status per attempted wallet snapshot. A generation and its `pipeline_runs` row never coordinate or imply continuity for another wallet.
+
 The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. Retries may repeat an interval with a new run ID after a failed attempt. `wallet_label` is derived from the pinned configured ENS value, falling back to the wallet address.
 
 | Column | Physical contract | Semantics |
 | --- | --- | --- |
 | `run_id` | `VARCHAR NOT NULL`, primary key | UUID identifying one attempted run. |
 | `chain_id` | `INTEGER NOT NULL` | EVM chain identifier, constrained to `1`. |
+| `generation_id` | `VARCHAR NOT NULL` | UUID identifying the wallet-scoped scan generation for this attempted snapshot. |
 | `wallet_address` | `VARCHAR NOT NULL` | Lowercase configured wallet scanned by the run. |
 | `wallet_label` | `VARCHAR NOT NULL` | Pinned project display label; not a live ENS-resolution claim. |
 | `from_block` | `BIGINT NOT NULL` | Inclusive interval start. |
@@ -151,7 +154,7 @@ The live build wrapper creates this table inside `analytics/artifacts/live.duckd
 | `completed_at` | nullable `TIMESTAMPTZ` | UTC pipeline completion/failure time; null while running. |
 | `scope_version` | `VARCHAR NOT NULL` | Version of the indexed semantic scope. |
 
-The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance the next start to the previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. Rebuilding transformations while already current reuses the latest completed run rather than creating a false scan interval.
+The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance each wallet's next start to that wallet's previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. During a live dbt build, `pipeline_metadata` selects the latest run at the current finalized end independently for each wallet, so one wallet's generation cannot supply another wallet's provenance. Rebuilding transformations while already current reuses each wallet's latest completed run rather than creating a false scan interval.
 
 ### `app.token_recognition_overrides`
 
@@ -167,6 +170,9 @@ The local API creates this table inside `analytics/artifacts/live.duckdb`; dbt d
 A row overrides automatic `wallet_events.recognition_status`; no row means automatic classification. Normal in-place dbt builds preserve the table, while deleting or replacing the DuckDB file loses this local-only state.
 
 ## Local API contract
+
+The API accepts an optional `wallet_address` on every dashboard query endpoint; clients may select a configured target by its canonical lowercase address. When omitted, the service resolves the active target from request-time `EVM_WALLET_SCAN_ADDRESS` or the artifact's sole current metadata row. Zero or multiple metadata wallets fail clearly and require the environment selector; no live wallet is hardcoded. Fixture/demo data may still use the pinned Vitalik fixture target.
+
 
 The `/api/v1` service currently advertises response schema `dashboard-api-v16`. It serves only `analytics/artifacts/live.duckdb` in production mode and refuses fixture provenance, missing/unfinalized snapshot metadata, a metadata run ID that does not match the latest completed `ops.pipeline_runs` row, non-contiguous completed intervals, or a cumulative run event count that does not reconcile with `pipeline_metadata.transfer_count`. It projects the metadata contract explicitly rather than exposing every mart column. It left-joins the application-owned override table before recognition, repeated inclusive `account`, optional literal `q`, and optional UTC date predicates are applied. Search covers the identifiers and labels exposed by the dashboard: transaction hash, configured wallet, counterparty, token address, token symbol, and token name. `start` is inclusive and `end` is exclusive; they are `YYYY-MM-DD` dates and must be provided together with `start < end`. Omitting `account` selects all rows, including internal unresolved evidence; `account=eoa_candidate` or `account=contract` selects only that successfully classified type. `account=none` explicitly selects no rows and cannot be combined with another account value. For counterparty rankings, recognition selects an inclusive address cohort: an address qualifies when at least one scoped event has the selected recognition status, then all of that address's events inside the remaining account/search/time scope contribute to its counts. This preserves mixed recognized/other relationships instead of splitting or dropping them. Version 16 renames the pinned label, removes obsolete and derivable metadata fields, and sources observed event block extrema directly from the mart. The API derives event `transfer_id` at delivery time and uses transaction index in its stable event cursor. Exact raw values remain only in the complete intermediate event relation and are not published to the current dashboard. Counterparty counts remain external-only. The service exposes:
 

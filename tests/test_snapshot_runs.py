@@ -9,6 +9,8 @@ from scripts.snapshot_runs import (
     FinalizedBlock,
     HyperIndexMetadata,
     SnapshotAlreadyCurrent,
+    SnapshotRun,
+    dbt_snapshot_environment,
     ensure_run_table,
     fetch_hyperindex_metadata,
     finish_snapshot_run,
@@ -17,6 +19,7 @@ from scripts.snapshot_runs import (
     resolve_finalized_block,
     resolve_snapshot_target,
     start_snapshot_run,
+    start_snapshot_runs,
 )
 
 WALLET = ConfiguredWallet(
@@ -66,6 +69,7 @@ class SnapshotRunsTest(unittest.TestCase):
             [
                 ("run_id", "VARCHAR", True, True),
                 ("chain_id", "INTEGER", True, False),
+                ("generation_id", "VARCHAR", True, False),
                 ("wallet_address", "VARCHAR", True, False),
                 ("wallet_label", "VARCHAR", True, False),
                 ("from_block", "BIGINT", True, False),
@@ -75,6 +79,26 @@ class SnapshotRunsTest(unittest.TestCase):
                 ("status", "VARCHAR", True, False),
                 ("completed_at", "TIMESTAMP WITH TIME ZONE", False, False),
                 ("scope_version", "VARCHAR", True, False),
+            ],
+        )
+
+    def test_wallet_targets_use_composite_identity(self) -> None:
+        with duckdb.connect(str(self.database_path)) as connection:
+            ensure_run_table(connection)
+            actual = [
+                (row[1], row[2], bool(row[3]), bool(row[5]))
+                for row in connection.execute(
+                    "pragma table_info('ops.wallet_targets')"
+                ).fetchall()
+            ]
+
+        self.assertEqual(
+            actual,
+            [
+                ("chain_id", "INTEGER", True, True),
+                ("wallet_address", "VARCHAR", True, True),
+                ("wallet_label", "VARCHAR", True, False),
+                ("created_at", "TIMESTAMP WITH TIME ZONE", True, False),
             ],
         )
 
@@ -149,13 +173,93 @@ class SnapshotRunsTest(unittest.TestCase):
             ).fetchone()
             self.assertEqual(first_row, (2, "completed"))
 
+    def test_first_scan_of_new_wallet_is_independent_from_existing_wallet_progress(self) -> None:
+        second_wallet = ConfiguredWallet("0x" + "1" * 40, "second")
+        first = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(100, "0x" + "a" * 64),
+        )
+        with duckdb.connect(str(self.database_path)) as connection:
+            connection.execute(
+                "create table wallet_events (chain_id integer, wallet_address varchar, block_number bigint)"
+            )
+            connection.execute("insert into wallet_events values (1, ?, 50)", [WALLET.address])
+        finish_snapshot_run(first, database_path=self.database_path, succeeded=True)
+
+        runs = start_snapshot_runs(
+            database_path=self.database_path,
+            wallets=[WALLET, second_wallet],
+            metadata=HyperIndexMetadata(3, 200, None, True),
+            finalized_block=FinalizedBlock(150, "0x" + "b" * 64),
+        )
+        self.assertEqual(len(runs), 2)
+        by_wallet = {run.wallet_address: run for run in runs}
+        self.assertEqual((by_wallet[WALLET.address].from_block, by_wallet[WALLET.address].to_block), (101, 150))
+        self.assertEqual((by_wallet[second_wallet.address].from_block, by_wallet[second_wallet.address].to_block), (3, 150))
+        self.assertNotEqual(runs[0].generation_id, runs[1].generation_id)
+
+        with duckdb.connect(str(self.database_path)) as connection:
+            connection.execute("insert into wallet_events values (1, ?, 120), (1, ?, 50)", [WALLET.address, second_wallet.address])
+        for run in runs:
+            finish_snapshot_run(run, database_path=self.database_path, succeeded=True)
+        with duckdb.connect(str(self.database_path)) as connection:
+            target_rows = connection.execute("select chain_id, wallet_address from ops.wallet_targets order by wallet_address").fetchall()
+            generation_rows = connection.execute(
+                "select wallet_address, count(*) from ops.scan_generations group by wallet_address order by wallet_address"
+            ).fetchall()
+        self.assertEqual(target_rows, [(1, second_wallet.address), (1, WALLET.address)])
+        self.assertEqual(generation_rows, [(second_wallet.address, 1), (WALLET.address, 2)])
+
+    def test_existing_wallet_incremental_refresh_preserves_prior_run(self) -> None:
+        first = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(100, "0x" + "a" * 64),
+        )
+        with duckdb.connect(str(self.database_path)) as connection:
+            connection.execute("create table wallet_events (chain_id integer, wallet_address varchar, block_number bigint)")
+            connection.execute("insert into wallet_events values (1, ?, 50)", [WALLET.address])
+        finish_snapshot_run(first, database_path=self.database_path, succeeded=True)
+        second = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 200, None, True),
+            finalized_block=FinalizedBlock(150, "0x" + "b" * 64),
+        )
+        self.assertEqual(second.from_block, 101)
+        self.assertNotEqual(first.run_id, second.run_id)
+        self.assertNotEqual(first.generation_id, second.generation_id)
+        with duckdb.connect(str(self.database_path)) as connection:
+            rows = connection.execute(
+                "select run_id, status from ops.pipeline_runs order by from_block"
+            ).fetchall()
+        self.assertEqual(rows, [(first.run_id, "completed"), (second.run_id, "running")])
+
+    def test_dbt_environment_keeps_configured_start_for_complete_history(self) -> None:
+        run = SnapshotRun(
+            run_id="run",
+            chain_id=1,
+            wallet_address=WALLET.address,
+            wallet_label=WALLET.label,
+            from_block=101,
+            to_block=150,
+            to_block_hash="0x" + "a" * 64,
+            scope_version="wallet-transfer-signature-v1",
+            generation_id="generation",
+        )
+        environment = dbt_snapshot_environment(run, coverage_start_block=3)
+        self.assertEqual(environment["EVM_WALLET_SNAPSHOT_START_BLOCK"], "3")
+
     def test_refuses_gaps_stale_indexer_and_empty_increment(self) -> None:
         with duckdb.connect(str(self.database_path)) as connection:
             ensure_run_table(connection)
             connection.execute(
                 """
                 insert into ops.pipeline_runs values (
-                  'gap', 1, ?, 'vitalik.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
+                  'gap', 1, 'generation-gap', ?, 'vitalik.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
                 )
                 """,
                 [WALLET.address, "0x" + "a" * 64, "wallet-transfer-signature-v1"],

@@ -1,8 +1,10 @@
+import os
 import shutil
 import unittest
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import duckdb
 from fastapi.testclient import TestClient
@@ -62,6 +64,11 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
+        selected_metadata = self.client.get(
+            "/api/v1/metadata",
+            params={"wallet_address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"},
+        ).json()
+        self.assertEqual(selected_metadata["wallet_address"], metadata["wallet_address"])
         self.assertEqual(metadata["api_schema_version"], "dashboard-api-v16")
         self.assertEqual(
             set(metadata),
@@ -72,6 +79,7 @@ class DashboardApiTest(unittest.TestCase):
                 "data_source",
                 "generated_at",
                 "snapshot_run_id",
+                "snapshot_generation_id",
                 "snapshot_start_block",
                 "snapshot_end_block",
                 "snapshot_end_block_hash",
@@ -132,6 +140,29 @@ class DashboardApiTest(unittest.TestCase):
             + metadata["account_evidence_failed_event_count"]
             + metadata["account_evidence_not_checked_event_count"],
         )
+
+    def test_active_wallet_is_derived_from_metadata_or_explicit_environment(self) -> None:
+        wallet_address = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(self.service.active_wallet_address(), wallet_address)
+        with patch.dict(os.environ, {"EVM_WALLET_SCAN_ADDRESS": "0x" + wallet_address[2:].upper()}, clear=True):
+            self.assertEqual(self.service.active_wallet_address(), wallet_address)
+
+    def test_active_wallet_requires_selector_when_metadata_is_not_unique(self) -> None:
+        with TemporaryDirectory() as directory:
+            database_path = Path(directory) / "multiple-wallets.duckdb"
+            shutil.copy2(FIXTURE_DB_PATH, database_path)
+            with duckdb.connect(str(database_path)) as connection:
+                connection.execute("insert into pipeline_metadata select * from pipeline_metadata limit 1")
+                connection.execute(
+                    "update pipeline_metadata set wallet_address = ? where rowid = (select max(rowid) from pipeline_metadata)",
+                    ["0x" + "b" * 40],
+                )
+            service = QueryService(database_path, require_live=False)
+            with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(
+                DatabaseUnavailable, "No active wallet selected; set EVM_WALLET_SCAN_ADDRESS"
+            ):
+                service.active_wallet_address()
 
     def test_completed_snapshot_run_exposes_finalized_contiguous_coverage(self) -> None:
         with TemporaryDirectory() as directory:

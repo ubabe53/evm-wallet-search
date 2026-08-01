@@ -8,6 +8,7 @@ with expected(column_name) as (
     ('data_source'),
     ('generated_at'),
     ('snapshot_run_id'),
+    ('snapshot_generation_id'),
     ('snapshot_start_block'),
     ('snapshot_end_block'),
     ('snapshot_end_block_hash'),

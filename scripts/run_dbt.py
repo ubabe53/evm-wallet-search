@@ -26,14 +26,15 @@ try:
     from .enrich_token_metadata import JsonRpcClient
     from .project_config import resolved_runtime
     from .snapshot_runs import (
+        ConfiguredWallet,
         SnapshotAlreadyCurrent,
         dbt_snapshot_environment,
         fetch_hyperindex_metadata,
         finish_snapshot_run,
         latest_completed_snapshot_run,
-        read_configured_wallet,
+        read_configured_wallets,
         resolve_snapshot_target,
-        start_snapshot_run,
+        start_snapshot_runs,
     )
 except ImportError:
     from artifact_paths import (
@@ -47,19 +48,21 @@ except ImportError:
     from enrich_token_metadata import JsonRpcClient
     from project_config import resolved_runtime
     from snapshot_runs import (
+        ConfiguredWallet,
         SnapshotAlreadyCurrent,
         dbt_snapshot_environment,
         fetch_hyperindex_metadata,
         finish_snapshot_run,
         latest_completed_snapshot_run,
-        read_configured_wallet,
+        read_configured_wallets,
         resolve_snapshot_target,
-        start_snapshot_run,
+        start_snapshot_runs,
     )
 
 
 REQUIREMENTS = ANALYTICS_DIR / "requirements.txt"
 HYPERINDEX_DSN_ENV = "DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN"
+EVM_WALLET_SCAN_ADDRESS_ENV = "EVM_WALLET_SCAN_ADDRESS"
 DBT_DOCS_SUBCOMMANDS = {"generate", "serve"}
 
 
@@ -158,6 +161,22 @@ def requests_hyperindex(extra_args: list[str]) -> bool:
     return False
 
 
+def select_scan_wallet(
+    wallets: list[ConfiguredWallet], configured_address: str | None
+) -> ConfiguredWallet:
+    """Select the one wallet whose source interval this live build will scan."""
+
+    normalized_address = configured_address.strip().lower() if configured_address else None
+    if normalized_address:
+        for wallet in wallets:
+            if wallet.address == normalized_address:
+                return wallet
+        raise RuntimeError(f"No configured wallet matches {normalized_address}")
+    if len(wallets) != 1:
+        raise RuntimeError(f"Set {EVM_WALLET_SCAN_ADDRESS_ENV} to select one configured wallet")
+    return wallets[0]
+
+
 def main() -> None:
     command = sys.argv[1] if len(sys.argv) > 1 else "build"
     if command not in {"build", "test", "seed", "run", "docs"}:
@@ -179,29 +198,32 @@ def main() -> None:
             raise SystemExit("Live snapshot builds require HyperIndex GraphQL and Ethereum RPC URLs")
         metadata = fetch_hyperindex_metadata(str(graphql_url))
         finalized_block = resolve_snapshot_target(JsonRpcClient(str(rpc_url)), metadata)
-        wallet = read_configured_wallet()
+        wallets = read_configured_wallets()
+        selected_wallet = select_scan_wallet(
+            wallets, os.environ.get(EVM_WALLET_SCAN_ADDRESS_ENV)
+        )
         try:
-            snapshot_run = start_snapshot_run(
-                wallet=wallet,
+            snapshot_runs = start_snapshot_runs(
+                wallets=[selected_wallet],
                 metadata=metadata,
                 finalized_block=finalized_block,
             )
         except SnapshotAlreadyCurrent as current:
             print(current)
-            snapshot_run = latest_completed_snapshot_run(
-                wallet=wallet,
-                metadata=metadata,
-                finalized_block=finalized_block,
-            )
+            snapshot_runs = [
+                latest_completed_snapshot_run(
+                    wallet=selected_wallet, metadata=metadata, finalized_block=finalized_block
+                )
+            ]
             run_dbt(
                 command,
                 sys.argv[2:],
                 use_hyperindex=True,
                 hyperindex_dsn=str(hyperindex_dsn),
                 extra_env=dbt_snapshot_environment(
-                    snapshot_run,
+                    snapshot_runs[0],
                     coverage_start_block=metadata.start_block,
-                ),
+                ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
             return
         try:
@@ -211,14 +233,16 @@ def main() -> None:
                 use_hyperindex=True,
                 hyperindex_dsn=str(hyperindex_dsn) if hyperindex_dsn else None,
                 extra_env=dbt_snapshot_environment(
-                    snapshot_run,
+                    snapshot_runs[0],
                     coverage_start_block=metadata.start_block,
-                ),
+                ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
         except BaseException:
-            finish_snapshot_run(snapshot_run, succeeded=False)
+            for snapshot_run in snapshot_runs:
+                finish_snapshot_run(snapshot_run, succeeded=False)
             raise
-        finish_snapshot_run(snapshot_run, succeeded=True)
+        for snapshot_run in snapshot_runs:
+            finish_snapshot_run(snapshot_run, succeeded=True)
         return
 
     run_dbt(

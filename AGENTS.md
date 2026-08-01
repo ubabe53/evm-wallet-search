@@ -22,7 +22,7 @@ Treat documentation as part of the implementation. If code and documentation dis
 ## Current product boundary
 
 - Ethereum mainnet only (`chain_id = 1`).
-- One configured wallet, currently the pinned address for `vitalik.eth`.
+- One selected configured wallet per live artifact; the pinned `vitalik.eth` target is fixture/demo configuration only and is never a live API fallback.
 - One `Transfer(address,address,uint256)` event signature, intended for ERC-20 analytics. ERC-721 uses the same signature, and the current wildcard indexer does not disambiguate standards; never claim every captured row is proven ERC-20.
 - HyperIndex Postgres is ingestion persistence; `analytics/artifacts/live.duckdb` is the complete local analytics artifact and stores one `ops.pipeline_runs` row per attempted finalized snapshot interval. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
 - The local read-only FastAPI service in `server/` queries only `analytics/artifacts/live.duckdb`; it must reject fixture provenance.
