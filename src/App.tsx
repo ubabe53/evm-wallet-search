@@ -118,11 +118,20 @@ export function App() {
           </p>
         </div>
         <div className="toolbar">
-          <div className="scanLauncher">
+          <div
+            className="scanLauncher"
+            onMouseEnter={() => setScanOpen(true)}
+            onMouseLeave={() => setScanOpen(false)}
+            onFocus={() => setScanOpen(true)}
+            onBlur={(event) => {
+              const next = event.relatedTarget as Node | null;
+              if (!next || !event.currentTarget.contains(next)) setScanOpen(false);
+            }}
+          >
             <button
               className="scanLauncherButton"
               type="button"
-              onClick={() => setScanOpen((open) => !open)}
+              onClick={() => setScanOpen(true)}
               aria-expanded={scanOpen}
               aria-controls="wallet-scan-panel"
             >

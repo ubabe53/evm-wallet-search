@@ -124,7 +124,7 @@ select {
 .scanLauncherPanel {
   position: absolute;
   z-index: 20;
-  top: calc(100% + 10px);
+  top: 100%;
   right: 0;
   display: grid;
   width: min(520px, calc(100vw - 32px));
