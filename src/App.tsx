@@ -191,14 +191,20 @@ export function App() {
       </header>
 
       <section className="scanPanel" aria-label="Wallet scan">
-        <div>
-          <strong>Scan another wallet</strong>
-          <p>Full Transfer-signature history from block 0 through the finalized head.</p>
+        <div className="scanHeader">
+          <div>
+            <strong>Scan another wallet</strong>
+            <p>Full Transfer-signature history from block 0 through the finalized head.</p>
+          </div>
+          <span className={`scanHint ${dashboardDataMode === "api" ? "live" : "fixture"}`}>
+            {dashboardDataMode === "api" ? "Live mode" : "Fixture demo"}
+          </span>
         </div>
-        <form onSubmit={(event) => { event.preventDefault(); void startWalletScan(); }}>
+        <form className="scanForm" onSubmit={(event) => { event.preventDefault(); void startWalletScan(); }}>
           <label>
             <span className="srOnly">Wallet address or ENS</span>
             <input
+              className="scanInput"
               value={scanInput}
               onChange={(event) => setScanInput(event.target.value)}
               placeholder="0x… or name.eth"
@@ -206,7 +212,7 @@ export function App() {
               disabled={dashboardDataMode === "static" || scanJob?.status === "queued" || scanJob?.status === "running"}
             />
           </label>
-          <button type="submit" disabled={dashboardDataMode === "static" || !scanInput.trim() || scanJob?.status === "queued" || scanJob?.status === "running"}>
+          <button className="scanButton" type="submit" disabled={dashboardDataMode === "static" || !scanInput.trim() || scanJob?.status === "queued" || scanJob?.status === "running"}>
             {scanJob?.status === "queued" || scanJob?.status === "running" ? "Scanning…" : "Start scan"}
           </button>
         </form>
