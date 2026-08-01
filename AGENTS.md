@@ -2,7 +2,7 @@
 
 ## Mission
 
-Build a portfolio-grade Ethereum wallet interaction graph whose analytics are reproducible, bounded, and honest about what the ERC-20-intended `Transfer` signature can—and cannot—prove.
+Build a portfolio-grade Ethereum wallet transfer analytics application whose results are reproducible, bounded, and honest about what the ERC-20-intended `Transfer` signature can—and cannot—prove.
 
 Optimize for agent legibility: keep architecture, commands, invariants, and change routes explicit enough that a new agent can act safely without reconstructing the repository from scratch.
 
