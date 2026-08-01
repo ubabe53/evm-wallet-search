@@ -20,6 +20,7 @@ ACCOUNT_FILTERS = (
     "contract",
 )
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+DEFAULT_WALLET_ADDRESS = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
 API_SCHEMA_VERSION = "dashboard-api-v16"
 PIPELINE_METADATA_COLUMNS = """
@@ -29,6 +30,7 @@ PIPELINE_METADATA_COLUMNS = """
   data_source,
   generated_at,
   snapshot_run_id,
+  snapshot_generation_id,
   snapshot_start_block,
   snapshot_end_block,
   snapshot_end_block_hash,
@@ -74,6 +76,7 @@ class TokenNotFound(LookupError):
 
 @dataclass(frozen=True)
 class DashboardFilters:
+    wallet_address: str = DEFAULT_WALLET_ADDRESS
     account_filters: tuple[str, ...] = ACCOUNT_FILTERS
     query: str | None = None
     recognition: str = "all"
@@ -123,6 +126,8 @@ def filter_sql(
     if include_recognition and filters.recognition != "all":
         clauses.append("events.recognition_status = ?")
         parameters.append(filters.recognition)
+    clauses.append("events.wallet_address = ?")
+    parameters.append(filters.wallet_address)
 
     selected = tuple(dict.fromkeys(filters.account_filters))
     if not selected:
@@ -255,71 +260,58 @@ class QueryService:
             if connection is not None:
                 connection.close()
             raise DatabaseUnavailable("The analytics database could not be opened") from error
-        if len(metadata) != 1:
+        if not metadata:
             connection.close()
-            raise DatabaseUnavailable("The analytics database must contain one configured wallet")
+            raise DatabaseUnavailable("The analytics database contains no configured wallets")
         if self.require_live and metadata[0]["data_source"] != "hyperindex":
             connection.close()
             raise DatabaseUnavailable("The local API requires a HyperIndex-built live database")
-        snapshot_run_id = metadata[0].get("snapshot_run_id")
-        if metadata[0]["data_source"] == "hyperindex" and not snapshot_run_id:
+        if any(item["data_source"] != metadata[0]["data_source"] for item in metadata):
+            connection.close()
+            raise DatabaseUnavailable("The analytics database mixes provenance sources")
+        if self.require_live and any(item["data_source"] == "hyperindex" and not item.get("snapshot_run_id") for item in metadata):
             connection.close()
             raise DatabaseUnavailable(
                 "The live analytics database has no verified finalized snapshot run"
             )
         if metadata[0]["data_source"] == "hyperindex":
-            if metadata[0].get("snapshot_finality_policy") != "ethereum_finalized":
-                connection.close()
-                raise DatabaseUnavailable("The live analytics snapshot is not finalized")
-            try:
-                completed_runs = rows(
-                    connection,
-                    """
-                    select run_id, from_block, to_block, to_block_hash, events_found
-                    from ops.pipeline_runs
-                    where chain_id = ?
-                      and wallet_address = ?
-                      and scope_version = ?
-                      and status = 'completed'
-                      and events_found is not null
-                      and completed_at is not null
-                    order by from_block, to_block
-                    """,
-                    [
-                        metadata[0]["chain_id"],
-                        metadata[0]["wallet_address"],
-                        metadata[0]["snapshot_scope_version"],
-                    ],
-                )
-            except Exception as error:
-                connection.close()
-                raise DatabaseUnavailable("The finalized snapshot run could not be verified") from error
-            expected_start = metadata[0].get("snapshot_start_block")
-            contiguous = isinstance(expected_start, int) and bool(completed_runs)
-            for run in completed_runs:
-                contiguous = contiguous and run["from_block"] == expected_start
-                expected_start = run["to_block"] + 1
-            latest_run = completed_runs[-1] if completed_runs else {}
-            snapshot_end = metadata[0].get("snapshot_end_block")
-            latest_matches = (
-                isinstance(snapshot_end, int)
-                and latest_run.get("run_id") == snapshot_run_id
-                and latest_run.get("to_block") == snapshot_end
-                and latest_run.get("to_block_hash")
-                == metadata[0].get("snapshot_end_block_hash")
-                and expected_start == snapshot_end + 1
-            )
-            if not contiguous or not latest_matches:
-                connection.close()
-                raise DatabaseUnavailable(
-                    "The finalized snapshot runs are incomplete or non-contiguous"
-                )
-            cumulative_event_count = sum(int(run["events_found"]) for run in completed_runs)
-            if cumulative_event_count != metadata[0]["transfer_count"]:
-                connection.close()
-                raise DatabaseUnavailable(
-                    "The finalized snapshot run counts do not reconcile with the analytics events"
-                )
+            for wallet_metadata in metadata:
+                if wallet_metadata.get("snapshot_finality_policy") != "ethereum_finalized":
+                    connection.close()
+                    raise DatabaseUnavailable("The live analytics snapshot is not finalized")
+                try:
+                    completed_runs = rows(
+                        connection,
+                        """
+                        select run_id, from_block, to_block, to_block_hash, events_found
+                        from ops.pipeline_runs
+                        where chain_id = ? and wallet_address = ? and scope_version = ?
+                          and status = 'completed' and events_found is not null and completed_at is not null
+                        order by from_block, to_block
+                        """,
+                        [wallet_metadata["chain_id"], wallet_metadata["wallet_address"], wallet_metadata["snapshot_scope_version"]],
+                    )
+                except Exception as error:
+                    connection.close()
+                    raise DatabaseUnavailable("The finalized snapshot run could not be verified") from error
+                expected_start = wallet_metadata.get("snapshot_start_block")
+                contiguous = isinstance(expected_start, int) and bool(completed_runs)
+                for run in completed_runs:
+                    contiguous = contiguous and run["from_block"] == expected_start
+                    expected_start = run["to_block"] + 1
+                latest_run = completed_runs[-1] if completed_runs else {}
+                snapshot_end = wallet_metadata.get("snapshot_end_block")
+                latest_matches = (isinstance(snapshot_end, int)
+                    and latest_run.get("run_id") == wallet_metadata.get("snapshot_run_id")
+                    and latest_run.get("to_block") == snapshot_end
+                    and latest_run.get("to_block_hash") == wallet_metadata.get("snapshot_end_block_hash")
+                    and expected_start == snapshot_end + 1)
+                if not contiguous or not latest_matches:
+                    connection.close()
+                    raise DatabaseUnavailable("The finalized snapshot runs are incomplete or non-contiguous")
+                if sum(int(run["events_found"]) for run in completed_runs) != wallet_metadata["transfer_count"]:
+                    connection.close()
+                    raise DatabaseUnavailable("The finalized snapshot run counts do not reconcile with the analytics events")
         with self._schema_lock:
             if not self._schema_ready:
                 connection.execute("create schema if not exists app")
@@ -337,9 +329,12 @@ class QueryService:
                 self._schema_ready = True
         return connection
 
-    def metadata(self) -> dict[str, Any]:
+    def metadata(self, wallet_address: str = DEFAULT_WALLET_ADDRESS) -> dict[str, Any]:
         with self.connect() as connection:
-            metadata = pipeline_metadata_rows(connection)[0]
+            all_metadata = pipeline_metadata_rows(connection)
+            metadata = next((item for item in all_metadata if item["wallet_address"] == wallet_address), None)
+            if metadata is None:
+                raise DatabaseUnavailable("The requested wallet is not configured")
         checkpoint_recorded = metadata.get("snapshot_run_id") is not None
         return {
             **metadata,
@@ -351,8 +346,11 @@ class QueryService:
             "is_sampled": False,
         }
 
-    def provenance(self, connection: Any) -> dict[str, Any]:
-        metadata = pipeline_metadata_rows(connection)[0]
+    def provenance(self, connection: Any, wallet_address: str = DEFAULT_WALLET_ADDRESS) -> dict[str, Any]:
+        metadata_rows = pipeline_metadata_rows(connection)
+        metadata = next((item for item in metadata_rows if item["wallet_address"] == wallet_address), None)
+        if metadata is None:
+            raise DatabaseUnavailable("The requested wallet is not configured")
         checkpoint_recorded = metadata.get("snapshot_run_id") is not None
         return {
             **metadata,
@@ -366,6 +364,7 @@ class QueryService:
     @staticmethod
     def query_contract(filters: DashboardFilters) -> dict[str, Any]:
         return {
+            "wallet_address": filters.wallet_address,
             "recognition": filters.recognition,
             "account_evidence": list(filters.account_filters),
             "query": filters.query,
@@ -458,7 +457,7 @@ class QueryService:
                 """,
                 parameters,
             )[0]
-            provenance = self.provenance(connection)
+            provenance = self.provenance(connection, filters.wallet_address)
         return {"provenance": provenance, "query": self.query_contract(filters), **result}
 
     def events(
@@ -525,7 +524,7 @@ class QueryService:
                 """,
                 parameters,
             )
-            provenance = self.provenance(connection)
+            provenance = self.provenance(connection, filters.wallet_address)
         has_more = len(items) > limit
         returned = items[:limit]
         return {
@@ -578,7 +577,7 @@ class QueryService:
                 """,
                 parameters,
             )
-            provenance = self.provenance(connection)
+            provenance = self.provenance(connection, filters.wallet_address)
         return {
             "provenance": provenance,
             "query": self.query_contract(filters),
@@ -665,7 +664,7 @@ class QueryService:
                 """,
                 [*parameters, *domain_parameters],
             )
-            provenance = self.provenance(connection)
+            provenance = self.provenance(connection, filters.wallet_address)
         return {
             "provenance": provenance,
             "query": self.query_contract(filters),
@@ -716,7 +715,7 @@ class QueryService:
                 """,
                 parameters,
             )
-            provenance = self.provenance(connection)
+            provenance = self.provenance(connection, filters.wallet_address)
         return {
             "provenance": provenance,
             "query": self.query_contract(filters),

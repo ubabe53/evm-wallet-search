@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, time, timezone
 from enum import Enum
 from typing import Annotated, Literal
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 from scripts.artifact_paths import LIVE_DB_PATH
 from server.queries import (
     ACCOUNT_FILTERS,
+    DEFAULT_WALLET_ADDRESS,
     DashboardFilters,
     DatabaseUnavailable,
     InvalidCursor,
@@ -44,6 +46,7 @@ class RecognitionOverrideRequest(BaseModel):
 
 
 def dashboard_filters(
+    wallet_address: str = DEFAULT_WALLET_ADDRESS,
     recognition: RecognitionFilter = RecognitionFilter.all,
     account: Annotated[list[AccountFilter] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=128)] = None,
@@ -61,8 +64,11 @@ def dashboard_filters(
     if start is not None and end is not None and start >= end:
         raise HTTPException(status_code=422, detail="start must be before exclusive end")
     normalized_query = q.strip() if q and q.strip() else None
+    if not re.fullmatch(r"0x[0-9a-fA-F]{40}", wallet_address):
+        raise HTTPException(status_code=422, detail="wallet_address must be a 20-byte hexadecimal address")
     return DashboardFilters(
         account_filters=selected,
+        wallet_address=wallet_address.lower(),
         query=normalized_query,
         recognition=recognition.value,
         start_at=datetime.combine(start, time.min, timezone.utc) if start else None,
@@ -101,8 +107,8 @@ def create_app(service: QueryService | None = None) -> FastAPI:
         }
 
     @application.get("/api/v1/metadata")
-    def metadata() -> dict:
-        return query_service.metadata()
+    def metadata(wallet_address: str = DEFAULT_WALLET_ADDRESS) -> dict:
+        return query_service.metadata(wallet_address.lower())
 
     @application.get("/api/v1/summary")
     def summary(filters: Annotated[DashboardFilters, Depends(dashboard_filters)]) -> dict:

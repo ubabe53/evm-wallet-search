@@ -39,6 +39,16 @@ class ConfiguredWallet:
 
 
 @dataclass(frozen=True)
+class ScanGeneration:
+    generation_id: str
+    chain_id: int
+    from_block: int
+    to_block: int
+    to_block_hash: str
+    scope_version: str
+
+
+@dataclass(frozen=True)
 class FinalizedBlock:
     number: int
     block_hash: str
@@ -62,17 +72,34 @@ class SnapshotRun:
     to_block: int
     to_block_hash: str
     scope_version: str
+    generation_id: str
+
+
+def read_configured_wallets(path: Path = WALLETS_PATH) -> list[ConfiguredWallet]:
+    with path.open(newline="") as source:
+        wallets = list(csv.DictReader(source))
+    if not wallets:
+        raise RuntimeError("At least one configured wallet is required")
+    result = []
+    seen = set()
+    for row in wallets:
+        address = row["address"].strip().lower()
+        if not ADDRESS_PATTERN.fullmatch(address):
+            raise RuntimeError("Configured wallet must be a canonical Ethereum address")
+        if address in seen:
+            raise RuntimeError(f"Configured wallet is duplicated: {address}")
+        seen.add(address)
+        result.append(ConfiguredWallet(address=address, label=row["ens"].strip() or address))
+    return result
 
 
 def read_configured_wallet(path: Path = WALLETS_PATH) -> ConfiguredWallet:
-    with path.open(newline="") as source:
-        wallets = list(csv.DictReader(source))
+    """Compatibility helper for single-wallet callers and fixture tooling."""
+
+    wallets = read_configured_wallets(path)
     if len(wallets) != 1:
-        raise RuntimeError("Finalized snapshot builds currently require exactly one configured wallet")
-    address = wallets[0]["address"].strip().lower()
-    if not ADDRESS_PATTERN.fullmatch(address):
-        raise RuntimeError("Configured wallet must be a canonical Ethereum address")
-    return ConfiguredWallet(address=address, label=wallets[0]["ens"].strip() or address)
+        raise RuntimeError("This caller requires exactly one configured wallet")
+    return wallets[0]
 
 
 def _http_json(url: str, payload: dict[str, Any]) -> Any:
@@ -157,9 +184,38 @@ def ensure_run_table(connection: Any) -> None:
     connection.execute("create schema if not exists ops")
     connection.execute(
         """
+        create table if not exists ops.wallet_targets (
+          chain_id integer not null check (chain_id = 1),
+          wallet_address varchar not null,
+          wallet_label varchar not null,
+          target_id varchar primary key,
+          created_at timestamptz not null default current_timestamp,
+          unique (chain_id, wallet_address)
+        )
+        """
+    )
+    connection.execute(
+        """
+        create table if not exists ops.scan_generations (
+          generation_id varchar primary key,
+          chain_id integer not null check (chain_id = 1),
+          from_block bigint not null,
+          to_block bigint not null,
+          to_block_hash varchar not null,
+          scope_version varchar not null,
+          status varchar not null check (status in ('running', 'completed', 'failed')),
+          started_at timestamptz not null,
+          completed_at timestamptz,
+          check (from_block <= to_block)
+        )
+        """
+    )
+    connection.execute(
+        """
         create table if not exists ops.pipeline_runs (
           run_id varchar primary key,
           chain_id integer not null check (chain_id = 1),
+          generation_id varchar not null,
           wallet_address varchar not null,
           wallet_label varchar not null,
           from_block bigint not null,
@@ -169,10 +225,31 @@ def ensure_run_table(connection: Any) -> None:
           status varchar not null check (status in ('running', 'completed', 'failed')),
           completed_at timestamptz,
           scope_version varchar not null,
+          unique (generation_id, chain_id, wallet_address),
           check (from_block <= to_block)
         )
         """
     )
+    columns = {row[1] for row in connection.execute("pragma table_info('ops.pipeline_runs')").fetchall()}
+    if "generation_id" not in columns:
+        # Preserve an already-built artifact while allowing new runs to carry generation lineage.
+        connection.execute("alter table ops.pipeline_runs add column generation_id varchar")
+    legacy_runs = connection.execute(
+        "select run_id, chain_id, from_block, to_block, to_block_hash, scope_version, status, completed_at "
+        "from ops.pipeline_runs where generation_id is null"
+    ).fetchall()
+    for run_id, chain_id, from_block, to_block, block_hash, scope_version, status, completed_at in legacy_runs:
+        generation_id = f"legacy:{run_id}"
+        connection.execute(
+            "insert into ops.scan_generations values (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "on conflict (generation_id) do nothing",
+            [generation_id, chain_id, from_block, to_block, block_hash, scope_version, status,
+             completed_at or datetime.now(timezone.utc), completed_at],
+        )
+        connection.execute(
+            "update ops.pipeline_runs set generation_id = ? where run_id = ?",
+            [generation_id, run_id],
+        )
 
 
 def next_run_start(
@@ -209,6 +286,25 @@ def start_snapshot_run(
     metadata: HyperIndexMetadata,
     finalized_block: FinalizedBlock,
 ) -> SnapshotRun:
+    return start_snapshot_runs(
+        database_path=database_path,
+        wallets=[wallet],
+        metadata=metadata,
+        finalized_block=finalized_block,
+    )[0]
+
+
+def start_snapshot_runs(
+    *,
+    database_path: Path = LIVE_DB_PATH,
+    wallets: list[ConfiguredWallet],
+    metadata: HyperIndexMetadata,
+    finalized_block: FinalizedBlock,
+) -> list[SnapshotRun]:
+    """Create one shared finalized generation and one explicit run per target wallet."""
+
+    if not wallets:
+        raise RuntimeError("At least one configured wallet is required")
     if metadata.end_block is not None and metadata.end_block < finalized_block.number:
         raise RuntimeError("HyperIndex endBlock is earlier than the finalized snapshot target")
     if metadata.progress_block < finalized_block.number:
@@ -222,57 +318,61 @@ def start_snapshot_run(
     database_path.parent.mkdir(parents=True, exist_ok=True)
     with duckdb.connect(str(database_path)) as connection:
         ensure_run_table(connection)
+        from_blocks = {}
+        for wallet in wallets:
+            connection.execute(
+                "insert into ops.wallet_targets (chain_id, wallet_address, wallet_label, target_id) values (?, ?, ?, ?) "
+                "on conflict (chain_id, wallet_address) do update set wallet_label = excluded.wallet_label",
+                [CHAIN_ID, wallet.address, wallet.label, f"{CHAIN_ID}:{wallet.address}"],
+            )
+            from_blocks[wallet.address] = next_run_start(
+                connection, chain_id=CHAIN_ID, wallet_address=wallet.address,
+                scope_version=SCOPE_VERSION, configured_start_block=metadata.start_block,
+            )
+        if all(from_block > finalized_block.number for from_block in from_blocks.values()):
+            raise SnapshotAlreadyCurrent(
+                f"Snapshot is already finalized through block {finalized_block.number}"
+            )
+        if len(set(from_blocks.values())) != 1:
+            raise RuntimeError("Configured wallets do not share a contiguous scan start")
+        from_block = next(iter(from_blocks.values()))
         active_run = connection.execute(
             """
             select run_id
             from ops.pipeline_runs
-            where chain_id = ? and wallet_address = ? and scope_version = ? and status = 'running'
+            where chain_id = ? and scope_version = ? and status = 'running'
             limit 1
             """,
-            [CHAIN_ID, wallet.address, SCOPE_VERSION],
+            [CHAIN_ID, SCOPE_VERSION],
         ).fetchone()
         if active_run is not None:
             raise RuntimeError(f"Snapshot run {active_run[0]} is already running")
-        from_block = next_run_start(
-            connection,
-            chain_id=CHAIN_ID,
-            wallet_address=wallet.address,
-            scope_version=SCOPE_VERSION,
-            configured_start_block=metadata.start_block,
-        )
-        if from_block > finalized_block.number:
-            raise SnapshotAlreadyCurrent(
-                f"Snapshot is already finalized through block {from_block - 1}"
-            )
-        run = SnapshotRun(
-            run_id=str(uuid.uuid4()),
-            chain_id=CHAIN_ID,
-            wallet_address=wallet.address,
-            wallet_label=wallet.label,
-            from_block=from_block,
-            to_block=finalized_block.number,
-            to_block_hash=finalized_block.block_hash,
-            scope_version=SCOPE_VERSION,
-        )
+        generation_id = str(uuid.uuid4())
         connection.execute(
-            """
-            insert into ops.pipeline_runs (
-              run_id, chain_id, wallet_address, wallet_label, from_block, to_block,
-              to_block_hash, events_found, status, completed_at, scope_version
-            ) values (?, ?, ?, ?, ?, ?, ?, null, 'running', null, ?)
-            """,
-            [
-                run.run_id,
-                run.chain_id,
-                run.wallet_address,
-                run.wallet_label,
-                run.from_block,
-                run.to_block,
-                run.to_block_hash,
-                run.scope_version,
-            ],
+            "insert into ops.scan_generations values (?, ?, ?, ?, ?, ?, 'running', ?, null)",
+            [generation_id, CHAIN_ID, from_block, finalized_block.number, finalized_block.block_hash,
+             SCOPE_VERSION, datetime.now(timezone.utc)],
         )
-    return run
+        runs = []
+        for wallet in wallets:
+            run = SnapshotRun(
+                run_id=str(uuid.uuid4()), chain_id=CHAIN_ID, generation_id=generation_id,
+                wallet_address=wallet.address, wallet_label=wallet.label,
+                from_block=from_block, to_block=finalized_block.number,
+                to_block_hash=finalized_block.block_hash, scope_version=SCOPE_VERSION,
+            )
+            connection.execute(
+                """
+                insert into ops.pipeline_runs (
+                  run_id, chain_id, generation_id, wallet_address, wallet_label, from_block, to_block,
+                  to_block_hash, events_found, status, completed_at, scope_version
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, null, 'running', null, ?)
+                """,
+                [run.run_id, run.chain_id, run.generation_id, run.wallet_address, run.wallet_label,
+                 run.from_block, run.to_block, run.to_block_hash, run.scope_version],
+            )
+            runs.append(run)
+    return runs
 
 
 def latest_completed_snapshot_run(
@@ -297,7 +397,7 @@ def latest_completed_snapshot_run(
         )
         row = connection.execute(
             """
-            select run_id, chain_id, wallet_address, wallet_label, from_block, to_block,
+            select run_id, chain_id, generation_id, wallet_address, wallet_label, from_block, to_block,
               to_block_hash, scope_version
             from ops.pipeline_runs
             where chain_id = ? and wallet_address = ? and scope_version = ? and status = 'completed'
@@ -308,17 +408,18 @@ def latest_completed_snapshot_run(
         ).fetchone()
     if row is None or next_block != finalized_block.number + 1:
         raise RuntimeError("No completed snapshot matches the current finalized block")
-    if str(row[6]).lower() != finalized_block.block_hash:
+    if str(row[7]).lower() != finalized_block.block_hash:
         raise RuntimeError("The recorded finalized block hash does not match Ethereum RPC")
     return SnapshotRun(
         run_id=str(row[0]),
         chain_id=int(row[1]),
-        wallet_address=str(row[2]),
-        wallet_label=str(row[3]),
-        from_block=int(row[4]),
-        to_block=int(row[5]),
-        to_block_hash=str(row[6]),
-        scope_version=str(row[7]),
+        generation_id=str(row[2]),
+        wallet_address=str(row[3]),
+        wallet_label=str(row[4]),
+        from_block=int(row[5]),
+        to_block=int(row[6]),
+        to_block_hash=str(row[7]),
+        scope_version=str(row[8]),
     )
 
 
@@ -360,6 +461,16 @@ def finish_snapshot_run(
                 """,
                 [datetime.now(timezone.utc), run.run_id],
             )
+        generation_status = connection.execute(
+            "select count(*) filter (where status = 'running'), count(*) filter (where status = 'failed') "
+            "from ops.pipeline_runs where generation_id = ?",
+            [run.generation_id],
+        ).fetchone()
+        if generation_status and generation_status[0] == 0:
+            connection.execute(
+                "update ops.scan_generations set status = ?, completed_at = ? where generation_id = ?",
+                ["failed" if generation_status[1] else "completed", datetime.now(timezone.utc), run.generation_id],
+            )
 
 
 def dbt_snapshot_environment(run: SnapshotRun, *, coverage_start_block: int) -> dict[str, str]:
@@ -370,4 +481,5 @@ def dbt_snapshot_environment(run: SnapshotRun, *, coverage_start_block: int) -> 
         "EVM_WALLET_SNAPSHOT_END_BLOCK_HASH": run.to_block_hash,
         "EVM_WALLET_SNAPSHOT_FINALITY_POLICY": FINALITY_POLICY,
         "EVM_WALLET_SNAPSHOT_SCOPE_VERSION": run.scope_version,
+        "EVM_WALLET_SNAPSHOT_GENERATION_ID": run.generation_id,
     }

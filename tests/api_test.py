@@ -62,6 +62,11 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(health.json()["data_source"], "fixture")
 
         metadata = self.client.get("/api/v1/metadata").json()
+        selected_metadata = self.client.get(
+            "/api/v1/metadata",
+            params={"wallet_address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"},
+        ).json()
+        self.assertEqual(selected_metadata["wallet_address"], metadata["wallet_address"])
         self.assertEqual(metadata["api_schema_version"], "dashboard-api-v16")
         self.assertEqual(
             set(metadata),
@@ -72,6 +77,7 @@ class DashboardApiTest(unittest.TestCase):
                 "data_source",
                 "generated_at",
                 "snapshot_run_id",
+                "snapshot_generation_id",
                 "snapshot_start_block",
                 "snapshot_end_block",
                 "snapshot_end_block_hash",

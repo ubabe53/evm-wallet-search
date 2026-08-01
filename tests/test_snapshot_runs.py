@@ -17,6 +17,7 @@ from scripts.snapshot_runs import (
     resolve_finalized_block,
     resolve_snapshot_target,
     start_snapshot_run,
+    start_snapshot_runs,
 )
 
 WALLET = ConfiguredWallet(
@@ -66,6 +67,7 @@ class SnapshotRunsTest(unittest.TestCase):
             [
                 ("run_id", "VARCHAR", True, True),
                 ("chain_id", "INTEGER", True, False),
+                ("generation_id", "VARCHAR", True, False),
                 ("wallet_address", "VARCHAR", True, False),
                 ("wallet_label", "VARCHAR", True, False),
                 ("from_block", "BIGINT", True, False),
@@ -149,13 +151,39 @@ class SnapshotRunsTest(unittest.TestCase):
             ).fetchone()
             self.assertEqual(first_row, (2, "completed"))
 
+    def test_multi_wallet_run_shares_generation_and_keeps_wallet_grains(self) -> None:
+        second_wallet = ConfiguredWallet("0x" + "1" * 40, "second")
+        runs = start_snapshot_runs(
+            database_path=self.database_path,
+            wallets=[WALLET, second_wallet],
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[0].generation_id, runs[1].generation_id)
+        with duckdb.connect(str(self.database_path)) as connection:
+            connection.execute(
+                "create table wallet_events (chain_id integer, wallet_address varchar, block_number bigint)"
+            )
+            connection.execute("insert into wallet_events values (1, ?, 50)", [WALLET.address])
+        for run in runs:
+            finish_snapshot_run(run, database_path=self.database_path, succeeded=True)
+        with duckdb.connect(str(self.database_path)) as connection:
+            targets = connection.execute("select count(*) from ops.wallet_targets").fetchone()
+            runs_count = connection.execute("select count(*) from ops.pipeline_runs").fetchone()
+            generations = connection.execute("select count(*) from ops.scan_generations where status = 'completed'").fetchone()
+            assert targets is not None and runs_count is not None and generations is not None
+            self.assertEqual(targets[0], 2)
+            self.assertEqual(runs_count[0], 2)
+            self.assertEqual(generations[0], 1)
+
     def test_refuses_gaps_stale_indexer_and_empty_increment(self) -> None:
         with duckdb.connect(str(self.database_path)) as connection:
             ensure_run_table(connection)
             connection.execute(
                 """
                 insert into ops.pipeline_runs values (
-                  'gap', 1, ?, 'vitalik.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
+                  'gap', 1, 'generation-gap', ?, 'vitalik.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
                 )
                 """,
                 [WALLET.address, "0x" + "a" * 64, "wallet-transfer-signature-v1"],

@@ -6,7 +6,7 @@ This file is the high-level system map for humans and agents. It records what ex
 
 ```text
 Ethereum mainnet
-      │ Transfer(address,address,uint256) logs involving the configured wallet
+      │ Transfer(address,address,uint256) logs involving configured wallet targets
       │ (ERC-20-intended; token standard is not disambiguated)
       ▼
 Envio HyperIndex
@@ -38,7 +38,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
-| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics, finalized snapshot-run history, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
+| Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold complete HyperIndex-derived analytics, durable wallet targets, shared finalized scan generations, wallet-grained snapshot-run history, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
 | Local account evidence store | `analytics/artifacts/account_evidence.duckdb` | Checkpoint one successful pinned bytecode observation per event counterparty, with retryable failures | A checked-in seed, an implicit build-time RPC job, or proof of permanent identity |
 | Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
@@ -121,6 +121,7 @@ checked-in fixtures → dbt → DuckDB → bounded JSON exporter → React/stati
 This path is deterministic and suitable for CI and GitHub Pages. It is not proof of live-source integration behavior. Fixture builds write only `analytics/artifacts/fixture.duckdb` and deliberately remove the HyperIndex DSN from dbt's environment. Live builds write only `analytics/artifacts/live.duckdb`; fixture validation cannot overwrite that cache.
 
 ## Local API boundary
+
 
 The loopback-only FastAPI service:
 

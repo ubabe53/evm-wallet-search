@@ -52,6 +52,14 @@ account_evidence_metrics as (
   group by chain_id, wallet_address
 )
 
+{% if not var('use_fixture', true) %}, snapshot_runs as (
+  select wallet_address, run_id, generation_id, from_block, to_block, to_block_hash
+  from ops.pipeline_runs
+  where generation_id = '{{ env_var("EVM_WALLET_SNAPSHOT_GENERATION_ID") }}'
+    and status in ('running', 'completed')
+)
+{% endif %}
+
 select
   coalesce(wallets.ens, wallets.wallet_address) as configured_wallet_label,
   wallets.wallet_address,
@@ -60,16 +68,18 @@ select
   current_timestamp as generated_at,
   {% if var('use_fixture', true) %}
   cast(null as varchar) as snapshot_run_id,
+  cast(null as varchar) as snapshot_generation_id,
   cast(null as bigint) as snapshot_start_block,
   cast(null as bigint) as snapshot_end_block,
   cast(null as varchar) as snapshot_end_block_hash,
   cast(null as varchar) as snapshot_finality_policy,
   cast(null as varchar) as snapshot_scope_version,
   {% else %}
-  '{{ env_var("EVM_WALLET_SNAPSHOT_RUN_ID") }}' as snapshot_run_id,
-  cast({{ env_var("EVM_WALLET_SNAPSHOT_START_BLOCK") }} as bigint) as snapshot_start_block,
-  cast({{ env_var("EVM_WALLET_SNAPSHOT_END_BLOCK") }} as bigint) as snapshot_end_block,
-  '{{ env_var("EVM_WALLET_SNAPSHOT_END_BLOCK_HASH") }}' as snapshot_end_block_hash,
+  snapshot_runs.run_id as snapshot_run_id,
+  snapshot_runs.generation_id as snapshot_generation_id,
+  snapshot_runs.from_block as snapshot_start_block,
+  snapshot_runs.to_block as snapshot_end_block,
+  snapshot_runs.to_block_hash as snapshot_end_block_hash,
   '{{ env_var("EVM_WALLET_SNAPSHOT_FINALITY_POLICY") }}' as snapshot_finality_policy,
   '{{ env_var("EVM_WALLET_SNAPSHOT_SCOPE_VERSION") }}' as snapshot_scope_version,
   {% endif %}
@@ -95,3 +105,6 @@ select
 from {{ ref('stg_wallets') }} as wallets
 left join event_metrics as events using (chain_id, wallet_address)
 left join account_evidence_metrics as evidence using (chain_id, wallet_address)
+{% if not var('use_fixture', true) %}
+left join snapshot_runs using (wallet_address)
+{% endif %}
