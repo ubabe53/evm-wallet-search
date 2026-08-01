@@ -102,7 +102,7 @@ Token addresses remain part of the mart grain so fixture search and token filter
 
 ### `pipeline_metadata`
 
-One row per `(chain_id, wallet_address)` containing the pinned `configured_wallet_label`, fixture-versus-HyperIndex source, generation time, complete captured-event count, observed event block/time extrema, and account-evidence coverage metadata. `configured_wallet_label` is derived from the pinned `stg_wallets.ens`, falling back to the wallet address; it is project configuration, not a live ENS resolution. Live rows also carry the completed snapshot run ID, cumulative start block, finalized end block and hash, `ethereum_finalized` policy, and semantic scope version. Those snapshot fields describe verified scan coverage; `event_block_number_min`/`max` and `first_event_at`/`last_event_at` describe only observed rows and can never establish continuity. Fixture snapshot fields are null even though fixture event extrema are populated.
+One row per `(chain_id, wallet_address)` containing the pinned `configured_wallet_label`, fixture-versus-HyperIndex source, generation time, complete captured-event count, observed event block/time extrema, and account-evidence coverage metadata. `configured_wallet_label` is derived from the pinned `stg_wallets.ens`, falling back to the wallet address; it remains presentation configuration, not live ENS evidence. Live snapshot runs separately record the accepted input and, for ENS-shaped labels, the finalized ENS resolution provenance in `ops.pipeline_runs`. Live rows also carry the completed snapshot run ID, cumulative start block, finalized end block and hash, `ethereum_finalized` policy, and semantic scope version. Those snapshot fields describe verified scan coverage; `event_block_number_min`/`max` and `first_event_at`/`last_event_at` describe only observed rows and can never establish continuity. Fixture snapshot fields are null even though fixture event extrema are populated.
 
 Account-evidence coverage uses `distinct_nonzero_nonself_event_counterparties` as its population scope. At the address grain, `eligible = classified + failed + not_checked`; the event-weighted fields apply the same statuses to captured Transfer-signature rows. Rates are deliberately not stored because they are exactly derivable from these reconciled counts. Observation block/time bounds and the schema version are derived only from successfully classified addresses. Fixture builds therefore report their eligible address/event populations as not checked while leaving successful-observation provenance null.
 
@@ -137,7 +137,7 @@ The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read
 
 Live orchestration owns `ops.wallet_targets` at exactly one durable row per `(chain_id, wallet_address)`, with that composite key and no synthetic target identity. It also owns `ops.scan_generations` at one wallet-scoped finalized interval, canonical end hash, scope, and lifecycle status per attempted wallet snapshot. A generation and its `pipeline_runs` row never coordinate or imply continuity for another wallet.
 
-The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. Retries may repeat an interval with a new run ID after a failed attempt. `wallet_label` is derived from the pinned configured ENS value, falling back to the wallet address.
+The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. Retries may repeat an interval with a new run ID after a failed attempt. `wallet_label` is derived from the pinned configured ENS value, falling back to the wallet address; the separate input/provenance fields below record any finalized ENS resolution.
 
 | Column | Physical contract | Semantics |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ The live build wrapper creates this table inside `analytics/artifacts/live.duckd
 | `chain_id` | `INTEGER NOT NULL` | EVM chain identifier, constrained to `1`. |
 | `generation_id` | `VARCHAR NOT NULL` | UUID identifying the wallet-scoped scan generation for this attempted snapshot. |
 | `wallet_address` | `VARCHAR NOT NULL` | Lowercase configured wallet scanned by the run. |
-| `wallet_label` | `VARCHAR NOT NULL` | Pinned project display label; not a live ENS-resolution claim. |
+| `wallet_label` | `VARCHAR NOT NULL` | Pinned project display label; not itself a live ENS-resolution claim. |
 | `from_block` | `BIGINT NOT NULL` | Inclusive interval start. |
 | `to_block` | `BIGINT NOT NULL` | Inclusive finalized interval end. |
 | `to_block_hash` | `VARCHAR NOT NULL` | Lowercase canonical hash pinned for `to_block`. |

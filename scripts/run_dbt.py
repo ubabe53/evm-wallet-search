@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from server.ens import resolve_scan_input
+
 try:
     from .artifact_paths import (
         ACCOUNT_EVIDENCE_DB_PATH,
@@ -207,9 +209,12 @@ def main() -> None:
         selected_wallet = select_scan_wallet(
             wallets, os.environ.get(EVM_WALLET_SCAN_ADDRESS_ENV)
         )
-        from server.ens import resolve_scan_input
-
-        scan_input = resolve_scan_input(selected_wallet.label, rpc_client)
+        scan_value = (
+            selected_wallet.label
+            if selected_wallet.label.lower().endswith(".eth")
+            else selected_wallet.address
+        )
+        scan_input = resolve_scan_input(scan_value, rpc_client)
         try:
             snapshot_runs = start_snapshot_runs(
                 wallets=[selected_wallet],

@@ -32,6 +32,7 @@ class ArtifactPathsTest(unittest.TestCase):
         self.assertEqual(run_dbt.select_scan_wallet([WALLET_A], None), WALLET_A)
 
     @patch("scripts.run_dbt.finish_snapshot_run")
+    @patch("scripts.run_dbt.resolve_scan_input")
     @patch("scripts.run_dbt.run_dbt")
     @patch("scripts.run_dbt.start_snapshot_runs")
     @patch("scripts.run_dbt.resolve_snapshot_target")
@@ -49,6 +50,7 @@ class ArtifactPathsTest(unittest.TestCase):
         start_runs,
         run,
         _finish,
+        resolve_scan_input,
     ) -> None:
         snapshot = SnapshotRun(
             run_id="run-b",
@@ -69,6 +71,7 @@ class ArtifactPathsTest(unittest.TestCase):
         fetch_metadata.return_value = HyperIndexMetadata(3, 100, None, True)
         resolve_target.return_value = FinalizedBlock(100, "0x" + "c" * 64)
         start_runs.return_value = [snapshot]
+        resolve_scan_input.return_value = object()
 
         with patch.dict(
             os.environ,
