@@ -8,6 +8,7 @@ import {
   Search,
   Sun,
 } from "lucide-react";
+import { useState } from "react";
 import { dashboardDataMode } from "./data";
 import { ActivityTimeline } from "./dashboard/ActivityTimeline";
 import { CounterpartyTable } from "./dashboard/CounterpartyTable";
@@ -31,6 +32,7 @@ import {
 import { useDashboard } from "./dashboard/useDashboard";
 
 export function App() {
+  const [scanOpen, setScanOpen] = useState(false);
   const {
     apiResult,
     apiResultIsCurrent,
@@ -75,6 +77,7 @@ export function App() {
     startWalletScan,
     wallets,
   } = useDashboard();
+  const scanBusy = scanJob?.status === "queued" || scanJob?.status === "running";
 
   if (error) {
     return (
@@ -115,6 +118,63 @@ export function App() {
           </p>
         </div>
         <div className="toolbar">
+          <div className="scanLauncher">
+            <button
+              className="scanLauncherButton"
+              type="button"
+              onClick={() => setScanOpen((open) => !open)}
+              aria-expanded={scanOpen}
+              aria-controls="wallet-scan-panel"
+            >
+              <span>Scan wallet</span>
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+            {scanOpen && (
+              <div className="scanLauncherPanel" id="wallet-scan-panel" aria-label="Wallet scan">
+                <div className="scanHeader">
+                  <div>
+                    <strong>Change analysis wallet</strong>
+                    <p>Scan from block 0 through the finalized head.</p>
+                  </div>
+                  <span className={`scanHint ${dashboardDataMode === "api" ? "live" : "fixture"}`}>
+                    {dashboardDataMode === "api" ? "Live mode" : "Fixture demo"}
+                  </span>
+                </div>
+                <form className="scanForm" onSubmit={(event) => { event.preventDefault(); void startWalletScan(); }}>
+                  <label>
+                    <span className="srOnly">Wallet address or ENS</span>
+                    <input
+                      className="scanInput"
+                      value={scanInput}
+                      onChange={(event) => setScanInput(event.target.value)}
+                      placeholder="0x… or name.eth"
+                      aria-label="Wallet address or ENS"
+                      disabled={dashboardDataMode === "static" || scanBusy}
+                    />
+                  </label>
+                  <button className="scanButton" type="submit" disabled={dashboardDataMode === "static" || !scanInput.trim() || scanBusy}>
+                    {scanBusy ? "Scanning…" : "Start scan"}
+                  </button>
+                </form>
+                {scanBusy && (
+                  <div className="scanProgress" role="status" aria-live="polite">
+                    <span>Scanning {scanJob.wallet_label} · {scanJob.progress}%</span>
+                    <progress max="100" value={scanJob.progress}>{scanJob.progress}%</progress>
+                  </div>
+                )}
+                {scanJob?.status === "completed" && <p className="scanSuccess" role="status">Scan complete. Switched to {scanJob.wallet_label}.</p>}
+                {(scanError || scanJob?.status === "failed") && <p className="scanError" role="alert">{scanError ?? scanJob?.error}</p>}
+                {wallets.length > 0 && (
+                  <div className="walletList" aria-label="Completed wallets">
+                    <span>Completed wallets:</span>
+                    {wallets.map((wallet) => <span key={wallet.wallet_address} className={wallet.wallet_address === data.metadata.wallet_address ? "currentWallet" : ""}>{wallet.label}</span>)}
+                  </div>
+                )}
+                {dashboardDataMode === "static" && <p className="boundedNote">Wallet scanning is available only in live local mode.</p>}
+              </div>
+            )}
+          </div>
+          <div className="filterBar" aria-label="Dashboard filters">
           <div className="recognitionControls">
             <fieldset className="recognitionFilter">
               <legend className="srOnly">Token recognition</legend>
@@ -178,6 +238,7 @@ export function App() {
               aria-label="Filter dashboard"
             />
           </label>
+          </div>
           <button
             className="iconButton"
             type="button"
@@ -189,49 +250,6 @@ export function App() {
           </button>
         </div>
       </header>
-
-      <section className="scanPanel" aria-label="Wallet scan">
-        <div className="scanHeader">
-          <div>
-            <strong>Scan another wallet</strong>
-            <p>Full Transfer-signature history from block 0 through the finalized head.</p>
-          </div>
-          <span className={`scanHint ${dashboardDataMode === "api" ? "live" : "fixture"}`}>
-            {dashboardDataMode === "api" ? "Live mode" : "Fixture demo"}
-          </span>
-        </div>
-        <form className="scanForm" onSubmit={(event) => { event.preventDefault(); void startWalletScan(); }}>
-          <label>
-            <span className="srOnly">Wallet address or ENS</span>
-            <input
-              className="scanInput"
-              value={scanInput}
-              onChange={(event) => setScanInput(event.target.value)}
-              placeholder="0x… or name.eth"
-              aria-label="Wallet address or ENS"
-              disabled={dashboardDataMode === "static" || scanJob?.status === "queued" || scanJob?.status === "running"}
-            />
-          </label>
-          <button className="scanButton" type="submit" disabled={dashboardDataMode === "static" || !scanInput.trim() || scanJob?.status === "queued" || scanJob?.status === "running"}>
-            {scanJob?.status === "queued" || scanJob?.status === "running" ? "Scanning…" : "Start scan"}
-          </button>
-        </form>
-        {scanJob && (scanJob.status === "queued" || scanJob.status === "running") && (
-          <div className="scanProgress" role="status" aria-live="polite">
-            <span>Scanning {scanJob.wallet_label} · {scanJob.progress}%</span>
-            <progress max="100" value={scanJob.progress}>{scanJob.progress}%</progress>
-          </div>
-        )}
-        {scanJob?.status === "completed" && <p className="scanSuccess" role="status">Scan complete. Switched to {scanJob.wallet_label}.</p>}
-        {(scanError || scanJob?.status === "failed") && <p className="scanError" role="alert">{scanError ?? scanJob?.error}</p>}
-        {wallets.length > 0 && (
-          <div className="walletList" aria-label="Completed wallets">
-            <span>Completed wallets:</span>
-            {wallets.map((wallet) => <span key={wallet.wallet_address} className={wallet.wallet_address === data.metadata.wallet_address ? "currentWallet" : ""}>{wallet.label}</span>)}
-          </div>
-        )}
-        {dashboardDataMode === "static" && <p className="boundedNote">Wallet scanning is available only in live local mode.</p>}
-      </section>
 
       <section className="overviewContext" aria-label="Analysis context">
         <div className="analysisSubject">

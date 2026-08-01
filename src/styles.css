@@ -97,10 +97,38 @@ select {
   padding: 8px 0 20px;
 }
 
-.scanPanel {
+.scanLauncher {
+  position: relative;
+}
+.scanLauncherButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 40px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--live-bg);
+  padding: 0 0.8rem;
+  color: var(--live-text);
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.scanLauncherButton:hover,
+.scanLauncherButton:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  outline: none;
+}
+.scanLauncherPanel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 10px);
+  right: 0;
   display: grid;
+  width: min(520px, calc(100vw - 32px));
   gap: 0.65rem;
-  margin: 1rem 0;
   padding: 1rem 1.15rem;
   border: 1px solid var(--border);
   border-radius: 0.8rem;
@@ -293,7 +321,19 @@ h2 {
 .toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  max-width: 760px;
+  flex-wrap: wrap;
+}
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  order: 2;
+  flex: 1 1 100%;
 }
 
 .recognitionControls {
@@ -1406,6 +1446,11 @@ code {
   .toolbar {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .filterBar {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .toolbar .searchbox {
