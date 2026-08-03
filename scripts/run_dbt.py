@@ -30,14 +30,14 @@ try:
     from .enrich_token_metadata import JsonRpcClient
     from .project_config import resolved_runtime
     from .snapshot_runs import (
-        ConfiguredWallet,
         ADDRESS_PATTERN,
-        SnapshotRun,
+        ConfiguredWallet,
         SnapshotAlreadyCurrent,
+        SnapshotRun,
         dbt_snapshot_environment,
+        ensure_live_target_registry,
         fetch_hyperindex_metadata,
         finish_snapshot_run,
-        ensure_live_target_registry,
         latest_completed_snapshot_run,
         mark_ingestion_complete,
         read_live_wallet_targets,
@@ -56,14 +56,14 @@ except ImportError:
     from enrich_token_metadata import JsonRpcClient
     from project_config import resolved_runtime
     from snapshot_runs import (
-        ConfiguredWallet,
         ADDRESS_PATTERN,
-        SnapshotRun,
+        ConfiguredWallet,
         SnapshotAlreadyCurrent,
+        SnapshotRun,
         dbt_snapshot_environment,
+        ensure_live_target_registry,
         fetch_hyperindex_metadata,
         finish_snapshot_run,
-        ensure_live_target_registry,
         latest_completed_snapshot_run,
         mark_ingestion_complete,
         read_live_wallet_targets,

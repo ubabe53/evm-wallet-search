@@ -130,10 +130,10 @@ class SnapshotRunsTest(unittest.TestCase):
         self.assertEqual(retry.run_id, run.run_id)
         self.assertEqual(retry.from_block, run.from_block)
         with duckdb.connect(str(self.database_path), read_only=True) as connection:
-            self.assertEqual(
-                connection.execute("select count(*) from ops.pipeline_runs").fetchone()[0],
-                1,
-            )
+            row = connection.execute("select count(*) from ops.pipeline_runs").fetchone()
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row[0], 1)
 
     def test_wallet_targets_use_composite_identity(self) -> None:
         with duckdb.connect(str(self.database_path)) as connection:
