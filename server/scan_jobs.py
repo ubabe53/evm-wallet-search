@@ -101,7 +101,6 @@ def configured_scan_worker(job: ScanJob, staging_path: Path, progress: Callable[
         "WALLET_SCAN_FROM_BLOCK": str(job.from_block),
         "WALLET_SCAN_TO_BLOCK": str(job.to_block),
         "WALLET_SCAN_OUTPUT_PATH": str(staging_path),
-        "WALLET_SCAN_BASE_ARTIFACT_PATH": str(staging_path),
     })
     if job.resolver_source:
         environment["WALLET_SCAN_RESOLVER_SOURCE"] = job.resolver_source
