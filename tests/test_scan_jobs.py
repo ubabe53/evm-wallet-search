@@ -142,6 +142,111 @@ class ScanJobsTest(unittest.TestCase):
                 self.assertEqual(override_row[0], "recognized")
             self.assertEqual({row["wallet_address"] for row in manager.list_wallets()}, {wallet_a, wallet_b})
 
+    def test_scan_extension_accepts_cumulative_snapshot_start(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            live = Path(directory) / "live.duckdb"
+            wallet = "0x" + "a" * 40
+            with duckdb.connect(str(live)) as connection:
+                for relation in ("wallet_events", "token_summary", "counterparty_summary", "timeline_daily"):
+                    connection.execute(f"create table {relation} (wallet_address varchar)")
+                connection.execute(
+                    """
+                    create table pipeline_metadata (
+                      chain_id integer, wallet_address varchar, configured_wallet_label varchar,
+                      data_source varchar,
+                      snapshot_start_block bigint, snapshot_end_block bigint,
+                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar
+                    )
+                    """
+                )
+                connection.execute(
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    [wallet, "0x" + "a" * 64],
+                )
+
+            def worker(job, staging_path, progress: Callable[[int], None]) -> None:
+                self.assertEqual(job.from_block, 11)
+                with duckdb.connect(str(staging_path)) as connection:
+                    connection.execute(
+                        "update pipeline_metadata set snapshot_end_block = ?, snapshot_end_block_hash = ? where wallet_address = ?",
+                        [job.to_block, "0x" + "b" * 64, wallet],
+                    )
+                progress(90)
+
+            manager = ScanJobManager(
+                live, resolver=resolve_wallet, worker=worker, finalized_head=lambda: 20
+            )
+            job = manager.create(wallet)
+            for _ in range(50):
+                current = manager.get(job.job_id)
+                if current and current.status in {"completed", "failed"}:
+                    break
+                time.sleep(0.01)
+            completed = manager.get(job.job_id)
+            assert completed is not None
+            self.assertEqual(completed.status, "completed", completed.error)
+            self.assertEqual((completed.from_block, completed.to_block), (11, 20))
+            with duckdb.connect(str(live), read_only=True) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "select snapshot_start_block, snapshot_end_block from pipeline_metadata where wallet_address = ?",
+                        [wallet],
+                    ).fetchone(),
+                    (0, 20),
+                )
+
+    def test_scan_extension_rejects_changed_cumulative_snapshot_start(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            live = Path(directory) / "live.duckdb"
+            wallet = "0x" + "a" * 40
+            with duckdb.connect(str(live)) as connection:
+                for relation in ("wallet_events", "token_summary", "counterparty_summary", "timeline_daily"):
+                    connection.execute(f"create table {relation} (wallet_address varchar)")
+                connection.execute(
+                    """
+                    create table pipeline_metadata (
+                      chain_id integer, wallet_address varchar, configured_wallet_label varchar,
+                      data_source varchar,
+                      snapshot_start_block bigint, snapshot_end_block bigint,
+                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar
+                    )
+                    """
+                )
+                connection.execute(
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    [wallet, "0x" + "a" * 64],
+                )
+
+            def worker(job, staging_path, progress: Callable[[int], None]) -> None:
+                with duckdb.connect(str(staging_path)) as connection:
+                    connection.execute(
+                        "update pipeline_metadata set snapshot_start_block = ?, snapshot_end_block = ?, snapshot_end_block_hash = ? where wallet_address = ?",
+                        [1, job.to_block, "0x" + "b" * 64, wallet],
+                    )
+                progress(90)
+
+            manager = ScanJobManager(
+                live, resolver=resolve_wallet, worker=worker, finalized_head=lambda: 20
+            )
+            job = manager.create(wallet)
+            for _ in range(50):
+                current = manager.get(job.job_id)
+                if current and current.status in {"completed", "failed"}:
+                    break
+                time.sleep(0.01)
+            failed = manager.get(job.job_id)
+            assert failed is not None
+            self.assertEqual(failed.status, "failed")
+            self.assertIn("does not cover the requested block range", failed.error or "")
+            with duckdb.connect(str(live), read_only=True) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "select snapshot_start_block, snapshot_end_block from pipeline_metadata where wallet_address = ?",
+                        [wallet],
+                    ).fetchone(),
+                    (0, 10),
+                )
+
     def test_scan_rejects_worker_that_drops_existing_wallet_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             live = Path(directory) / "live.duckdb"

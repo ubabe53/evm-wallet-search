@@ -313,7 +313,42 @@ class ScanJobManager:
         row = next((item for item in rows if item[0] == job.wallet_address), None)
         if row is None or row[1] != "hyperindex":
             raise RuntimeError("Wallet scan artifact has incorrect wallet or live provenance")
-        if row[2] != job.from_block or row[3] != job.to_block or not row[4]:
+        expected_snapshot_start = job.from_block
+        if previous_path is not None:
+            try:
+                import duckdb
+
+                with duckdb.connect(str(staging_path), read_only=True) as connection:
+                    previous = str(previous_path).replace("'", "''")
+                    connection.execute(f"attach '{previous}' as previous_live (read_only)")
+                    previous_metadata_exists = connection.execute(
+                        """
+                        select count(*)
+                        from duckdb_tables()
+                        where database_name = 'previous_live'
+                          and schema_name = 'main' and table_name = 'pipeline_metadata'
+                        """
+                    ).fetchone()[0]
+                    previous_row = (
+                        connection.execute(
+                            """
+                            select snapshot_start_block
+                            from previous_live.main.pipeline_metadata
+                            where lower(wallet_address) = lower(?)
+                            """,
+                            [job.wallet_address],
+                        ).fetchone()
+                        if previous_metadata_exists
+                        else None
+                    )
+                if previous_row is not None and previous_row[0] is not None:
+                    expected_snapshot_start = int(previous_row[0])
+            except Exception as error:
+                raise RuntimeError("Wallet scan artifact could not verify prior wallet coverage") from error
+        # snapshot_start_block is the wallet's cumulative coverage start, so an
+        # extending scan may legitimately begin after this value. The staged
+        # artifact must preserve that start and end at the requested finalized block.
+        if row[2] != expected_snapshot_start or row[3] != job.to_block or not row[4]:
             raise RuntimeError("Wallet scan artifact does not cover the requested block range")
         if job.observation_block_hash and row[4].lower() != job.observation_block_hash.lower():
             raise RuntimeError("Wallet scan artifact finalized block hash does not match the scan observation")
