@@ -16,6 +16,7 @@ from scripts.snapshot_runs import (
     fetch_hyperindex_metadata,
     finish_snapshot_run,
     latest_completed_snapshot_run,
+    mark_ingestion_complete,
     next_run_start,
     resolve_finalized_block,
     resolve_snapshot_target,
@@ -87,8 +88,52 @@ class SnapshotRunsTest(unittest.TestCase):
                 ("observation_block_number", "BIGINT", False, False),
                 ("observation_block_hash", "VARCHAR", False, False),
                 ("observation_timestamp", "TIMESTAMP WITH TIME ZONE", False, False),
+                ("ingestion_status", "VARCHAR", True, False),
+                ("raw_events_found", "BIGINT", False, False),
+                ("raw_ingested_at", "TIMESTAMP WITH TIME ZONE", False, False),
             ],
         )
+
+    def test_pipeline_run_keeps_ingestion_checkpoint_separate_from_publication(self) -> None:
+        run = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        mark_ingestion_complete(run, raw_events_found=4, database_path=self.database_path)
+        with duckdb.connect(str(self.database_path), read_only=True) as connection:
+            row = connection.execute(
+                "select status, ingestion_status, raw_events_found, raw_ingested_at from ops.pipeline_runs where run_id = ?",
+                [run.run_id],
+            ).fetchone()
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row[0:3], ("running", "completed", 4))
+        self.assertIsNotNone(row[3])
+
+    def test_failed_publication_reuses_completed_ingestion_without_new_run(self) -> None:
+        run = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        mark_ingestion_complete(run, raw_events_found=4, database_path=self.database_path)
+        finish_snapshot_run(run, database_path=self.database_path, succeeded=False)
+        retry = start_snapshot_run(
+            database_path=self.database_path,
+            wallet=WALLET,
+            metadata=HyperIndexMetadata(3, 100, None, True),
+            finalized_block=FinalizedBlock(75, "0x" + "a" * 64),
+        )
+        self.assertEqual(retry.run_id, run.run_id)
+        self.assertEqual(retry.from_block, run.from_block)
+        with duckdb.connect(str(self.database_path), read_only=True) as connection:
+            self.assertEqual(
+                connection.execute("select count(*) from ops.pipeline_runs").fetchone()[0],
+                1,
+            )
 
     def test_wallet_targets_use_composite_identity(self) -> None:
         with duckdb.connect(str(self.database_path)) as connection:
@@ -278,7 +323,7 @@ class SnapshotRunsTest(unittest.TestCase):
             ).fetchall()
         self.assertEqual(rows, [(first.run_id, "completed"), (second.run_id, "running")])
 
-    def test_dbt_environment_keeps_configured_start_for_complete_history(self) -> None:
+    def test_dbt_environment_separates_missing_interval_from_cumulative_coverage(self) -> None:
         run = SnapshotRun(
             run_id="run",
             chain_id=1,
@@ -291,7 +336,8 @@ class SnapshotRunsTest(unittest.TestCase):
             generation_id="generation",
         )
         environment = dbt_snapshot_environment(run, coverage_start_block=3)
-        self.assertEqual(environment["EVM_WALLET_SNAPSHOT_START_BLOCK"], "3")
+        self.assertEqual(environment["EVM_WALLET_SNAPSHOT_START_BLOCK"], "101")
+        self.assertEqual(environment["EVM_WALLET_SNAPSHOT_COVERAGE_START_BLOCK"], "3")
 
     def test_refuses_gaps_stale_indexer_and_empty_increment(self) -> None:
         with duckdb.connect(str(self.database_path)) as connection:

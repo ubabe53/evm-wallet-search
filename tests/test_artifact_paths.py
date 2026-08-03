@@ -18,6 +18,27 @@ WALLET_B = ConfiguredWallet("0x" + "b" * 40, "wallet-b")
 
 
 class ArtifactPathsTest(unittest.TestCase):
+    @patch("duckdb.connect")
+    def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect) -> None:
+        connection = connect.return_value.__enter__.return_value
+        connection.execute.return_value.fetchone.return_value = (7,)
+        run = SnapshotRun(
+            run_id="run",
+            chain_id=1,
+            wallet_address=WALLET_A.address,
+            wallet_label=WALLET_A.label,
+            from_block=3,
+            to_block=100,
+            to_block_hash="0x" + "a" * 64,
+            scope_version="wallet-transfer-signature-v1",
+            generation_id="generation",
+        )
+
+        self.assertEqual(run_dbt.count_hyperindex_events("postgresql://secret", run), 7)
+        count_query = connection.execute.call_args_list[2].args[0]
+        self.assertIn("chain_id = 1", count_query)
+        self.assertIn("lower(from_address) = ? or lower(to_address) = ?", count_query)
+
     def test_scan_wallet_address_is_normalized_and_selected(self) -> None:
         selected = run_dbt.select_scan_wallet([WALLET_A, WALLET_B], "  " + WALLET_B.address.upper() + "  ")
         self.assertEqual(selected, WALLET_B)
@@ -30,16 +51,22 @@ class ArtifactPathsTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "No configured wallet matches"):
             run_dbt.select_scan_wallet([WALLET_A, WALLET_B], "0x" + "c" * 40)
 
+    def test_scan_wallet_address_rejects_malformed_input(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "canonical Ethereum address"):
+            run_dbt.select_scan_wallet([WALLET_A], "0xnot-an-address")
+
     def test_single_wallet_is_selected_without_scan_wallet_address(self) -> None:
         self.assertEqual(run_dbt.select_scan_wallet([WALLET_A], None), WALLET_A)
 
     @patch("scripts.run_dbt.finish_snapshot_run")
+    @patch("scripts.run_dbt.mark_ingestion_complete")
+    @patch("scripts.run_dbt.count_hyperindex_events", return_value=0)
     @patch("scripts.run_dbt.run_dbt")
     @patch("scripts.run_dbt.start_snapshot_runs")
     @patch("scripts.run_dbt.resolve_snapshot_target")
     @patch("scripts.run_dbt.fetch_hyperindex_metadata")
     @patch("server.ens.resolve_scan_input")
-    @patch("scripts.run_dbt.read_configured_wallets", return_value=[WALLET_A, WALLET_B])
+    @patch("scripts.run_dbt.read_live_wallet_targets", return_value=[WALLET_A, WALLET_B])
     @patch("scripts.run_dbt.ensure_python_dependencies")
     @patch("scripts.run_dbt.resolved_runtime")
     def test_adding_wallet_b_does_not_create_a_run_for_wallet_a(
@@ -52,6 +79,8 @@ class ArtifactPathsTest(unittest.TestCase):
         resolve_target,
         start_runs,
         run,
+        _count_hyperindex_events,
+        _mark_ingestion_complete,
         _finish,
     ) -> None:
         snapshot = SnapshotRun(
