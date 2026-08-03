@@ -282,7 +282,6 @@ def main() -> None:
                 hyperindex_dsn=str(hyperindex_dsn),
                 extra_env=dbt_snapshot_environment(
                     snapshot_runs[0],
-                    coverage_start_block=metadata.start_block,
                 ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
             return
@@ -300,7 +299,6 @@ def main() -> None:
                 hyperindex_dsn=str(hyperindex_dsn) if hyperindex_dsn else None,
                 extra_env=dbt_snapshot_environment(
                     snapshot_runs[0],
-                    coverage_start_block=metadata.start_block,
                 ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
         except BaseException:

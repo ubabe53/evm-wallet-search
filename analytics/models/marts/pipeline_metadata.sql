@@ -69,9 +69,10 @@ account_evidence_metrics as (
 )
 
 {% if not var('use_fixture', true) %}, snapshot_runs as (
-  select chain_id, wallet_address, run_id, generation_id, from_block, to_block, to_block_hash
+  select chain_id, wallet_address, run_id, generation_id, coverage_start_block, from_block, to_block, to_block_hash
   from (
     select chain_id, wallet_address, run_id, generation_id, from_block, to_block, to_block_hash,
+      min(from_block) over (partition by chain_id, wallet_address) as coverage_start_block,
       row_number() over (
         partition by chain_id, wallet_address
         order by to_block desc, completed_at desc
@@ -79,7 +80,10 @@ account_evidence_metrics as (
     from ops.pipeline_runs
     where chain_id = 1
       and scope_version = '{{ env_var("EVM_WALLET_SNAPSHOT_SCOPE_VERSION") }}'
-      and status = 'completed'
+      and (
+        status = 'completed'
+        or run_id = '{{ env_var("EVM_WALLET_SNAPSHOT_RUN_ID") }}'
+      )
   )
   where wallet_run_rank = 1
 )
@@ -102,7 +106,7 @@ select
   {% else %}
   snapshot_runs.run_id as snapshot_run_id,
   snapshot_runs.generation_id as snapshot_generation_id,
-  snapshot_runs.from_block as snapshot_start_block,
+  snapshot_runs.coverage_start_block as snapshot_start_block,
   snapshot_runs.to_block as snapshot_end_block,
   snapshot_runs.to_block_hash as snapshot_end_block_hash,
   '{{ env_var("EVM_WALLET_SNAPSHOT_FINALITY_POLICY") }}' as snapshot_finality_policy,

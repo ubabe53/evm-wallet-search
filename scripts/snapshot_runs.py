@@ -697,13 +697,12 @@ def mark_ingestion_complete(
         raise RuntimeError("The snapshot run is not active and cannot record ingestion completion")
 
 
-def dbt_snapshot_environment(run: SnapshotRun, *, coverage_start_block: int) -> dict[str, str]:
+def dbt_snapshot_environment(run: SnapshotRun) -> dict[str, str]:
     return {
         "EVM_WALLET_SNAPSHOT_RUN_ID": run.run_id,
-        # Source models read only the interval being ingested. Coverage metadata
-        # retains the cumulative beginning of the wallet's contiguous history.
+        # Source models read only the interval being ingested. The metadata mart
+        # derives cumulative coverage from the completed run history per wallet.
         "EVM_WALLET_SNAPSHOT_START_BLOCK": str(run.from_block),
-        "EVM_WALLET_SNAPSHOT_COVERAGE_START_BLOCK": str(coverage_start_block),
         "EVM_WALLET_SNAPSHOT_END_BLOCK": str(run.to_block),
         "EVM_WALLET_SNAPSHOT_END_BLOCK_HASH": run.to_block_hash,
         "EVM_WALLET_SNAPSHOT_FINALITY_POLICY": FINALITY_POLICY,

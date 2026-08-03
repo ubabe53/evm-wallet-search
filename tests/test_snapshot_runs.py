@@ -335,9 +335,9 @@ class SnapshotRunsTest(unittest.TestCase):
             scope_version="wallet-transfer-signature-v1",
             generation_id="generation",
         )
-        environment = dbt_snapshot_environment(run, coverage_start_block=3)
+        environment = dbt_snapshot_environment(run)
         self.assertEqual(environment["EVM_WALLET_SNAPSHOT_START_BLOCK"], "101")
-        self.assertEqual(environment["EVM_WALLET_SNAPSHOT_COVERAGE_START_BLOCK"], "3")
+        self.assertNotIn("EVM_WALLET_SNAPSHOT_COVERAGE_START_BLOCK", environment)
 
     def test_refuses_gaps_stale_indexer_and_empty_increment(self) -> None:
         with duckdb.connect(str(self.database_path)) as connection:
