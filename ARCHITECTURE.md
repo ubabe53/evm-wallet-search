@@ -13,10 +13,11 @@ address/ENS input → server-side finalized ENS resolver
       │ provenance carried through the scan-job adapter to the worker
       ▼
 Envio HyperIndex
-      │ normalized Erc20Transfer entities
+      │ normalized Erc20Transfer entities (normal or isolated bounded job)
       ▼
 HyperIndex Postgres (ingestion persistence)
-      │ read-only dbt source in live mode
+      │ public Envio state + validated shared wallet_scan raw events/checkpoints
+      │ read-only dbt sources in live mode
       ▼
 dbt + offline token inputs + local account evidence cache
       │ staging → intermediate evidence → marts
@@ -38,7 +39,8 @@ The frontend selects exactly one path at build time: local development uses boun
 
 | Component | Location | Responsibility | Must not become |
 | --- | --- | --- | --- |
-| Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
+| Indexer | `indexer/` | Capture wallet-relevant `Transfer(address,address,uint256)` logs and persist one normalized entity per log; bounded jobs use isolated temporary schemas | A claim that every row is proven ERC-20, or a general trace/call/approval/arbitrary-wallet indexer without a scope decision |
+| Shared raw scan store | HyperIndex Postgres `wallet_scan` schema | Provide the worker-owned merge contract for deduplicated bounded-job events and completed wallet intervals, including empty intervals | A database per wallet, a replacement for Envio-owned checkpoints, or an analytics serving database |
 | Analytics | `analytics/` | Transform exact event facts and offline enrichment into tested DuckDB marts | A runtime RPC client or a place that hides source/provenance boundaries |
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
 | Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold additive HyperIndex-derived analytics for all completed wallets, durable wallet targets, wallet-scoped finalized scan generations, wallet-grained snapshot-run history, shared enrichment projections, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
@@ -62,6 +64,7 @@ Rules:
 
 - The browser never receives Postgres/RPC credentials or direct database access.
 - HyperIndex Postgres is the ingestion source, not the application query interface.
+- The shared raw helper never mutates Envio's normal `public` checkpoint state. It accepts only a temporary `wallet_scan_<job>` schema whose Envio-owned progress row proves the requested start/end was fully processed, re-verifies the endpoint hash through an authoritative finalized-block resolver, and transactionally validates and merges immutable event facts into `wallet_scan.transfer_events`. `wallet_scan.ingestion_runs` is the durable interval checkpoint contract, including for proven-complete zero-event ranges. Wiring bounded indexing, that helper, dbt, cleanup, and publication together remains the explicit scan-worker step.
 - DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. Orchestration owns `ops.pipeline_runs`, while the isolated `app.token_recognition_overrides` table is mutable local product state; dbt models rewrite neither schema.
 - Enrichment joins onto event facts. It may add sourced interpretation but must not rewrite immutable event evidence.
 - `int_wallet_transfer_events` is the shared, materialized semantic event relation. It keeps the
@@ -111,14 +114,13 @@ Detailed field grains and tests are in `docs/data-model.md`.
 ### Local analytics path
 
 ```text
-address/ENS input → server-side finalized ENS resolver → explicit scan-worker adapter → HyperIndex progress + Ethereum finalized block → dbt live source → `live.duckdb` → FastAPI → React
+address/ENS input → server-side finalized ENS resolver → explicit scan-worker adapter → HyperIndex/Postgres raw sources → dbt live source → staged `live.duckdb` → atomic publication → FastAPI → React
 
-The scan manager does not interpret ENS provenance or implement the indexer. It copies the complete
-live artifact into a temporary staging path and gives that path to the explicit worker adapter. The
-worker receives the typed finalized observation and must update the selected wallet's missing range
-in place, preserving every existing wallet and shared enrichment cache row. The manager validates
-the result and atomically publishes it; this is the publication boundary, not a claim that the
-manager itself can collect or merge chain data.
+The scan manager copies the complete live artifact into a temporary staging path and gives that path
+to the explicit worker adapter. The staged raw-store layer provides the worker's validated,
+transactional Postgres merge and durable interval-checkpoint contract, but this commit does not yet
+wire indexing, merge, dbt, cleanup, and publication into one command. Until that worker is configured,
+the manager still fails safely without replacing the served artifact.
 ```
 
 The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, selects one wallet through `EVM_WALLET_SCAN_ADDRESS`, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for that wallet, and advances coverage only after dbt succeeds. A new selected wallet starts at the configured start block; an existing selected wallet starts at its own latest completed block plus one. The complete live DuckDB artifact is additive: publishing a selected wallet must preserve prior wallet projections. Token RPC metadata is cached once per `(chain_id, token_address)` and counterparty bytecode evidence once per `(chain_id, address)`; new wallets reuse successful observations and only add missing candidates. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.
