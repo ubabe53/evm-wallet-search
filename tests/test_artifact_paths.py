@@ -18,8 +18,9 @@ WALLET_B = ConfiguredWallet("0x" + "b" * 40, "wallet-b")
 
 
 class ArtifactPathsTest(unittest.TestCase):
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=False)
     @patch("duckdb.connect")
-    def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect) -> None:
+    def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect, _shared_exists) -> None:
         connection = connect.return_value.__enter__.return_value
         connection.execute.return_value.fetchone.return_value = (7,)
         run = SnapshotRun(
@@ -138,7 +139,10 @@ class ArtifactPathsTest(unittest.TestCase):
 
     @patch("scripts.run_dbt.subprocess.run")
     @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
-    def test_live_build_uses_live_database_and_read_only_source_dsn(self, _which, run) -> None:
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=True)
+    def test_live_build_uses_live_database_and_read_only_source_dsn(
+        self, _shared_exists, _which, run
+    ) -> None:
         run_dbt.run_dbt(
             "build",
             ["--vars", '{"use_fixture": false}'],
@@ -150,7 +154,26 @@ class ArtifactPathsTest(unittest.TestCase):
         environment = run.call_args.kwargs["env"]
         self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(LIVE_DB_PATH))
         self.assertEqual(environment[run_dbt.HYPERINDEX_DSN_ENV], "postgresql://secret")
+        self.assertEqual(environment[run_dbt.EVM_WALLET_SHARED_RAW_ENABLED_ENV], "true")
         self.assertEqual(environment["EVM_WALLET_SNAPSHOT_END_BLOCK"], "100")
+
+    @patch("scripts.run_dbt.subprocess.run")
+    @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=True)
+    def test_worker_live_build_uses_explicit_staging_artifact(
+        self, _shared_exists, _which, run
+    ) -> None:
+        staging = LIVE_DB_PATH.parent / "wallet-scan-job" / "live.duckdb"
+        run_dbt.run_dbt(
+            "build",
+            ["--vars", '{"use_fixture": false}'],
+            use_hyperindex=True,
+            hyperindex_dsn="postgresql://read-only",
+            database_path_override=staging,
+        )
+
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(staging))
 
     def test_live_build_requires_a_dsn(self) -> None:
         with self.assertRaisesRegex(SystemExit, "Live HyperIndex mode requires"):

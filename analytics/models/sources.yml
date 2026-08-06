@@ -45,3 +45,47 @@ sources:
             description: Indexed `to` participant emitted by the log.
           - name: value_raw
             description: Unconstrained exact numeric event value; cast to text inside Postgres before DuckDB scans it.
+  - name: bounded_wallet_scan
+    description: Additive finalized wallet-scan events merged from isolated bounded Envio schemas into shared Postgres persistence.
+    database: hyperindex
+    schema: wallet_scan
+    quoting:
+      identifier: true
+    tables:
+      - name: transfer_event
+        identifier: transfer_events
+        description: Deduplicated bounded-scan Transfer-signature events stored independently from Envio checkpoint state. {{ doc('transfer_signature_scope') }}
+        meta:
+          grain: one captured Transfer-signature log
+          primary_key: [chain_id, transaction_hash, log_index]
+          persistence_owner: bounded wallet scan worker in HyperIndex Postgres
+          provenance: isolated Envio bounded scan merged after wallet/range validation
+          consumers: [stg_transfer_events in live mode when the relation exists]
+          completeness: bounded by completed wallet_scan.ingestion_runs intervals and finalized pipeline runs
+        columns:
+          - name: chain_id
+            description: EVM chain identifier; currently fixed to Ethereum mainnet.
+          - name: block_number
+            description: Number of the block containing the captured log.
+          - name: block_hash
+            description: Canonical block hash provided with the indexed event.
+          - name: block_timestamp
+            description: Event block timestamp stored as Unix seconds.
+          - name: transaction_hash
+            description: Hash of the transaction containing the log.
+          - name: transaction_index
+            description: Transaction position within the block.
+          - name: transaction_from_address
+            description: Nullable selected top-level transaction sender.
+          - name: transaction_to_address
+            description: Nullable selected top-level transaction target.
+          - name: log_index
+            description: Log position within the transaction.
+          - name: token_address
+            description: Address of the contract that emitted the shared Transfer signature.
+          - name: from_address
+            description: Indexed `from` participant emitted by the log.
+          - name: to_address
+            description: Indexed `to` participant emitted by the log.
+          - name: value_raw
+            description: Exact unconstrained numeric event value; cast to text before DuckDB scans it.

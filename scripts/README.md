@@ -12,7 +12,9 @@ side effects of deterministic fixture or dbt commands.
 
 | Script | Responsibility |
 | --- | --- |
-| [`run_indexer.py`](run_indexer.py) | Launch Envio code generation or development with shared configuration |
+| [`run_indexer.py`](run_indexer.py) | Launch Envio code generation/development or one isolated bounded wallet scan with shared configuration |
+| [`wallet_scan_worker.py`](wallet_scan_worker.py) | Sequence finalized bounded indexing, shared raw merge/checkpointing, staged dbt, and run completion |
+| [`wallet_scan_raw.py`](wallet_scan_raw.py) | Validate Envio progress/finality and transactionally merge canonical raw events into shared Postgres persistence |
 | [`run_dbt.py`](run_dbt.py) | Select isolated fixture/live artifacts, bootstrap dbt, and coordinate finalized live snapshots |
 | [`snapshot_runs.py`](snapshot_runs.py) | Resolve and record contiguous finalized scan attempts |
 | [`run_api.py`](run_api.py) | Bootstrap dependencies and bind FastAPI to loopback |
@@ -31,6 +33,8 @@ Use the root commands rather than invoking implementation scripts directly:
 
 ```sh
 bun run indexer:dev
+bun run indexer:scan -- --wallet 0x... --from-block 100 --to-block 200 --schema wallet_scan_example
+bun run wallet-scan:worker # normally invoked by the API with its WALLET_SCAN_* contract
 bun run analytics:build:fixture
 bun run analytics:build:hyperindex
 bun run export:dashboard
@@ -43,6 +47,13 @@ bun run api:dev
 Networked or potentially expensive commands are explicit:
 
 - `indexer:dev` starts HyperIndex and may index/backfill its configured range.
+- `indexer:scan` runs `envio start --restart` for one caller-validated wallet/range inside a
+  required temporary `wallet_scan_*` schema. It requires the local Envio services, performs
+  network indexing, and resets only that isolated schema; it neither proves finality nor merges or
+  publishes the resulting rows by itself.
+- `wallet-scan:worker` is the first-party API adapter. It requires the manager-provided
+  `WALLET_SCAN_*` job variables plus explicit read/write Postgres credentials, and it may start a
+  bounded network index before updating only the supplied staged DuckDB path.
 - `analytics:build:hyperindex` reads live progress/finality and writes a live snapshot attempt.
 - `tokens:refresh`, `labels:enrich`, and `addresses:enrich` contact external sources.
 

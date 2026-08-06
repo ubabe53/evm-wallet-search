@@ -4,14 +4,63 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from unittest.mock import patch
 
 import duckdb
 
 from server.ens import ResolvedScanInput
-from server.scan_jobs import ScanJobManager, resolve_wallet
+from server.scan_jobs import (
+    ScanJob,
+    ScanJobManager,
+    configured_scan_worker,
+    resolve_wallet,
+)
 
 
 class ScanJobsTest(unittest.TestCase):
+    @patch(
+        "server.scan_jobs.resolved_runtime",
+        return_value={"ethereum_rpc_url": "https://configured-rpc.example"},
+    )
+    def test_scan_resolution_uses_shared_runtime_rpc_configuration(self, _runtime) -> None:
+        self.assertEqual(
+            ScanJobManager._rpc_url(),
+            "https://configured-rpc.example",
+        )
+
+    @patch("server.scan_jobs.subprocess.run")
+    def test_bundled_worker_receives_job_identity_and_original_input(self, run) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory) / "live.duckdb"
+            staging.touch()
+            job = ScanJob(
+                job_id="12345678-abcd-1234-abcd-1234567890ab",
+                requested_value="alice.eth",
+                wallet_address="0x" + "a" * 40,
+                wallet_label="alice.eth",
+                status="running",
+                progress=1,
+                from_block=10,
+                to_block=20,
+                error=None,
+                created_at="2026-08-06T12:00:00+00:00",
+                updated_at="2026-08-06T12:00:00+00:00",
+                resolver_source="ens-registry:test/resolver:test",
+                observation_block_number=20,
+                observation_block_hash="0x" + "b" * 64,
+                observation_timestamp="2026-08-06T12:00:00+00:00",
+            )
+            progress = []
+            with patch.dict("server.scan_jobs.os.environ", {}, clear=True):
+                configured_scan_worker(job, staging, progress.append)
+
+        command = run.call_args.args[0]
+        environment = run.call_args.kwargs["env"]
+        self.assertTrue(str(command[-1]).endswith("scripts/wallet_scan_worker.py"))
+        self.assertEqual(environment["WALLET_SCAN_JOB_ID"], job.job_id)
+        self.assertEqual(environment["WALLET_SCAN_REQUESTED_VALUE"], "alice.eth")
+        self.assertEqual(progress, [5, 95])
+
     def test_serializes_jobs_and_replaces_only_after_success(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             live = Path(directory) / "live.duckdb"

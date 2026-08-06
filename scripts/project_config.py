@@ -64,6 +64,12 @@ def resolved_runtime(config: Mapping[str, Any] | None = None) -> dict[str, str |
             "analytics",
             "hyperindex_postgres_dsn",
         ),
+        "wallet_scan_postgres_dsn": configured_value(
+            "WALLET_SCAN_POSTGRES_DSN",
+            values,
+            "analytics",
+            "wallet_scan_postgres_dsn",
+        ),
         "hyperindex_graphql_url": configured_value(
             "HYPERINDEX_GRAPHQL_URL",
             values,

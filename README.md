@@ -1,14 +1,13 @@
 # EVM Wallet Search
 
-An evidence-first Ethereum wallet interaction dashboard for one selected configured wallet. The project
+An evidence-first Ethereum wallet interaction dashboard for selected Ethereum wallets. The project
 indexes wallet-relevant `Transfer(address,address,uint256)` logs with Envio HyperIndex, builds
 reproducible DuckDB analytics with dbt, and serves them through a loopback FastAPI API to a React
 dashboard.
 
-The current target is Ethereum mainnet (`chain_id = 1`) and the pinned address
-`0xd8da6bf26964af9d7eed9e03e53415d37aa96045`. Its `vitalik.eth` label is project configuration,
-not a live ENS-resolution claim unless a scan job explicitly resolves it through the server-side
-ENS input boundary at a finalized block.
+The current target is Ethereum mainnet (`chain_id = 1`). The pinned fixture address and its
+`vitalik.eth` label are demo configuration only, not a live fallback or live ENS-resolution claim.
+Live scan jobs accept an address or resolve ENS through the server-side boundary at a finalized block.
 
 > [!IMPORTANT]
 > The event source is ERC-20-intended, not standards-proof. ERC-721 uses the same `Transfer`
@@ -33,7 +32,7 @@ or account history.
 ```mermaid
 flowchart LR
     eth["Ethereum mainnet<br/>Transfer-signature logs"] --> indexer["Envio HyperIndex<br/>indexer/"]
-    indexer --> postgres["HyperIndex Postgres<br/>ingestion persistence"]
+    indexer --> postgres["HyperIndex Postgres<br/>public + shared bounded raw persistence"]
     postgres --> dbt["dbt transformations<br/>analytics/"]
     enrich["Offline token inputs +<br/>local account evidence"] --> dbt
     dbt --> live["live.duckdb<br/>finalized-range snapshot"]
@@ -50,11 +49,11 @@ rows within the recorded `live.duckdb` coverage through the API. The static buil
 bounded fixture JSON and cannot establish live HyperIndex coverage. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for dependency rules, trust boundaries, and known gaps.
 
-The wallet seed may contain more than one target, but each live build selects exactly one with
-`EVM_WALLET_SCAN_ADDRESS`; when it is unset, exactly one configured wallet is required. The live
-artifact is a single-wallet projection. It does not merge separate wallet builds or claim combined
-persistence; a later dashboard merge worker requires an explicit architecture and data-contract
-decision.
+Each live build transforms one selected wallet interval, but `live.duckdb` retains completed
+projections and finalized run history for every scanned wallet. `EVM_WALLET_SCAN_ADDRESS` selects
+one wallet for a manual live build; the dashboard supplies its selected wallet to the bundled
+bounded worker. Shared token and counterparty enrichment remain keyed by canonical address rather
+than repeated per wallet.
 
 ## Dashboard and demo
 
@@ -68,9 +67,11 @@ The local dashboard exposes:
 - live mode wallet/ENS scan submission with progress, failure preservation, automatic switching,
   and a completed-wallet list; fixture mode keeps these controls disabled.
 
-Scan jobs are exposed by the local API and currently use `WALLET_SCAN_COMMAND` as the explicit
-adapter for the future multi-wallet indexer. The command must produce a block-0-to-finalized
-artifact; the API atomically replaces the served artifact only after success.
+Scan jobs are exposed by the local API and use the bundled bounded worker by default.
+`WALLET_SCAN_COMMAND` remains an optional adapter override. The worker indexes only the wallet's
+missing finalized range, merges validated raw rows into shared Postgres persistence, updates a
+staged copy of the complete DuckDB artifact, and lets the API publish it atomically only after
+preservation and provenance validation succeed.
 
 The production Vite build is the deterministic fixture demo. It is useful for interaction and
 presentation checks, but its fixture badge, bounded payload, and unrecorded scan coverage are part
@@ -96,8 +97,9 @@ bun run dashboard:dev:fixture
 Open the local URL printed by Vite. This runs only the deterministic fixture path; it does not
 start HyperIndex or produce live-wallet analytics.
 
-For the primary local product, Docker, an Envio token, and the HyperIndex Postgres DSN are also
-required; Ethereum RPC can use the configured public fallback. Follow the
+For the primary local product, Docker, an Envio token, a read-only HyperIndex Postgres DSN for
+manual builds, and an explicit write-capable wallet-scan DSN are also required. The scan worker
+uses its one DSN for persistence and a read-only dbt attachment to that same database. Ethereum RPC can use the configured public fallback. Follow the
 [live setup and recovery guide](docs/operations.md#local-setup) rather than treating the fixture
 quick start as a production workflow. Set `EVM_WALLET_SCAN_ADDRESS` for both the live build and
 the local API process when selecting a wallet. The live API has no hardcoded wallet fallback: if
