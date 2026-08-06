@@ -108,6 +108,37 @@ def read_configured_wallet(path: Path = WALLETS_PATH) -> ConfiguredWallet:
     return wallets[0]
 
 
+def read_live_wallet_targets(database_path: Path = LIVE_DB_PATH) -> list[ConfiguredWallet]:
+    """Read the durable live target registry; fixture seeds are not consulted."""
+
+    if not database_path.exists():
+        return []
+    import duckdb
+
+    with duckdb.connect(str(database_path), read_only=True) as connection:
+        exists = connection.execute(
+            "select count(*) from information_schema.tables "
+            "where table_schema = 'ops' and table_name = 'wallet_targets'"
+        ).fetchone()
+        if exists is None or exists[0] == 0:
+            return []
+        rows = connection.execute(
+            "select wallet_address, wallet_label from ops.wallet_targets "
+            "where chain_id = 1 order by wallet_address"
+        ).fetchall()
+    return [ConfiguredWallet(str(address).lower(), str(label)) for address, label in rows]
+
+
+def ensure_live_target_registry(database_path: Path = LIVE_DB_PATH) -> None:
+    """Apply the additive live orchestration schema before target selection."""
+
+    import duckdb
+
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    with duckdb.connect(str(database_path)) as connection:
+        ensure_run_table(connection)
+
+
 def _http_json(url: str, payload: dict[str, Any]) -> Any:
     request = urllib.request.Request(
         url,
@@ -251,11 +282,14 @@ def ensure_run_table(connection: Any) -> None:
           scope_version varchar not null,
           original_input varchar,
           normalized_name varchar,
-          resolver_source varchar,
-          observation_block_number bigint,
-          observation_block_hash varchar,
-          observation_timestamp timestamptz,
-          unique (generation_id, chain_id, wallet_address),
+              resolver_source varchar,
+              observation_block_number bigint,
+              observation_block_hash varchar,
+              observation_timestamp timestamptz,
+              ingestion_status varchar not null default 'pending',
+              raw_events_found bigint,
+              raw_ingested_at timestamptz,
+              unique (generation_id, chain_id, wallet_address),
           check (from_block <= to_block)
         )
         """
@@ -330,6 +364,9 @@ def ensure_run_table(connection: Any) -> None:
         ("observation_block_number", "bigint"),
         ("observation_block_hash", "varchar"),
         ("observation_timestamp", "timestamptz"),
+        ("ingestion_status", "varchar default 'pending'"),
+        ("raw_events_found", "bigint"),
+        ("raw_ingested_at", "timestamptz"),
     ):
         connection.execute(
             f"alter table ops.pipeline_runs add column if not exists {column} {definition}"
@@ -436,6 +473,46 @@ def start_snapshot_runs(
             ).fetchone()
             if active_run is not None:
                 raise RuntimeError(f"Snapshot run {active_run[0]} is already running")
+            retry_row = connection.execute(
+                """
+                select run_id, chain_id, generation_id, wallet_address, wallet_label,
+                  from_block, to_block, to_block_hash, scope_version, original_input,
+                  normalized_name, resolver_source, observation_block_number,
+                  observation_block_hash, observation_timestamp
+                from ops.pipeline_runs
+                where chain_id = ? and wallet_address = ? and scope_version = ?
+                  and from_block = ? and to_block = ? and to_block_hash = ?
+                  and status = 'failed' and ingestion_status = 'completed'
+                order by completed_at desc
+                limit 1
+                """,
+                [CHAIN_ID, wallet.address, SCOPE_VERSION, from_blocks[wallet.address],
+                 finalized_block.number, finalized_block.block_hash],
+            ).fetchone()
+            if retry_row is not None:
+                connection.execute(
+                    "update ops.pipeline_runs set status = 'running', completed_at = null where run_id = ?",
+                    [retry_row[0]],
+                )
+                connection.execute(
+                    "update ops.scan_generations set status = 'running', completed_at = null where generation_id = ?",
+                    [retry_row[2]],
+                )
+                runs.append(
+                    SnapshotRun(
+                        run_id=str(retry_row[0]), chain_id=int(retry_row[1]), generation_id=str(retry_row[2]),
+                        wallet_address=str(retry_row[3]), wallet_label=str(retry_row[4]),
+                        from_block=int(retry_row[5]), to_block=int(retry_row[6]),
+                        to_block_hash=str(retry_row[7]), scope_version=str(retry_row[8]),
+                        original_input=str(retry_row[9] or retry_row[4]),
+                        normalized_name=None if retry_row[10] is None else str(retry_row[10]),
+                        resolver_source=str(retry_row[11] or "legacy-configured-wallet"),
+                        observation_block_number=int(retry_row[12] or retry_row[6]),
+                        observation_block_hash=str(retry_row[13] or retry_row[7]),
+                        observation_timestamp=retry_row[14] or datetime.now(timezone.utc),
+                    )
+                )
+                continue
             generation_id = str(uuid.uuid4())
             from_block = from_blocks[wallet.address]
             if scan_input is None:
@@ -594,10 +671,38 @@ def finish_snapshot_run(
             )
 
 
-def dbt_snapshot_environment(run: SnapshotRun, *, coverage_start_block: int) -> dict[str, str]:
+def mark_ingestion_complete(
+    run: SnapshotRun,
+    *,
+    raw_events_found: int | None,
+    database_path: Path = LIVE_DB_PATH,
+) -> None:
+    """Checkpoint durable HyperIndex ingestion without publishing analytics."""
+
+    if raw_events_found is not None and raw_events_found < 0:
+        raise ValueError("raw_events_found must be non-negative")
+    import duckdb
+
+    with duckdb.connect(str(database_path)) as connection:
+        updated = connection.execute(
+            """
+            update ops.pipeline_runs
+            set ingestion_status = 'completed', raw_events_found = ?, raw_ingested_at = ?
+            where run_id = ? and status = 'running'
+            returning run_id
+            """,
+            [raw_events_found, datetime.now(timezone.utc), run.run_id],
+        ).fetchone()
+    if updated is None:
+        raise RuntimeError("The snapshot run is not active and cannot record ingestion completion")
+
+
+def dbt_snapshot_environment(run: SnapshotRun) -> dict[str, str]:
     return {
         "EVM_WALLET_SNAPSHOT_RUN_ID": run.run_id,
-        "EVM_WALLET_SNAPSHOT_START_BLOCK": str(coverage_start_block),
+        # Source models read only the interval being ingested. The metadata mart
+        # derives cumulative coverage from the completed run history per wallet.
+        "EVM_WALLET_SNAPSHOT_START_BLOCK": str(run.from_block),
         "EVM_WALLET_SNAPSHOT_END_BLOCK": str(run.to_block),
         "EVM_WALLET_SNAPSHOT_END_BLOCK_HASH": run.to_block_hash,
         "EVM_WALLET_SNAPSHOT_FINALITY_POLICY": FINALITY_POLICY,

@@ -18,7 +18,7 @@ Deduplicates wallet-relevant Transfer-signature entities by the canonical `(chai
 
 ### `stg_wallets`
 
-Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` value remains pinned project configuration for presentation and snapshot labeling; it is not live ENS-resolution evidence and is not copied into event facts. The seed may contain multiple targets, but each live dbt build selects exactly one with `EVM_WALLET_SCAN_ADDRESS` (or requires one target when the variable is unset), and `stg_wallets` is the selected-wallet projection used by that build. Separate live wallet projections are not merged into one artifact:
+Configured wallet targets at `(chain_id, wallet_address)` grain. `wallet_id` is not retained because chain plus normalized address is the canonical key. The current `ens` value remains pinned project configuration for presentation and snapshot labeling; it is not live ENS-resolution evidence and is not copied into event facts. The seed may contain multiple targets. Live transfer staging still selects exactly one with `EVM_WALLET_SCAN_ADDRESS` (or requires one target when the variable is unset), and `stg_wallets` is the selected-wallet projection used for that interval. The live `pipeline_metadata` mart reads the durable target registry and retains one metadata row per target with a completed snapshot run in the current scope version, while temporarily including the current in-flight run during dbt materialization so the staged artifact has current provenance. Separate completed wallet projections remain together in the complete artifact. Unscanned registry targets remain pending until their first run completes:
 
 - `vitalik.eth`
 - `0xd8da6bf26964af9d7eed9e03e53415d37aa96045`
@@ -52,7 +52,7 @@ The normalized fields are:
 
 Tokens without a registry match or manual recognition remain in event marts as `other`. Sourced token `decimals` remain nullable metadata; they never alter the exact emitted raw value.
 
-Raw RPC observations remain separate in `token_rpc_metadata` (or `token_rpc_metadata_fixture` for deterministic fixture builds) at one row per attempted token address. That relation preserves the returned `name`, `symbol`, and `decimals` alongside `rpc_block_number`, `fetched_at`, `fetch_status`, and `error_code`. The resolved enrichment consumes complete or partial metadata and excludes failed-only attempts, but it does not copy RPC execution fields into every resolved token row.
+Raw RPC observations remain separate in `token_rpc_metadata` (or `token_rpc_metadata_fixture` for deterministic fixture builds) at one row per attempted Ethereum token address, shared by every tracked wallet. The current mainnet-only seed contract uses `token_address` as its key. That relation preserves the returned `name`, `symbol`, and `decimals` alongside `rpc_block_number`, `fetched_at`, `fetch_status`, and `error_code`. The resolved enrichment consumes complete or partial metadata and excludes failed-only attempts, but it does not copy RPC execution fields into every resolved token row. Adding a wallet can introduce new token candidates, while normal enrichment skips existing rows; explicit retry or refresh modes may query failed or selected cached rows again.
 
 ### `int_wallet_transfer_events`
 
@@ -120,7 +120,7 @@ These tables are created and owned by Python application/orchestration code rath
 
 ### `account_evidence.account_evidence`
 
-The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read-only under the `account_evidence` catalog during live dbt builds. Its grain and primary key are one retained observation per `(chain_id, address)`. Successful observations are preserved; failed attempts can be replaced by a later successful result.
+The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read-only under the `account_evidence` catalog during live dbt builds. Its grain and primary key are one retained observation per `(chain_id, address)`, shared across every tracked wallet. Successful observations are preserved; failed attempts can be replaced by a later successful result. A new wallet reuses successful observations for counterparties already present in this cache and only collects addresses without a successful observation; failed observations remain retryable.
 
 | Column | Physical contract | Semantics |
 | --- | --- | --- |
@@ -143,7 +143,7 @@ The ignored `analytics/artifacts/account_evidence.duckdb` cache is attached read
 
 Live orchestration owns `ops.wallet_targets` at exactly one durable row per `(chain_id, wallet_address)`, with that composite key and no synthetic target identity. It also owns `ops.scan_generations` at one wallet-scoped finalized interval, canonical end hash, scope, and lifecycle status per attempted wallet snapshot. A generation and its `pipeline_runs` row never coordinate or imply continuity for another wallet.
 
-The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. Retries may repeat an interval with a new run ID after a failed attempt. `wallet_label` is derived from the pinned configured ENS value, falling back to the wallet address; the separate input/provenance fields below record any finalized ENS resolution.
+The live build wrapper creates this table inside `analytics/artifacts/live.duckdb`; dbt does not model, seed, replace, or export it. Its grain is one attempted run for `(chain_id, wallet_address, scope_version, from_block, to_block)`, identified by `run_id`. A failed run whose raw ingestion checkpoint is complete is reopened and reused for publication retry; failures before that checkpoint remain auditable and retryable. `wallet_label` is derived from the pinned configured ENS value, falling back to the wallet address; the separate input/provenance fields below record any finalized ENS resolution.
 
 | Column | Physical contract | Semantics |
 | --- | --- | --- |
@@ -165,8 +165,11 @@ The live build wrapper creates this table inside `analytics/artifacts/live.duckd
 | `observation_block_number` | `BIGINT NOT NULL` | Finalized Ethereum block at which the input was resolved or directly observed. |
 | `observation_block_hash` | `VARCHAR NOT NULL` | Canonical hash for `observation_block_number`. |
 | `observation_timestamp` | `TIMESTAMPTZ NOT NULL` | UTC block timestamp for the finalized observation. |
+| `ingestion_status` | `VARCHAR NOT NULL` | `pending` until durable raw HyperIndex ingestion is acknowledged; then `completed`. This is independent of analytics publication. |
+| `raw_events_found` | nullable `BIGINT` | Count observed during the durable raw-ingestion checkpoint. |
+| `raw_ingested_at` | nullable `TIMESTAMPTZ` | UTC time when durable raw ingestion was acknowledged. |
 
-The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance each wallet's next start to that wallet's previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. A run completes only after dbt succeeds. During a live dbt build, `pipeline_metadata` selects the latest run at the current finalized end independently for each wallet, so one wallet's generation cannot supply another wallet's provenance. Rebuilding transformations while already current reuses each wallet's latest completed run rather than creating a false scan interval.
+The first interval starts at HyperIndex `_meta.startBlock`. Only completed, exactly contiguous intervals advance each wallet's next start to that wallet's previous `to_block + 1`; failed rows remain auditable and retryable. The target is the newest block that is both fully processed by HyperIndex and no newer than Ethereum's current `finalized` head, capped by a configured HyperIndex end when present. Its canonical hash is fetched from Ethereum RPC. Durable raw ingestion is acknowledged before publication begins. If publication fails after that acknowledgement, a retry reopens the same failed run and interval instead of creating a new ingestion attempt; if ingestion is still pending, the failed interval remains retryable through the normal orchestration path. A run becomes `completed` only after dbt succeeds. During a live dbt build, `pipeline_metadata` selects each wallet's latest completed run in the current scope independently, plus the current in-flight run for the wallet being built, so one wallet's generation cannot supply another wallet's provenance and wallets may temporarily have different finalized coverage ends. The manager publishes only after the worker succeeds and the run is completed. Rebuilding transformations while already current reuses each wallet's latest completed run rather than creating a false scan interval.
 
 When an older artifact is opened, the additive schema migration keeps legacy rows readable with
 `legacy-configured-wallet` provenance and their recorded snapshot end block/hash; only new runs

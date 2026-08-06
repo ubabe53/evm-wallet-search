@@ -1,4 +1,20 @@
-with event_metrics as (
+with
+{% if var('use_fixture', true) %}
+wallets as (
+  select chain_id, ens, wallet_address
+  from {{ ref('stg_wallets') }}
+),
+{% else %}
+wallets as (
+  select
+    chain_id,
+    wallet_label as ens,
+    lower(wallet_address) as wallet_address
+  from ops.wallet_targets
+),
+{% endif %}
+
+event_metrics as (
   select
     chain_id,
     wallet_address,
@@ -53,18 +69,21 @@ account_evidence_metrics as (
 )
 
 {% if not var('use_fixture', true) %}, snapshot_runs as (
-  select wallet_address, run_id, generation_id, from_block, to_block, to_block_hash
+  select chain_id, wallet_address, run_id, generation_id, coverage_start_block, from_block, to_block, to_block_hash
   from (
-    select wallet_address, run_id, generation_id, from_block, to_block, to_block_hash,
+    select chain_id, wallet_address, run_id, generation_id, from_block, to_block, to_block_hash,
+      min(from_block) over (partition by chain_id, wallet_address) as coverage_start_block,
       row_number() over (
         partition by chain_id, wallet_address
-        order by to_block desc, case when status = 'running' then 0 else 1 end, completed_at desc nulls first
+        order by to_block desc, completed_at desc
       ) as wallet_run_rank
     from ops.pipeline_runs
     where chain_id = 1
       and scope_version = '{{ env_var("EVM_WALLET_SNAPSHOT_SCOPE_VERSION") }}'
-      and to_block = cast('{{ env_var("EVM_WALLET_SNAPSHOT_END_BLOCK") }}' as bigint)
-      and status in ('running', 'completed')
+      and (
+        status = 'completed'
+        or run_id = '{{ env_var("EVM_WALLET_SNAPSHOT_RUN_ID") }}'
+      )
   )
   where wallet_run_rank = 1
 )
@@ -87,7 +106,7 @@ select
   {% else %}
   snapshot_runs.run_id as snapshot_run_id,
   snapshot_runs.generation_id as snapshot_generation_id,
-  snapshot_runs.from_block as snapshot_start_block,
+  snapshot_runs.coverage_start_block as snapshot_start_block,
   snapshot_runs.to_block as snapshot_end_block,
   snapshot_runs.to_block_hash as snapshot_end_block_hash,
   '{{ env_var("EVM_WALLET_SNAPSHOT_FINALITY_POLICY") }}' as snapshot_finality_policy,
@@ -112,9 +131,9 @@ select
   evidence.account_evidence_observation_block_timestamp_min,
   evidence.account_evidence_observation_block_timestamp_max,
   evidence.account_evidence_schema_version
-from {{ ref('stg_wallets') }} as wallets
+from wallets
 left join event_metrics as events using (chain_id, wallet_address)
 left join account_evidence_metrics as evidence using (chain_id, wallet_address)
 {% if not var('use_fixture', true) %}
-left join snapshot_runs using (wallet_address)
+join snapshot_runs using (chain_id, wallet_address)
 {% endif %}

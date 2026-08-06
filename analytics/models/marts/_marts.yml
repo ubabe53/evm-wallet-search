@@ -270,7 +270,7 @@ models:
         description: UTC time at which dbt materialized this metadata row.
         tests: [not_null]
       - name: snapshot_run_id
-        description: Nullable identifier of the completed live pipeline run supporting this artifact.
+        description: Nullable identifier of the completed live pipeline run supporting the published artifact; the current in-flight run may appear temporarily during dbt materialization.
       - name: snapshot_generation_id
         description: Nullable identifier shared by the wallet-grained runs in one finalized scan generation.
       - name: snapshot_start_block

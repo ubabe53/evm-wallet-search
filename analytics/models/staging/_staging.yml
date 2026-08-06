@@ -58,7 +58,7 @@ models:
       materialization: view
       grain: one configured wallet per chain
       primary_key: [chain_id, wallet_address]
-      provenance: wallets seed
+      provenance: ops.wallet_targets in live mode; wallets seed in fixture mode
       consumers: [int_wallet_transfer_events, pipeline_metadata]
     columns:
       - name: chain_id

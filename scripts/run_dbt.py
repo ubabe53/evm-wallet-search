@@ -30,13 +30,17 @@ try:
     from .enrich_token_metadata import JsonRpcClient
     from .project_config import resolved_runtime
     from .snapshot_runs import (
+        ADDRESS_PATTERN,
         ConfiguredWallet,
         SnapshotAlreadyCurrent,
+        SnapshotRun,
         dbt_snapshot_environment,
+        ensure_live_target_registry,
         fetch_hyperindex_metadata,
         finish_snapshot_run,
         latest_completed_snapshot_run,
-        read_configured_wallets,
+        mark_ingestion_complete,
+        read_live_wallet_targets,
         resolve_snapshot_target,
         start_snapshot_runs,
     )
@@ -52,13 +56,17 @@ except ImportError:
     from enrich_token_metadata import JsonRpcClient
     from project_config import resolved_runtime
     from snapshot_runs import (
+        ADDRESS_PATTERN,
         ConfiguredWallet,
         SnapshotAlreadyCurrent,
+        SnapshotRun,
         dbt_snapshot_environment,
+        ensure_live_target_registry,
         fetch_hyperindex_metadata,
         finish_snapshot_run,
         latest_completed_snapshot_run,
-        read_configured_wallets,
+        mark_ingestion_complete,
+        read_live_wallet_targets,
         resolve_snapshot_target,
         start_snapshot_runs,
     )
@@ -68,6 +76,33 @@ REQUIREMENTS = ANALYTICS_DIR / "requirements.txt"
 HYPERINDEX_DSN_ENV = "DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN"
 EVM_WALLET_SCAN_ADDRESS_ENV = "EVM_WALLET_SCAN_ADDRESS"
 DBT_DOCS_SUBCOMMANDS = {"generate", "serve"}
+
+
+def count_hyperindex_events(dsn: str, run: SnapshotRun) -> int:
+    """Count durable wallet-scoped raw rows before analytics publication."""
+
+    import duckdb
+
+    wallet_address = str(run.wallet_address)
+    escaped_dsn = dsn.replace("'", "''")
+    with duckdb.connect(":memory:") as connection:
+        connection.execute("install postgres; load postgres")
+        connection.execute(
+            f"attach '{escaped_dsn}' as hyperindex (type postgres, read_only)"
+        )
+        row = connection.execute(
+            """
+            select count(*)
+            from hyperindex.public."Erc20Transfer"
+            where chain_id = 1
+              and block_number between ? and ?
+              and (lower(from_address) = ? or lower(to_address) = ?)
+            """,
+            [run.from_block, run.to_block, wallet_address, wallet_address],
+        ).fetchone()
+    if row is None:
+        raise RuntimeError("Could not count durable HyperIndex rows for the snapshot interval")
+    return int(row[0])
 
 
 def ensure_python_dependencies() -> None:
@@ -172,6 +207,8 @@ def select_scan_wallet(
 
     normalized_address = configured_address.strip().lower() if configured_address else None
     if normalized_address:
+        if not ADDRESS_PATTERN.fullmatch(normalized_address):
+            raise RuntimeError(f"{EVM_WALLET_SCAN_ADDRESS_ENV} must be a canonical Ethereum address")
         for wallet in wallets:
             if wallet.address == normalized_address:
                 return wallet
@@ -203,7 +240,16 @@ def main() -> None:
         metadata = fetch_hyperindex_metadata(str(graphql_url))
         rpc_client = JsonRpcClient(str(rpc_url))
         finalized_block = resolve_snapshot_target(rpc_client, metadata)
-        wallets = read_configured_wallets()
+        ensure_live_target_registry()
+        wallets = read_live_wallet_targets()
+        configured_address = os.environ.get(EVM_WALLET_SCAN_ADDRESS_ENV)
+        if configured_address and not any(
+            wallet.address == configured_address.strip().lower() for wallet in wallets
+        ):
+            # A new explicit live target is registered by start_snapshot_runs;
+            # it is never sourced from the fixture wallets.csv seed.
+            normalized_address = configured_address.strip().lower()
+            wallets.append(ConfiguredWallet(normalized_address, normalized_address))
         selected_wallet = select_scan_wallet(
             wallets, os.environ.get(EVM_WALLET_SCAN_ADDRESS_ENV)
         )
@@ -236,11 +282,16 @@ def main() -> None:
                 hyperindex_dsn=str(hyperindex_dsn),
                 extra_env=dbt_snapshot_environment(
                     snapshot_runs[0],
-                    coverage_start_block=metadata.start_block,
                 ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
             return
         try:
+            for snapshot_run in snapshot_runs:
+                raw_events_found = count_hyperindex_events(str(hyperindex_dsn), snapshot_run)
+                mark_ingestion_complete(
+                    snapshot_run,
+                    raw_events_found=raw_events_found,
+                )
             run_dbt(
                 command,
                 sys.argv[2:],
@@ -248,7 +299,6 @@ def main() -> None:
                 hyperindex_dsn=str(hyperindex_dsn) if hyperindex_dsn else None,
                 extra_env=dbt_snapshot_environment(
                     snapshot_runs[0],
-                    coverage_start_block=metadata.start_block,
                 ) | {EVM_WALLET_SCAN_ADDRESS_ENV: selected_wallet.address},
             )
         except BaseException:

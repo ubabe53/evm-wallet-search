@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import duckdb
 from eth_abi.abi import encode
 
 from scripts.enrich_token_metadata import (
@@ -60,6 +61,24 @@ class RpcMetadataTest(unittest.TestCase):
         self.assertEqual(select_candidates(connection, existing, 10), ["0x3"])
         self.assertEqual(select_candidates(connection, existing, 10, retry_failed=True), ["0x2"])
         self.assertEqual(select_candidates(connection, existing, 2, refresh=True), ["0x1", "0x2"])
+
+    def test_shared_token_cache_is_reused_across_wallets(self) -> None:
+        with duckdb.connect(":memory:") as connection:
+            connection.execute(
+                "create table wallet_events (wallet_address varchar, token_address varchar, recognition_status varchar)"
+            )
+            connection.executemany(
+                "insert into wallet_events values (?, ?, 'other')",
+                [("0xwallet-a", "0xshared"), ("0xwallet-b", "0xshared"), ("0xwallet-b", "0xnew")],
+            )
+            self.assertEqual(
+                select_candidates(
+                    connection,
+                    {"0xshared": {"fetch_status": "complete"}},
+                    10,
+                ),
+                ["0xnew"],
+            )
 
     def test_fetches_complete_and_failed_rows_at_one_block(self) -> None:
         rows = fetch_metadata(FakeMetadataClient(), ["0x1", "0x2"], "0x64")
