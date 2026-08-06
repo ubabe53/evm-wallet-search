@@ -171,6 +171,25 @@ Run the indexer locally:
 bun run indexer:dev
 ```
 
+The low-level bounded indexer entrypoint is reserved for the scan worker and assumes the local
+Envio Postgres/Hasura environment is already running:
+
+```sh
+bun run indexer:scan -- \
+  --wallet 0x0000000000000000000000000000000000000001 \
+  --from-block 100 --to-block 200 \
+  --schema wallet_scan_example --indexer-port 8082
+```
+
+It creates an ignored temporary Envio config, applies the inclusive `start_block`/`end_block`, and
+runs `envio start --restart` only inside the required `wallet_scan_*` Postgres schema. The schema
+and non-default port isolate the bounded process from the persistent `public` indexer. Never pass a
+persistent schema to this command. This entrypoint checks only address, range, schema, and port
+syntax; it does not resolve Ethereum finality or verify an end-block hash. The higher-level scan
+worker must supply the already-pinned finalized range, merge and checkpoint the resulting rows,
+and clean up the temporary schema. Running `indexer:scan` directly does not update the shared raw
+dataset or `live.duckdb`.
+
 Local HyperIndex requires Docker and an `ENVIO_API_TOKEN`. The indexer uses Envio wildcard indexing with topic filters for the configured wallet and writes `Erc20Transfer` entities to Postgres. It persists the canonical block hash provided with each event, while its opt-in field selection includes top-level transaction `from` and `to`; the transaction-envelope columns are nullable so existing rows can remain readable during migration. Raw event duplication is disabled.
 
 Run `bun run indexer:codegen` after changing the Envio field selection or entity schema. Adding the nullable transaction-envelope columns did not retroactively populate already-processed entities, and the newer non-null block-hash entity field requires rebuilding the historical entities. Before the next live DuckDB build on this contract, use Envio's restart/reindex operation for the intended range; do not point `stg_transfer_events` at an older `Erc20Transfer` table that lacks `block_hash`. Until replay, the existing artifact preserves missing senders/targets as null, relation evidence as `unknown`, and `is_indirect` as null. A normal fixture build, export, or dashboard run never starts that backfill.

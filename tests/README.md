@@ -18,7 +18,7 @@ expectations are documented in the [data-model contract](../docs/data-model.md#t
 | Local API behavior | `api_test.py`, `test_run_api.py` |
 | Fixture exporter and artifact isolation | `test_dashboard_export.py`, `test_artifact_paths.py` |
 | Indexer normalization | `indexer-transfer.test.ts` |
-| Snapshot continuity and finality | `test_snapshot_runs.py` |
+| Snapshot continuity, finality, and bounded indexer launching | `test_snapshot_runs.py`, `test_run_indexer.py` |
 | Token registry and RPC metadata | `test_token_registry.py`, `test_rpc_metadata.py` |
 | Counterparty bytecode evidence | `test_counterparty_types.py` |
 | dbt documentation coverage | `test_dbt_docs.py` |
