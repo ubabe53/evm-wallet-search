@@ -4,6 +4,8 @@ envio:
 
 analytics:
   hyperindex_postgres_dsn: ""
+  # Explicit write-capable URI used only by bounded wallet scan jobs.
+  wallet_scan_postgres_dsn: ""
   hyperindex_graphql_url: "http://127.0.0.1:8080/v1/graphql"
 
 ethereum:

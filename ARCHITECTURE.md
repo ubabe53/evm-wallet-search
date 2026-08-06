@@ -64,7 +64,7 @@ Rules:
 
 - The browser never receives Postgres/RPC credentials or direct database access.
 - HyperIndex Postgres is the ingestion source, not the application query interface.
-- The shared raw helper never mutates Envio's normal `public` checkpoint state. It accepts only a temporary `wallet_scan_<job>` schema whose Envio-owned progress row proves the requested start/end was fully processed, re-verifies the endpoint hash through an authoritative finalized-block resolver, and transactionally validates and merges immutable event facts into `wallet_scan.transfer_events`. `wallet_scan.ingestion_runs` is the durable interval checkpoint contract, including for proven-complete zero-event ranges. Wiring bounded indexing, that helper, dbt, cleanup, and publication together remains the explicit scan-worker step.
+- The shared raw helper never mutates Envio's normal `public` checkpoint state. It accepts only a temporary `wallet_scan_<job>` schema whose Envio-owned progress row proves the requested start/end was fully processed, re-verifies the endpoint hash through an authoritative finalized-block resolver, and transactionally validates and merges immutable event facts into `wallet_scan.transfer_events`. `wallet_scan.ingestion_runs` is the durable interval checkpoint contract, including for proven-complete zero-event ranges. The bundled scan worker is the explicit boundary that sequences bounded indexing, this merge, staged dbt, cleanup, and manager-owned atomic publication.
 - DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. Orchestration owns `ops.pipeline_runs`, while the isolated `app.token_recognition_overrides` table is mutable local product state; dbt models rewrite neither schema.
 - Enrichment joins onto event facts. It may add sourced interpretation but must not rewrite immutable event evidence.
 - `int_wallet_transfer_events` is the shared, materialized semantic event relation. It keeps the
@@ -117,10 +117,10 @@ Detailed field grains and tests are in `docs/data-model.md`.
 address/ENS input → server-side finalized ENS resolver → explicit scan-worker adapter → HyperIndex/Postgres raw sources → dbt live source → staged `live.duckdb` → atomic publication → FastAPI → React
 
 The scan manager copies the complete live artifact into a temporary staging path and gives that path
-to the explicit worker adapter. The staged raw-store layer provides the worker's validated,
-transactional Postgres merge and durable interval-checkpoint contract, but this commit does not yet
-wire indexing, merge, dbt, cleanup, and publication into one command. Until that worker is configured,
-the manager still fails safely without replacing the served artifact.
+to the bundled worker (or an explicit `WALLET_SCAN_COMMAND` override). The worker supervises bounded
+Envio indexing through persisted end-checkpoint readiness and process-group shutdown, then sequences finality validation, transactional shared-Postgres merge/checkpointing,
+temporary-schema cleanup, and dbt against that staged path. The manager then independently validates
+existing-wallet/local-state preservation and finalized provenance before atomic publication.
 ```
 
 The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, selects one wallet through `EVM_WALLET_SCAN_ADDRESS`, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for that wallet, and advances coverage only after dbt succeeds. A new selected wallet starts at the configured start block; an existing selected wallet starts at its own latest completed block plus one. The complete live DuckDB artifact is additive: publishing a selected wallet must preserve prior wallet projections. Token RPC metadata is cached once per `(chain_id, token_address)` and counterparty bytecode evidence once per `(chain_id, address)`; new wallets reuse successful observations and only add missing candidates. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.

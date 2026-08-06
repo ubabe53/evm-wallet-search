@@ -1,9 +1,4 @@
-"""Single-worker wallet scan orchestration and its stable adapter boundary.
-
-The current repository still has a single-wallet HyperIndex schema.  This module
-owns the application contract needed by the multi-wallet/indexer branch without
-claiming that the existing indexer can scan arbitrary wallets yet.
-"""
+"""Single-worker bounded wallet scans with validated atomic publication."""
 
 from __future__ import annotations
 
@@ -12,6 +7,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import uuid
@@ -21,6 +17,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from scripts.artifact_paths import LIVE_DB_PATH
+from scripts.project_config import resolved_runtime
 from server.ens import ResolvedScanInput, resolve_scan_input
 
 ADDRESS_PATTERN = r"^0x[0-9a-fA-F]{40}$"
@@ -81,21 +78,23 @@ def resolve_wallet(value: str) -> tuple[str, str]:
 
 
 def configured_scan_worker(job: ScanJob, staging_path: Path, progress: Callable[[int], None]) -> None:
-    """Run the future indexer adapter using an explicit command contract.
+    """Run the bundled worker or an explicitly overridden adapter command.
 
-    The command must update the complete DuckDB artifact already present at
+    The worker must update the complete DuckDB artifact already present at
     WALLET_SCAN_OUTPUT_PATH. It receives the wallet-specific missing range and
-    finalized target selected by the API. No command means the installation is
-    not yet wired to the multi-wallet merge worker; importantly, no failed or
-    partial artifact is served.
+    finalized target selected by the API. WALLET_SCAN_COMMAND can override the
+    bundled implementation without changing the publication boundary.
     """
-    command_text = os.environ.get("WALLET_SCAN_COMMAND")
-    if not command_text:
-        raise RuntimeError(
-            "Wallet scan worker is not configured; set WALLET_SCAN_COMMAND from the multi-wallet indexer branch"
-        )
+    command_text = os.environ.get("WALLET_SCAN_COMMAND", "").strip()
+    command = (
+        shlex.split(command_text)
+        if command_text
+        else [sys.executable, str(Path(__file__).parents[1] / "scripts" / "wallet_scan_worker.py")]
+    )
     environment = os.environ.copy()
     environment.update({
+        "WALLET_SCAN_JOB_ID": job.job_id,
+        "WALLET_SCAN_REQUESTED_VALUE": job.requested_value,
         "WALLET_SCAN_ADDRESS": job.wallet_address,
         "WALLET_SCAN_LABEL": job.wallet_label,
         "WALLET_SCAN_FROM_BLOCK": str(job.from_block),
@@ -111,7 +110,7 @@ def configured_scan_worker(job: ScanJob, staging_path: Path, progress: Callable[
     if job.observation_timestamp:
         environment["WALLET_SCAN_OBSERVATION_TIMESTAMP"] = job.observation_timestamp
     progress(5)
-    subprocess.run(shlex.split(command_text), check=True, env=environment)
+    subprocess.run(command, check=True, env=environment)
     if not staging_path.is_file():
         raise RuntimeError("Wallet scan worker completed without producing an artifact")
     progress(95)
@@ -137,9 +136,7 @@ class ScanJobManager:
         self._active_job_id: str | None = None
 
     def _rpc_finalized_head(self) -> int:
-        url = os.environ.get("ETHEREUM_RPC_URL") or os.environ.get("PUBLIC_RPC_URL")
-        if not url:
-            raise RuntimeError("ETHEREUM_RPC_URL is required to resolve the finalized head")
+        url = self._rpc_url()
         request = __import__("urllib.request", fromlist=["Request"]).Request(
             url,
             data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "eth_getBlockByNumber", "params": ["finalized", False]}).encode(),
@@ -152,14 +149,19 @@ class ScanJobManager:
             raise RuntimeError("Ethereum finalized head could not be resolved")
         return int(result["number"], 16)
 
+    @staticmethod
+    def _rpc_url() -> str:
+        url = resolved_runtime().get("ethereum_rpc_url")
+        if not url:
+            raise RuntimeError("ETHEREUM_RPC_URL is required to resolve the finalized head")
+        return str(url)
+
     def _rpc_client(self):
         manager = self
 
         class RpcClient:
             def call(self, method: str, params: list[object]) -> object:
-                url = os.environ.get("ETHEREUM_RPC_URL") or os.environ.get("PUBLIC_RPC_URL")
-                if not url:
-                    raise RuntimeError("ETHEREUM_RPC_URL is required to resolve the finalized head")
+                url = manager._rpc_url()
                 request = __import__("urllib.request", fromlist=["Request"]).Request(
                     url,
                     data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
@@ -171,7 +173,6 @@ class ScanJobManager:
                     raise RuntimeError("Ethereum RPC request failed")
                 return payload.get("result")
 
-        del manager
         return RpcClient()
 
     def _resolve_scan_input(self, value: str) -> ResolvedScanInput:

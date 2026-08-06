@@ -1,7 +1,9 @@
 import unittest
+from unittest.mock import MagicMock, patch
 
 from scripts.wallet_scan_raw import (
     RawIngestionInterval,
+    bounded_indexer_completed,
     merge_sql,
     validate_indexer_checkpoint,
     validate_temporary_schema,
@@ -72,6 +74,42 @@ class WalletScanRawTest(unittest.TestCase):
         for row in incomplete_rows:
             with self.subTest(row=row), self.assertRaisesRegex(RuntimeError, "indexer"):
                 validate_indexer_checkpoint(row, self.interval)
+
+    @patch("scripts.wallet_scan_raw.postgres_connection")
+    def test_polls_missing_or_partial_envio_checkpoint_until_ready(self, connect) -> None:
+        connection = MagicMock()
+        connect.return_value.__enter__.return_value = connection
+        connection.execute.return_value.fetchone.return_value = (0,)
+        self.assertFalse(
+            bounded_indexer_completed(
+                "postgresql://test",
+                schema_name="wallet_scan_job_123",
+                interval=self.interval,
+            )
+        )
+
+        connection.execute.return_value.fetchone.return_value = (1,)
+        connection.execute.return_value.fetchall.return_value = [
+            (1, 101, 200, 199, None)
+        ]
+        self.assertFalse(
+            bounded_indexer_completed(
+                "postgresql://test",
+                schema_name="wallet_scan_job_123",
+                interval=self.interval,
+            )
+        )
+
+        connection.execute.return_value.fetchall.return_value = [
+            (1, 101, 200, 200, "ready")
+        ]
+        self.assertTrue(
+            bounded_indexer_completed(
+                "postgresql://test",
+                schema_name="wallet_scan_job_123",
+                interval=self.interval,
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -141,6 +141,7 @@ def run_dbt(
     use_hyperindex: bool,
     hyperindex_dsn: str | None,
     extra_env: dict[str, str] | None = None,
+    database_path_override: Path | None = None,
 ) -> None:
     """Execute dbt against the database dedicated to the selected source mode."""
 
@@ -153,7 +154,7 @@ def run_dbt(
 
     env = os.environ.copy()
     env["DBT_PROFILES_DIR"] = str(ANALYTICS_DIR)
-    db_path = database_path(use_fixture=not use_hyperindex)
+    db_path = database_path_override or database_path(use_fixture=not use_hyperindex)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     env[DBT_DUCKDB_PATH_ENV] = str(db_path)
     env[ACCOUNT_EVIDENCE_DUCKDB_PATH_ENV] = str(ACCOUNT_EVIDENCE_DB_PATH)

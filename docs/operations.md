@@ -15,8 +15,8 @@ ENS name. ENS names use the pinned mainnet ENS registry and standard resolver ca
 Ethereum `finalized` observation block. The scan run records the original input, normalized name,
 resolved address, resolver source, observation block number/hash, and block timestamp in
 `ops.pipeline_runs`. Unsupported or unresolved names fail with `ENSNotRecognizedError` and are
-never passed to the indexer. This is provenance in the existing live artifact, not a third
-database, and it does not implement a reindex worker.
+never passed to the indexer. This provenance is persisted in the staged complete artifact by the
+bounded worker; it does not create a third analytics database or a database per wallet.
 
 Start the local API after the live build:
 
@@ -35,6 +35,7 @@ envio:
   api_token: ""
 analytics:
   hyperindex_postgres_dsn: ""
+  wallet_scan_postgres_dsn: ""
   hyperindex_graphql_url: "http://127.0.0.1:8080/v1/graphql"
 ethereum:
   rpc_url: ""
@@ -157,13 +158,30 @@ This is an explicit, potentially RPC-intensive operation. Fixture builds and ord
 
 ### Live wallet scan jobs
 
-The local API can start an additive wallet scan from the dashboard in live mode. Configure the explicit multi-wallet worker adapter before using it:
+The local API starts the bundled additive wallet worker by default. Configure the ordinary
+read-only dbt source URI for manual live builds and an explicit write-capable worker URI:
 
 ```sh
-export WALLET_SCAN_COMMAND='your-multi-wallet-indexer-command'
+export DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN='postgresql://READER:PASSWORD@127.0.0.1:5433/envio-dev'
+export WALLET_SCAN_POSTGRES_DSN='postgresql://WRITER:PASSWORD@127.0.0.1:5433/envio-dev'
 ```
 
-The command receives `WALLET_SCAN_ADDRESS`, `WALLET_SCAN_LABEL`, the wallet's missing `WALLET_SCAN_FROM_BLOCK`, `WALLET_SCAN_TO_BLOCK`, and `WALLET_SCAN_OUTPUT_PATH`, plus (for ENS or direct-address resolution) the finalized observation source/block/hash/timestamp variables. The manager has already copied the complete live artifact to the output path; the worker updates that one path in place. The worker must persist the selected run's finalized/provenance fields, preserve all existing wallet/run rows and shared enrichment/cache rows, and exit successfully. Only one job runs at a time. The manager validates and atomically replaces `analytics/artifacts/live.duckdb` after success; a failure never replaces or serves a partial artifact. The command remains an explicit adapter boundary: it owns chain collection and wallet merge behavior, while the manager owns atomic publication and preservation validation.
+For a scan job, the worker uses `WALLET_SCAN_POSTGRES_DSN` for the raw transaction and passes that
+exact URI to dbt's read-only attachment, so persistence and transformation cannot accidentally
+target different databases. The manager supplies job identity/original input, canonical wallet/label, the wallet's first missing
+through finalized range, output path, and resolver observation provenance. The bundled worker starts
+one isolated bounded Envio schema, proves Envio reached the requested end, rechecks the endpoint
+against current finalized RPC evidence, transactionally merges raw rows and a durable checkpoint,
+drops the temporary schema, and runs dbt against the staged artifact. Only one job runs at a time.
+The manager then validates provenance and preservation before atomically replacing
+`analytics/artifacts/live.duckdb`; failures never publish a partial artifact. Set
+`WALLET_SCAN_COMMAND` only to override this first-party subprocess contract deliberately.
+
+Envio remains a service after reaching a configured `end_block`, so the worker supervises it
+explicitly: it polls the isolated `envio_chains` checkpoint, terminates and reaps the process group
+after readiness, and fails on early process exit or timeout. The default timeout is 7200 seconds;
+set `WALLET_SCAN_INDEXER_TIMEOUT_SECONDS` between 1 and 86400 when a deliberate large backfill needs
+a different bound. A timeout never creates a completed raw checkpoint or publishes DuckDB state.
 
 Run the indexer locally:
 
@@ -203,9 +221,9 @@ bun run analytics:build:hyperindex
 
 dbt-duckdb attaches that database read-only as the `hyperindex` catalog. The wrapper stops with a clear error when live mode is requested without the DSN. Confirm the mapped local port with `docker port envio-postgres 5432`; this project currently maps it to `5433`. Store the URI under `analytics.hyperindex_postgres_dsn` in ignored `config.yaml` to avoid exporting it in every shell.
 
-The first successful build records one wallet-scoped `ops.pipeline_runs` row from its configured start through the chosen finalized block. Live wallet selection uses the durable `ops.wallet_targets` registry; `wallets.csv` remains fixture-only. Set `EVM_WALLET_SCAN_ADDRESS` when more than one live target exists; the value is normalized before selection, and an unset selector with multiple targets fails clearly. Each later snapshot for the selected wallet begins at that wallet's previous completed `to_block + 1`; failed rows do not advance coverage and the same interval remains retryable. The bounded indexer entrypoint can target an isolated `wallet_scan_<job>` schema, and the shared raw helper can validate, merge, and checkpoint that schema after re-verifying its endpoint hash. These are worker building blocks, not yet the configured `WALLET_SCAN_COMMAND`; until the orchestration command is wired, dashboard scans continue to fail safely without replacing the artifact. `HYPERINDEX_GRAPHQL_URL` or `analytics.hyperindex_graphql_url` may override the local GraphQL default.
+The first successful build records one wallet-scoped `ops.pipeline_runs` row from its configured start through the chosen finalized block. Live wallet selection uses the durable `ops.wallet_targets` registry; `wallets.csv` remains fixture-only. Set `EVM_WALLET_SCAN_ADDRESS` when more than one live target exists; the value is normalized before selection, and an unset selector with multiple targets fails clearly. Each later snapshot for the selected wallet begins at that wallet's previous completed `to_block + 1`; failed rows do not advance coverage and the same interval remains retryable. A bounded worker run writes immutable raw rows once to shared `wallet_scan.transfer_events` and its completed interval to `wallet_scan.ingestion_runs`. If dbt, staged validation, or atomic publication fails afterward, the next dashboard attempt sees that durable checkpoint and skips re-indexing the same raw interval. It creates a fresh DuckDB run and retries transformation/publication without changing completed coverage until success. `HYPERINDEX_GRAPHQL_URL` or `analytics.hyperindex_graphql_url` may override the local GraphQL default.
 
-An ordinary dbt failure marks its run `failed`. An abrupt process termination can leave a `running` row; the next build refuses to overlap it. Inspect that row before manually marking it failed, then rerun the same command. Do not delete a completed row to move the checkpoint: completed ranges are the evidence for cumulative continuity. `ingestion_status` and `raw_ingested_at` describe durable raw persistence, not a successful analytics publication; `status=completed` is reserved for the latter.
+An ordinary manual dbt failure marks its run `failed`. An abrupt process termination can leave a `running` row in its target artifact; inspect that row before manually changing it. Dashboard jobs write run state only to their temporary artifact until publication, so a failed staging directory is discarded; the separate Postgres ingestion checkpoint is what makes their raw retry idempotent. Do not delete a completed row to move coverage. `ingestion_status` and `raw_ingested_at` describe durable raw persistence, not a successful analytics publication; `status=completed` is reserved for the latter.
 
 The resulting `analytics/artifacts/live.duckdb` is the local application's query source and contains all completed wallet projections, orchestration-owned `ops.pipeline_runs`, shared enrichment inputs, and the isolated application-owned recognition override table. Token and account enrichment candidate selection also reads this live artifact exclusively and skips addresses already present in their global caches. Do not export full live history through the fixture-demo exporter. Start the local API with the same `EVM_WALLET_SCAN_ADDRESS` used for the build when selecting a wallet; if it is omitted, the API derives the active wallet only when the artifact has exactly one metadata wallet and fails clearly otherwise. The API verifies that metadata references the latest completed finalized run independently for every wallet, that completed intervals are contiguous, and that their cumulative `events_found` reconciles with each wallet's `pipeline_metadata.transfer_count`. It then opens one short-lived DuckDB connection per request, applies overrides and filters before exact aggregation/ranking, and paginates event rows with a stable opaque cursor.
 

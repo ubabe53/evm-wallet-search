@@ -7,6 +7,7 @@
     "indexer:codegen": "python3 scripts/run_indexer.py codegen",
     "indexer:dev": "python3 scripts/run_indexer.py dev",
     "indexer:scan": "python3 scripts/run_indexer.py scan",
+    "wallet-scan:worker": "python3 scripts/wallet_scan_worker.py",
     "analytics:build": "bun run analytics:build:fixture",
     "analytics:build:fixture": "python3 scripts/run_dbt.py build",
     "analytics:build:hyperindex": "python3 scripts/run_dbt.py build --vars '{\"use_fixture\": false}'",

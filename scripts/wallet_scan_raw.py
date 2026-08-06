@@ -83,8 +83,34 @@ def verify_bounded_indexer_completion(
 ) -> None:
     """Read Envio-owned progress before accepting an isolated bounded schema."""
 
+    if not bounded_indexer_completed(
+        dsn,
+        schema_name=schema_name,
+        interval=interval,
+    ):
+        raise RuntimeError("Bounded indexer did not complete the requested block interval")
+
+
+def bounded_indexer_completed(
+    dsn: str,
+    *,
+    schema_name: str,
+    interval: RawIngestionInterval,
+) -> bool:
+    """Return readiness while rejecting a differently configured Envio schema."""
+
     schema = validate_temporary_schema(schema_name)
     with postgres_connection(dsn, read_only=True) as connection:
+        exists = connection.execute(
+            """
+            select count(*)
+            from shared.information_schema.tables
+            where table_schema = ? and table_name = 'envio_chains'
+            """,
+            [schema],
+        ).fetchone()
+        if exists is None or exists[0] == 0:
+            return False
         rows = connection.execute(
             f"""
             select id, start_block, end_block, progress_block, ready_at
@@ -92,8 +118,17 @@ def verify_bounded_indexer_completion(
             order by id
             """
         ).fetchall()
-    row = rows[0] if len(rows) == 1 else None
-    validate_indexer_checkpoint(row, interval)
+    if len(rows) != 1:
+        raise RuntimeError("Bounded indexer did not persist one Ethereum progress checkpoint")
+    chain_id, start_block, end_block, progress_block, ready_at = rows[0]
+    if (
+        int(chain_id) != CHAIN_ID
+        or int(start_block) != interval.from_block
+        or end_block is None
+        or int(end_block) != interval.to_block
+    ):
+        raise RuntimeError("Bounded indexer checkpoint does not match the requested interval")
+    return int(progress_block) >= interval.to_block and ready_at is not None
 
 
 def _sql_literal(value: str) -> str:
