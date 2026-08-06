@@ -321,14 +321,17 @@ class ScanJobManager:
                 with duckdb.connect(str(staging_path), read_only=True) as connection:
                     previous = str(previous_path).replace("'", "''")
                     connection.execute(f"attach '{previous}' as previous_live (read_only)")
-                    previous_metadata_exists = connection.execute(
+                    previous_metadata_count = connection.execute(
                         """
                         select count(*)
                         from duckdb_tables()
                         where database_name = 'previous_live'
                           and schema_name = 'main' and table_name = 'pipeline_metadata'
                         """
-                    ).fetchone()[0]
+                    ).fetchone()
+                    previous_metadata_exists = bool(
+                        previous_metadata_count is not None and previous_metadata_count[0]
+                    )
                     previous_row = (
                         connection.execute(
                             """
