@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -39,7 +39,7 @@ try:
         HASH_PATTERN,
         RawIngestionInterval,
         bounded_indexer_completed,
-        completed_ingestion,
+        completed_ingestion_prefix,
         drop_temporary_schema,
         merge_bounded_ingestion,
     )
@@ -62,7 +62,7 @@ except ImportError:
         HASH_PATTERN,
         RawIngestionInterval,
         bounded_indexer_completed,
-        completed_ingestion,
+        completed_ingestion_prefix,
         drop_temporary_schema,
         merge_bounded_ingestion,
     )
@@ -361,19 +361,21 @@ def run_worker(environment: Mapping[str, str] = os.environ) -> None:
             raise RuntimeError(
                 "Wallet scan endpoint hash changed since the finalized observation"
             )
-        raw_events_found = completed_ingestion(write_dsn, interval)
-        if raw_events_found is None:
+        next_raw_block, raw_events_found = completed_ingestion_prefix(write_dsn, interval)
+        if next_raw_block <= scan.to_block:
+            pending_scan = replace(scan, from_block=next_raw_block)
+            pending_interval = replace(interval, from_block=next_raw_block)
             try:
                 run_bounded_indexer(
-                    scan,
+                    pending_scan,
                     write_dsn,
                     timeout_seconds=timeout_seconds,
                     envio_api_token=str(runtime.get("envio_api_token") or "") or None,
                 )
-                raw_events_found = merge_bounded_ingestion(
+                raw_events_found += merge_bounded_ingestion(
                     write_dsn,
                     schema_name=scan.schema_name,
-                    interval=interval,
+                    interval=pending_interval,
                     finalized_hash_resolver=lambda block: (
                         verified_endpoint_hash
                         if block == scan.to_block

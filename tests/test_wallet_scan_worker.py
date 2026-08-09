@@ -124,7 +124,7 @@ class WalletScanWorkerTest(unittest.TestCase):
     @patch("scripts.wallet_scan_worker.run_dbt")
     @patch("scripts.wallet_scan_worker.mark_ingestion_complete")
     @patch("scripts.wallet_scan_worker.run_bounded_indexer")
-    @patch("scripts.wallet_scan_worker.completed_ingestion", return_value=3)
+    @patch("scripts.wallet_scan_worker.completed_ingestion_prefix", return_value=(21, 3))
     @patch("scripts.wallet_scan_worker.finalized_block_hash", return_value=BLOCK_HASH)
     @patch("scripts.wallet_scan_worker.start_snapshot_run", return_value=snapshot_run())
     @patch("scripts.wallet_scan_worker.configured_start_block", return_value=10)
@@ -135,7 +135,7 @@ class WalletScanWorkerTest(unittest.TestCase):
         _configured_start,
         _start,
         verify_hash,
-        _completed,
+        _completed_prefix,
         run_indexer,
         mark_ingestion,
         run_dbt,
@@ -160,7 +160,7 @@ class WalletScanWorkerTest(unittest.TestCase):
     @patch("scripts.wallet_scan_worker.drop_temporary_schema")
     @patch("scripts.wallet_scan_worker.merge_bounded_ingestion", return_value=4)
     @patch("scripts.wallet_scan_worker.run_bounded_indexer")
-    @patch("scripts.wallet_scan_worker.completed_ingestion", return_value=None)
+    @patch("scripts.wallet_scan_worker.completed_ingestion_prefix", return_value=(10, 0))
     @patch("scripts.wallet_scan_worker.finalized_block_hash", return_value=BLOCK_HASH)
     @patch("scripts.wallet_scan_worker.start_snapshot_run", return_value=snapshot_run())
     @patch("scripts.wallet_scan_worker.configured_start_block", return_value=10)
@@ -171,7 +171,7 @@ class WalletScanWorkerTest(unittest.TestCase):
         _configured_start,
         _start,
         _verify_hash,
-        _completed,
+        _completed_prefix,
         run_indexer,
         merge,
         drop_schema,
@@ -185,6 +185,40 @@ class WalletScanWorkerTest(unittest.TestCase):
         merge.assert_called_once()
         drop_schema.assert_called_once()
         self.assertEqual(mark_ingestion.call_args.kwargs["raw_events_found"], 4)
+        finish.assert_called_once_with(snapshot_run(), database_path=STAGING, succeeded=True)
+
+    @patch("scripts.wallet_scan_worker.finish_snapshot_run")
+    @patch("scripts.wallet_scan_worker.run_dbt")
+    @patch("scripts.wallet_scan_worker.mark_ingestion_complete")
+    @patch("scripts.wallet_scan_worker.drop_temporary_schema")
+    @patch("scripts.wallet_scan_worker.merge_bounded_ingestion", return_value=4)
+    @patch("scripts.wallet_scan_worker.run_bounded_indexer")
+    @patch("scripts.wallet_scan_worker.completed_ingestion_prefix", return_value=(16, 2))
+    @patch("scripts.wallet_scan_worker.finalized_block_hash", return_value=BLOCK_HASH)
+    @patch("scripts.wallet_scan_worker.start_snapshot_run", return_value=snapshot_run())
+    @patch("scripts.wallet_scan_worker.configured_start_block", return_value=10)
+    @patch("scripts.wallet_scan_worker.resolved_runtime", return_value={})
+    def test_retry_indexes_only_tail_after_completed_raw_prefix(
+        self,
+        _runtime,
+        _configured_start,
+        _start,
+        _verify_hash,
+        _completed_prefix,
+        run_indexer,
+        merge,
+        drop_schema,
+        mark_ingestion,
+        _run_dbt,
+        finish,
+    ) -> None:
+        run_worker(worker_environment())
+
+        pending_scan = run_indexer.call_args.args[0]
+        self.assertEqual((pending_scan.from_block, pending_scan.to_block), (16, 20))
+        self.assertEqual(merge.call_args.kwargs["interval"].from_block, 16)
+        drop_schema.assert_called_once()
+        self.assertEqual(mark_ingestion.call_args.kwargs["raw_events_found"], 6)
         finish.assert_called_once_with(snapshot_run(), database_path=STAGING, succeeded=True)
 
 

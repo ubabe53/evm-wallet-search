@@ -121,6 +121,8 @@ to the bundled worker (or an explicit `WALLET_SCAN_COMMAND` override). The worke
 Envio indexing through persisted end-checkpoint readiness and process-group shutdown, then sequences finality validation, transactional shared-Postgres merge/checkpointing,
 temporary-schema cleanup, and dbt against that staged path. The manager then independently validates
 existing-wallet/local-state preservation and finalized provenance before atomic publication.
+When a publication retry pins a newer finalized endpoint, the worker reuses every contiguous completed
+raw checkpoint from the still-missing start and indexes only the uncheckpointed tail.
 ```
 
 The indexer and live analytics are explicit operations. A live build chooses the newest block that is both within HyperIndex's transactional progress and no newer than Ethereum's `finalized` head, selects one wallet through `EVM_WALLET_SCAN_ADDRESS`, records one attempted wallet-scoped interval in `ops.pipeline_runs` and `ops.scan_generations` for that wallet, and advances coverage only after dbt succeeds. A new selected wallet starts at the configured start block; an existing selected wallet starts at its own latest completed block plus one. The complete live DuckDB artifact is additive: publishing a selected wallet must preserve prior wallet projections. Token RPC metadata is cached once per `(chain_id, token_address)` and counterparty bytecode evidence once per `(chain_id, address)`; new wallets reuse successful observations and only add missing candidates. Builds must not silently start indexing, backfills, registry refreshes, or enrichment jobs.

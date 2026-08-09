@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from scripts.wallet_scan_raw import (
     RawIngestionInterval,
     bounded_indexer_completed,
+    completed_ingestion_prefix,
     drop_temporary_schema,
     merge_sql,
     validate_indexer_checkpoint,
@@ -54,6 +55,66 @@ class WalletScanRawTest(unittest.TestCase):
             connection.execute.call_args.args[0],
             "call postgres_execute('shared', ?, use_transaction := true)",
         )
+
+    @patch("scripts.wallet_scan_raw.shared_raw_store_exists", return_value=True)
+    @patch("scripts.wallet_scan_raw.postgres_connection")
+    def test_reuses_contiguous_completed_ingestion_prefix(self, connect, _exists) -> None:
+        connection = MagicMock()
+        connect.return_value.__enter__.return_value = connection
+        connection.execute.return_value.fetchall.return_value = [
+            (101, 150, "0x" + "c" * 64, 2),
+            (151, 175, "0x" + "d" * 64, 3),
+        ]
+
+        self.assertEqual(
+            completed_ingestion_prefix("postgresql://test", self.interval),
+            (176, 5),
+        )
+
+    @patch("scripts.wallet_scan_raw.shared_raw_store_exists", return_value=True)
+    @patch("scripts.wallet_scan_raw.postgres_connection")
+    def test_reuses_exact_completed_endpoint_with_matching_hash(self, connect, _exists) -> None:
+        connection = MagicMock()
+        connect.return_value.__enter__.return_value = connection
+        connection.execute.return_value.fetchall.return_value = [
+            (101, 200, self.interval.to_block_hash, 4)
+        ]
+
+        self.assertEqual(
+            completed_ingestion_prefix("postgresql://test", self.interval),
+            (201, 4),
+        )
+
+    @patch("scripts.wallet_scan_raw.shared_raw_store_exists", return_value=True)
+    @patch("scripts.wallet_scan_raw.postgres_connection")
+    def test_rejects_gapped_or_overlapping_completed_prefix(self, connect, _exists) -> None:
+        connection = MagicMock()
+        connect.return_value.__enter__.return_value = connection
+        for rows in (
+            [(102, 150, "0x" + "c" * 64, 2)],
+            [
+                (101, 150, "0x" + "c" * 64, 2),
+                (150, 175, "0x" + "d" * 64, 3),
+            ],
+            [(101, 201, "0x" + "c" * 64, 4)],
+        ):
+            connection.execute.return_value.fetchall.return_value = rows
+            with self.subTest(rows=rows), self.assertRaisesRegex(RuntimeError, "contiguous"):
+                completed_ingestion_prefix("postgresql://test", self.interval)
+
+    @patch("scripts.wallet_scan_raw.shared_raw_store_exists", return_value=True)
+    @patch("scripts.wallet_scan_raw.postgres_connection")
+    def test_rejects_completed_endpoint_with_different_finalized_hash(
+        self, connect, _exists
+    ) -> None:
+        connection = MagicMock()
+        connect.return_value.__enter__.return_value = connection
+        connection.execute.return_value.fetchall.return_value = [
+            (101, 200, "0x" + "c" * 64, 4)
+        ]
+
+        with self.assertRaisesRegex(RuntimeError, "endpoint hash"):
+            completed_ingestion_prefix("postgresql://test", self.interval)
 
     def test_rejects_invalid_interval_provenance(self) -> None:
         invalid = RawIngestionInterval(

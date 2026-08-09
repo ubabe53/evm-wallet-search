@@ -189,6 +189,52 @@ def completed_ingestion(dsn: str, interval: RawIngestionInterval) -> int | None:
     return None if row is None else int(row[0])
 
 
+def completed_ingestion_prefix(
+    dsn: str,
+    interval: RawIngestionInterval,
+) -> tuple[int, int]:
+    """Return the first missing block and raw count across contiguous checkpoints."""
+
+    interval.validate()
+    if not shared_raw_store_exists(dsn):
+        return interval.from_block, 0
+    with postgres_connection(dsn, read_only=True) as connection:
+        rows = connection.execute(
+            """
+            select from_block, to_block, to_block_hash, raw_events_found
+            from shared.wallet_scan.ingestion_runs
+            where chain_id = 1 and wallet_address = ? and scope_version = ?
+              and status = 'completed' and to_block >= ? and from_block <= ?
+            order by from_block, to_block
+            """,
+            [
+                interval.wallet_address,
+                interval.scope_version,
+                interval.from_block,
+                interval.to_block,
+            ],
+        ).fetchall()
+    if not rows:
+        return interval.from_block, 0
+
+    next_block = interval.from_block
+    raw_events_found = 0
+    for from_block, to_block, to_block_hash, event_count in rows:
+        start = int(from_block)
+        end = int(to_block)
+        if start != next_block or end > interval.to_block:
+            raise RuntimeError(
+                "Completed raw ingestion intervals are not a contiguous requested prefix"
+            )
+        if end == interval.to_block and str(to_block_hash).lower() != interval.to_block_hash:
+            raise RuntimeError(
+                "Completed raw ingestion endpoint hash conflicts with requested finality"
+            )
+        raw_events_found += int(event_count)
+        next_block = end + 1
+    return next_block, raw_events_found
+
+
 def merge_sql(schema_name: str, interval: RawIngestionInterval) -> str:
     """Build one transactional server-side merge for a validated temporary schema."""
 
