@@ -57,7 +57,7 @@ export function TokenTable({
         )}
         {rankedRows.map((row, index) => (
           <tr key={row.token_address}>
-            <td>
+            <td className="tokenIdentityTableCell">
               <div className="tokenIdentityCell">
                 <span className="rankCell">{index + 1}</span>
                 <div>
@@ -82,7 +82,7 @@ export function TokenTable({
                 </div>
               </div>
             </td>
-            <td className="tokenActivityCell">
+            <td className="tokenActivityCell" data-label="Activity">
               <strong>{row.transfer_count.toLocaleString("en-US")}</strong>
               <div
                 className="tokenActivityBar"
@@ -98,7 +98,7 @@ export function TokenTable({
                 />
               </div>
             </td>
-            <td className="tokenDirectionCell">
+            <td className="tokenDirectionCell" data-label="Direction">
               <span className="flowIndicator">
                 <span className="direction in"><ArrowDownLeft size={13} />In {row.inbound_transfer_count.toLocaleString("en-US")}</span>
                 <i aria-hidden="true">|</i>
@@ -110,7 +110,7 @@ export function TokenTable({
                 Indirect {row.indirect_inbound_transfer_count.toLocaleString("en-US")} in · {row.indirect_outbound_transfer_count.toLocaleString("en-US")} out
               </small>
             </td>
-            <td className="tokenCounterpartyCell">
+            <td className="tokenCounterpartyCell" data-label="Counterparties">
               <strong>{row.counterparty_count.toLocaleString("en-US")}</strong>
               <small
                 title={`${row.sender_account_count.toLocaleString("en-US")} distinct non-zero sender accounts, ${row.recipient_account_count.toLocaleString("en-US")} distinct non-zero recipient accounts`}
@@ -118,7 +118,7 @@ export function TokenTable({
                 {row.sender_account_count.toLocaleString("en-US")} senders · {row.recipient_account_count.toLocaleString("en-US")} recipients
               </small>
             </td>
-            <td>
+            <td className="tokenRecognitionTableCell" data-label="Recognition">
               <div className="recognitionCell">
                 <span className={`recognitionStatus ${row.recognition_status}`}>
                   {row.recognition_status === "recognized" ? "Recognized" : "Other"}

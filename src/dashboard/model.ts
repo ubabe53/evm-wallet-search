@@ -4,6 +4,7 @@ import type {
   CounterpartySummary,
   DashboardMetadata,
   RecognitionFilter,
+  ScanJob,
   TimelineBucket,
   TimelineInterval,
   TimelineRow,
@@ -18,6 +19,15 @@ export const RECOGNITION_FILTERS: RecognitionFilter[] = ["all", "recognized", "o
 const ETHERSCAN_BASE_URL = "https://etherscan.io";
 export const INDIRECT_TRANSFER_EXPLANATION = "Top-level transaction sender differs from Transfer.from. This can happen with transferFrom, routers, Safe/account abstraction, or synthetic event emission; the mismatch alone does not prove intent or legitimacy.";
 export const SELF_TRANSFER_EXPLANATION = "Transfer.from and Transfer.to are both the tracked wallet. The event is preserved once, but it is neither inbound nor outbound and has no external counterparty.";
+
+export function scanStageLabel(job: Pick<ScanJob, "status" | "progress">): string {
+  if (job.status === "queued") return "Queued";
+  if (job.status === "completed") return "Complete";
+  if (job.status === "failed") return "Failed";
+  if (job.progress < 5) return "Preparing scan";
+  if (job.progress < 95) return "Indexing and building analytics";
+  return "Validating and publishing";
+}
 
 export function etherscanAddressUrl(address: string): string {
   return `${ETHERSCAN_BASE_URL}/address/${address}`;

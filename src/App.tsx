@@ -28,6 +28,7 @@ import {
   compactAddress,
   etherscanAddressUrl,
   generatedAtLabel,
+  scanStageLabel,
   snapshotCoverageLabel,
 } from "./dashboard/model";
 import { useDashboard } from "./dashboard/useDashboard";
@@ -86,6 +87,7 @@ export function App() {
   } = useDashboard();
   const scanPolling = scanJob?.status === "queued" || scanJob?.status === "running";
   const scanBusy = scanSubmitting || scanPolling;
+  const scanStage = scanJob ? scanStageLabel(scanJob) : null;
 
   if (error) {
     return (
@@ -173,7 +175,7 @@ export function App() {
                 {scanSubmitting
                   ? "Starting scan"
                   : scanPolling
-                    ? `Scanning ${scanJob?.progress ?? 0}%`
+                    ? scanStage
                     : "Scan wallet"}
               </span>
               {!scanBusy && <ChevronDown size={14} aria-hidden="true" />}
@@ -207,9 +209,9 @@ export function App() {
                   <div className="scanProgress" role="status" aria-live="polite">
                     <span className="scanProgressLabel">
                       <span>Scanning {scanJob.wallet_label}</span>
-                      <strong>{scanJob.progress}%</strong>
+                      <strong>{scanStage}</strong>
                     </span>
-                    <progress max="100" value={scanJob.progress}>{scanJob.progress}%</progress>
+                    <progress aria-label={scanStage ?? "Scan in progress"} />
                   </div>
                 )}
                 {scanJob?.status === "completed" && <p className="scanSuccess" role="status">Scan complete. Switched to {scanJob.wallet_label}.</p>}

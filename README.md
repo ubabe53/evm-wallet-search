@@ -62,10 +62,11 @@ The local dashboard exposes:
 - exact selection totals alongside bounded rankings and cursor-paginated events;
 - yearly/monthly captured-event timelines with explicit inbound, outbound, and self directions;
 - token and counterparty rankings by captured event count, never cross-token quantity or value;
+- responsive token and counterparty rankings with themed vertical scrolling and no horizontal pan;
 - provenance that separates finalized scan coverage from observed event extrema;
 - `All`, `Recognized`, and `Other` token views plus pinned-block `EOA`/`Contract` evidence.
 - live mode selection among completed wallets without rescanning, plus separate wallet/ENS scan
-  submission with persistent progress feedback, last-good dashboard preservation and retry on
+  submission with honest stage-based activity feedback, last-good dashboard preservation and retry on
   refresh failure, and automatic switching; fixture mode keeps scanning disabled.
 
 Scan jobs are exposed by the local API and use the bundled bounded worker by default.
