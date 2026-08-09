@@ -45,6 +45,22 @@ class ArtifactPathsTest(unittest.TestCase):
         self.assertIn("incremental_strategy='delete+insert'", sql)
         self.assertNotIn("incremental_strategy='merge'", sql)
 
+    def test_immutable_fact_check_is_scoped_to_current_wallet_interval(self) -> None:
+        sql = (
+            Path(__file__).parents[1]
+            / "analytics"
+            / "tests"
+            / "immutable_event_facts_through_enrichment.sql"
+        ).read_text()
+
+        self.assertIn("using (chain_id, wallet_address)", sql)
+        self.assertIn('env_var("EVM_WALLET_SNAPSHOT_START_BLOCK")', sql)
+        self.assertIn('env_var("EVM_WALLET_SNAPSHOT_END_BLOCK")', sql)
+        self.assertIn(
+            "using (chain_id, wallet_address, transaction_hash, log_index)",
+            sql,
+        )
+
     @patch("scripts.run_dbt.shared_raw_store_exists", return_value=False)
     @patch("duckdb.connect")
     def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect, _shared_exists) -> None:
