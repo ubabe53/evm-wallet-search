@@ -1,3 +1,4 @@
+import shutil
 import tempfile
 import time
 import unittest
@@ -108,10 +109,10 @@ class ScanJobsTest(unittest.TestCase):
                     connection.execute("create table if not exists counterparty_summary (wallet_address varchar)")
                     connection.execute("create table if not exists timeline_daily (wallet_address varchar)")
                     connection.execute(
-                        "create table if not exists pipeline_metadata (wallet_address varchar, data_source varchar, snapshot_start_block bigint, snapshot_end_block bigint, snapshot_end_block_hash varchar, snapshot_finality_policy varchar)"
+                        "create table if not exists pipeline_metadata (wallet_address varchar, data_source varchar, snapshot_start_block bigint, snapshot_end_block bigint, snapshot_end_block_hash varchar, snapshot_finality_policy varchar, generated_at timestamptz)"
                     )
                     connection.execute(
-                        "insert into pipeline_metadata values (?, 'hyperindex', 0, 123, '0xhash', 'ethereum_finalized')",
+                        "insert into pipeline_metadata values (?, 'hyperindex', 0, 123, '0xhash', 'ethereum_finalized', current_timestamp)",
                         [job.wallet_address],
                     )
                 progress(90)
@@ -153,14 +154,14 @@ class ScanJobsTest(unittest.TestCase):
                     """
                     create table pipeline_metadata (
                       chain_id integer, wallet_address varchar, configured_wallet_label varchar,
-                      data_source varchar,
+                      data_source varchar, generated_at timestamptz,
                       snapshot_start_block bigint, snapshot_end_block bigint,
                       snapshot_end_block_hash varchar, snapshot_finality_policy varchar
                     )
                     """
                 )
                 connection.execute(
-                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', timestamptz '2026-08-09 00:00:00+00', 0, 10, ?, 'ethereum_finalized')",
                     [wallet_a, "0x" + "a" * 64],
                 )
                 connection.execute("create schema app")
@@ -177,7 +178,11 @@ class ScanJobsTest(unittest.TestCase):
                 self.assertEqual(job.from_block, 0)
                 with duckdb.connect(str(staging_path)) as connection:
                     connection.execute(
-                        "insert into pipeline_metadata values (1, ?, 'wallet-b', 'hyperindex', ?, ?, ?, 'ethereum_finalized')",
+                        "update pipeline_metadata set generated_at = timestamptz '2026-08-10 00:00:00+00' where wallet_address = ?",
+                        [wallet_a],
+                    )
+                    connection.execute(
+                        "insert into pipeline_metadata values (1, ?, 'wallet-b', 'hyperindex', timestamptz '2026-08-10 00:00:00+00', ?, ?, ?, 'ethereum_finalized')",
                         [wallet_b, job.from_block, job.to_block, "0x" + "b" * 64],
                     )
                 progress(90)
@@ -208,6 +213,13 @@ class ScanJobsTest(unittest.TestCase):
                 if override_row is None:
                     self.fail("token override was not preserved")
                 self.assertEqual(override_row[0], "recognized")
+                self.assertEqual(
+                    connection.execute(
+                        "select generated_at from pipeline_metadata where wallet_address = ?",
+                        [wallet_a],
+                    ).fetchone(),
+                    (datetime(2026, 8, 10, tzinfo=timezone.utc),),
+                )
             self.assertEqual({row["wallet_address"] for row in manager.list_wallets()}, {wallet_a, wallet_b})
 
     def test_scan_extension_accepts_cumulative_snapshot_start(self) -> None:
@@ -223,12 +235,13 @@ class ScanJobsTest(unittest.TestCase):
                       chain_id integer, wallet_address varchar, configured_wallet_label varchar,
                       data_source varchar,
                       snapshot_start_block bigint, snapshot_end_block bigint,
-                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar
+                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar,
+                      generated_at timestamptz
                     )
                     """
                 )
                 connection.execute(
-                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized', current_timestamp)",
                     [wallet, "0x" + "a" * 64],
                 )
 
@@ -272,12 +285,16 @@ class ScanJobsTest(unittest.TestCase):
                     (0, 20),
                 )
 
-    def test_scan_extension_rejects_changed_cumulative_snapshot_start(self) -> None:
+    def test_validation_accepts_generated_at_metadata_schema_upgrade(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            live = Path(directory) / "live.duckdb"
-            wallet = "0x" + "a" * 40
-            with duckdb.connect(str(live)) as connection:
-                for relation in ("wallet_events", "token_summary", "counterparty_summary", "timeline_daily"):
+            previous = Path(directory) / "previous.duckdb"
+            staging = Path(directory) / "staging.duckdb"
+            wallet_a = "0x" + "a" * 40
+            wallet_b = "0x" + "b" * 40
+            with duckdb.connect(str(previous)) as connection:
+                for relation in (
+                    "wallet_events", "token_summary", "counterparty_summary", "timeline_daily"
+                ):
                     connection.execute(f"create table {relation} (wallet_address varchar)")
                 connection.execute(
                     """
@@ -291,6 +308,47 @@ class ScanJobsTest(unittest.TestCase):
                 )
                 connection.execute(
                     "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    [wallet_a, "0x" + "a" * 64],
+                )
+            shutil.copy2(previous, staging)
+            with duckdb.connect(str(staging)) as connection:
+                connection.execute(
+                    "alter table pipeline_metadata add column generated_at timestamptz"
+                )
+                connection.execute(
+                    "update pipeline_metadata set generated_at = timestamptz '2026-08-10 00:00:00+00'"
+                )
+                connection.execute(
+                    "insert into pipeline_metadata values (1, ?, 'wallet-b', 'hyperindex', 0, 20, ?, 'ethereum_finalized', timestamptz '2026-08-10 00:00:00+00')",
+                    [wallet_b, "0x" + "b" * 64],
+                )
+
+            job = ScanJob(
+                "job", wallet_b, wallet_b, wallet_b, "running", 95, 0, 20, None,
+                "2026-08-10T00:00:00+00:00", "2026-08-10T00:00:00+00:00",
+            )
+            ScanJobManager._validate_staged_artifact(job, staging, previous)
+
+    def test_scan_extension_rejects_changed_cumulative_snapshot_start(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            live = Path(directory) / "live.duckdb"
+            wallet = "0x" + "a" * 40
+            with duckdb.connect(str(live)) as connection:
+                for relation in ("wallet_events", "token_summary", "counterparty_summary", "timeline_daily"):
+                    connection.execute(f"create table {relation} (wallet_address varchar)")
+                connection.execute(
+                    """
+                    create table pipeline_metadata (
+                      chain_id integer, wallet_address varchar, configured_wallet_label varchar,
+                      data_source varchar,
+                      snapshot_start_block bigint, snapshot_end_block bigint,
+                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar,
+                      generated_at timestamptz
+                    )
+                    """
+                )
+                connection.execute(
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized', current_timestamp)",
                     [wallet, "0x" + "a" * 64],
                 )
 
@@ -339,12 +397,13 @@ class ScanJobsTest(unittest.TestCase):
                     create table pipeline_metadata (
                       chain_id integer, wallet_address varchar, configured_wallet_label varchar,
                       data_source varchar, snapshot_start_block bigint, snapshot_end_block bigint,
-                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar
+                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar,
+                      generated_at timestamptz
                     )
                     """
                 )
                 connection.execute(
-                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized', current_timestamp)",
                     [wallet_a, "0x" + "a" * 64],
                 )
 
@@ -353,7 +412,7 @@ class ScanJobsTest(unittest.TestCase):
                 with duckdb.connect(str(staging_path)) as connection:
                     connection.execute("delete from wallet_events")
                     connection.execute(
-                        "insert into pipeline_metadata values (1, ?, 'wallet-b', 'hyperindex', 0, 20, ?, 'ethereum_finalized')",
+                        "insert into pipeline_metadata values (1, ?, 'wallet-b', 'hyperindex', 0, 20, ?, 'ethereum_finalized', current_timestamp)",
                         [wallet_b, "0x" + "b" * 64],
                     )
 
@@ -405,12 +464,13 @@ class ScanJobsTest(unittest.TestCase):
                     create table pipeline_metadata (
                       chain_id integer, wallet_address varchar, configured_wallet_label varchar,
                       data_source varchar, snapshot_start_block bigint, snapshot_end_block bigint,
-                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar
+                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar,
+                      generated_at timestamptz
                     )
                     """
                 )
                 connection.execute(
-                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized', current_timestamp)",
                     [wallet, "0x" + "a" * 64],
                 )
 
@@ -499,10 +559,10 @@ class ScanJobsTest(unittest.TestCase):
                     connection.execute("create table counterparty_summary (wallet_address varchar)")
                     connection.execute("create table timeline_daily (wallet_address varchar)")
                     connection.execute(
-                        "create table pipeline_metadata (wallet_address varchar, data_source varchar, snapshot_start_block bigint, snapshot_end_block bigint, snapshot_end_block_hash varchar, snapshot_finality_policy varchar)"
+                        "create table pipeline_metadata (wallet_address varchar, data_source varchar, snapshot_start_block bigint, snapshot_end_block bigint, snapshot_end_block_hash varchar, snapshot_finality_policy varchar, generated_at timestamptz)"
                     )
                     connection.execute(
-                        "insert into pipeline_metadata values (?, 'hyperindex', 0, ?, ?, 'ethereum_finalized')",
+                        "insert into pipeline_metadata values (?, 'hyperindex', 0, ?, ?, 'ethereum_finalized', current_timestamp)",
                         [job.wallet_address, job.to_block, "0x" + "b" * 64],
                     )
 

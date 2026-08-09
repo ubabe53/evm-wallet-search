@@ -308,6 +308,19 @@ class ScanJobManager:
             with duckdb.connect(str(staging_path), read_only=True) as connection:
                 for relation in ("pipeline_metadata", "wallet_events", "token_summary", "counterparty_summary", "timeline_daily"):
                     connection.execute(f"select count(*) from {relation}")
+                metadata_columns = {
+                    item[0]
+                    for item in connection.execute(
+                        """
+                        select column_name from duckdb_columns()
+                        where database_name = current_database()
+                          and schema_name = 'main'
+                          and table_name = 'pipeline_metadata'
+                        """
+                    ).fetchall()
+                }
+                if "generated_at" not in metadata_columns:
+                    raise RuntimeError("Wallet scan artifact metadata is missing generated_at")
                 rows = connection.execute(
                     """
                     select wallet_address, data_source, snapshot_start_block,
@@ -535,13 +548,53 @@ class ScanJobManager:
                                 raise RuntimeError(f"Wallet scan artifact dropped rows from ops.{relation}")
 
                         if previous_metadata_exists:
+                            previous_metadata_columns = [
+                                item[0]
+                                for item in connection.execute(
+                                    """
+                                    select column_name from duckdb_columns()
+                                    where database_name = 'previous_live'
+                                      and schema_name = 'main'
+                                      and table_name = 'pipeline_metadata'
+                                    order by column_index
+                                    """
+                                ).fetchall()
+                            ]
+                            staged_metadata_columns = {
+                                item[0]
+                                for item in connection.execute(
+                                    """
+                                    select column_name from duckdb_columns()
+                                    where database_name = current_database()
+                                      and schema_name = 'main'
+                                      and table_name = 'pipeline_metadata'
+                                    """
+                                ).fetchall()
+                            }
+                            comparable_metadata_columns = [
+                                column
+                                for column in previous_metadata_columns
+                                if column != "generated_at"
+                            ]
+                            if set(comparable_metadata_columns) != (
+                                staged_metadata_columns - {"generated_at"}
+                            ):
+                                raise RuntimeError(
+                                    "Wallet scan artifact changed existing wallet metadata schema"
+                                )
+                            metadata_projection = ", ".join(
+                                '"' + column.replace('"', '""') + '"'
+                                for column in comparable_metadata_columns
+                            )
                             metadata_missing = count_rows(
-                                """
+                                f"""
                                 select count(*) from (
-                                  select * from previous_live.main.pipeline_metadata
+                                  select {metadata_projection}
+                                  from previous_live.main.pipeline_metadata
                                   where wallet_address <> ?
                                   except all
-                                  select * from main.pipeline_metadata
+                                  select {metadata_projection}
+                                  from main.pipeline_metadata
                                   where wallet_address <> ?
                                 )
                                 """,
