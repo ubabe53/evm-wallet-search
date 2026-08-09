@@ -331,7 +331,7 @@ The full test command builds `analytics/artifacts/fixture.duckdb`, exports fixtu
 
 ## GitHub CI and Deployment
 
-`.github/workflows/ci.yml` runs the fast mandatory static gate, reproducible fixture-demo pipeline, and production static build for pull requests and pushes to `main`. It also runs advisory JavaScript and Python dependency audits. The uploaded production build is retained for one day to help diagnose a run; this retention setting does not control how long a deployed site stays online.
+`.github/workflows/ci.yml` runs the fast mandatory static gate, reproducible fixture-demo pipeline, and production static build for pull requests and pushes to `main`. A separate package job validates `compose.yaml` and builds both live distribution images without starting Postgres, contacting Ethereum, running an index, or requiring credentials. CI also runs advisory JavaScript and Python dependency audits. The uploaded production build is retained for one day to help diagnose a run; this retention setting does not control how long a deployed site stays online.
 
 `.github/workflows/deploy.yml` rebuilds the fixture-backed static demo from the exact revision that passed `main` CI and publishes it to GitHub Pages. It does not deploy the complete local database-backed application. Deployment is disabled by default. To enable it when the repository and GitHub plan support Pages:
 
