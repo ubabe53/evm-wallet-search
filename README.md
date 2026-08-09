@@ -66,7 +66,7 @@ The local dashboard exposes:
 - provenance that separates finalized scan coverage from observed event extrema;
 - `All`, `Recognized`, and `Other` token views plus pinned-block `EOA`/`Contract` evidence.
 - live mode selection among completed wallets without rescanning, plus separate wallet/ENS scan
-  submission with persistent progress feedback, last-good dashboard preservation and retry on
+  submission with honest stage-based activity feedback, last-good dashboard preservation and retry on
   refresh failure, and automatic switching; fixture mode keeps scanning disabled.
 
 Scan jobs are exposed by the local API and use the bundled bounded worker by default.
