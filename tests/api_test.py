@@ -34,6 +34,17 @@ class DashboardApiTest(unittest.TestCase):
         with self.service.connect() as connection:
             connection.execute("delete from app.token_recognition_overrides")
 
+    def test_liveness_does_not_require_an_analytics_artifact(self) -> None:
+        with TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.duckdb"
+            client = TestClient(
+                create_app(QueryService(missing), ScanJobManager(live_path=missing))
+            )
+            response = client.get("/api/v1/health/live")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
     def test_scan_job_and_wallet_list_contracts(self) -> None:
         manager = ScanJobManager(
             self.database_path,

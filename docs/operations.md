@@ -1,6 +1,53 @@
 # Operations
 
-## Local Setup
+## Packaged live setup
+
+Requirements are Bun and Docker Desktop. Copy `.env.example` to the ignored `.env` and set
+`ENVIO_API_TOKEN`. `ETHEREUM_RPC_URL` is optional for ordinary scans: Compose injects the configured
+public mainnet fallback when it is empty. The internal Postgres user, password, database, and both
+read/write DSNs are private Compose configuration and do not need user setup.
+
+Start the live product with one explicit initial address or ENS name:
+
+```sh
+cp .env.example .env
+bun run app:up -- 0x0000000000000000000000000000000000000001
+```
+
+The launcher validates configuration, builds the application and dashboard images, starts private
+Postgres plus the API/worker and web services, waits for process liveness, submits the initial scan
+through `POST /api/v1/scan-jobs`, and reports the same named stages as the dashboard. It prints the
+URL only after the worker has indexed the missing range through its pinned finalized endpoint,
+merged durable raw rows/checkpoints, built and validated staged analytics, and published
+`live.duckdb` atomically. A first wallet begins at block 0; an existing wallet resumes at its first
+missing block and reuses completed raw checkpoints after a failed publication. The resolved
+canonical initial target is saved without secrets under ignored `.runtime/docker.env` so it remains
+the unambiguous default when several wallets exist.
+
+Only nginx is published, on `127.0.0.1:5173` by default. Set `EVM_WALLET_APP_PORT` in `.env` if that
+port is occupied. FastAPI listens on all interfaces only within the private Compose network so nginx
+can reach it; Postgres and the API port are never published to the host. `/api/v1/health/live` is container
+liveness and can succeed before analytics exist; `/api/v1/health` becomes ready only after valid
+live provenance is available.
+
+```sh
+bun run app:status
+bun run app:logs
+bun run app:down
+```
+
+`app:down` removes containers and the private network but preserves the `postgres-data` and
+`analytics-data` named volumes. This retains raw checkpoints, every completed wallet projection,
+recognition overrides, and account-evidence cache. To diagnose a failed first scan, inspect
+`bun run app:logs`, correct `.env`, and rerun the same `app:up` command; publication failures retain
+the last good DuckDB artifact and durable raw checkpoints. Removing Compose volumes permanently
+deletes local ingestion and analytics state and is intentionally not wrapped in a convenience
+command.
+
+The Docker path never builds or serves fixture JSON. The deterministic fixture build remains the
+separate GitHub Pages demo workflow.
+
+## Native component development
 
 ```sh
 bun install
@@ -275,7 +322,8 @@ The full test command builds `analytics/artifacts/fixture.duckdb`, exports fixtu
 
 The demo site does not expire after one day; only the separate CI download artifact does. If private-repository Pages is unavailable on the current plan, keep the gate disabled and connect the fixture-demo build to a static host that supports private Git integration, such as Cloudflare Pages, Netlify, or Vercel. Set the host's build command to `bun run test && bun run dashboard:build` and its output directory to `dist`.
 
-The planned local distribution is separate from static deployment. It will use Docker to package the indexer, persistence, transformation/API workflow, and frontend with explicit persistent volumes, secrets, health checks, and startup order. No Docker or Compose contract exists in the repository yet.
+The Compose live distribution and static deployment are deliberately separate. Compose packages
+the complete local database-backed application; GitHub Pages publishes only bounded fixture JSON.
 
 Dependabot checks Actions, JavaScript, indexer, and Python dependencies weekly. Pull requests inherit the repository template and Copilot review instructions, but branch protection and automatic Copilot review assignment are repository settings and must be enabled separately when desired.
 

@@ -30,8 +30,10 @@ bun run api:dev
 bun run test:api
 ```
 
-The service binds to `127.0.0.1:8000`, exposes readiness at `/api/v1/health`, and serves OpenAPI
-documentation at `/docs`. Stop it before rebuilding `live.duckdb`, then restart it and reload the
+The native development service binds to `127.0.0.1:8000`. `/api/v1/health/live` reports only that
+the process is reachable and deliberately works before the first artifact exists;
+`/api/v1/health` is readiness backed by validated analytics metadata. OpenAPI documentation is at
+`/docs`. Stop the native API before rebuilding `live.duckdb`, then restart it and reload the
 dashboard after the build completes.
 
 ## Contracts

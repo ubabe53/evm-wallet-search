@@ -49,6 +49,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
 | Fixture demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON only to the explicit fixture/static build | The complete-history local serving architecture |
 | Dashboard | `src/` | Present activity timeline, summary, rankings, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
+| Local distribution | `Dockerfile`, `compose.yaml`, `docker/` | Package persistent Postgres, the API/worker/dbt runtime, and the API-mode dashboard behind one loopback web origin | Nested Docker, fixture/live mixing, public database ports, or an image containing user secrets |
 | Tests | `tests/`, `analytics/tests/`, `analytics/models/unit_tests.yml` | Enforce UI, export, enrichment, grain, and semantic contracts | A substitute for documenting system intent and boundaries |
 | Context layer | `AGENTS.md`, this file, `README.md`, `docs/` | Make constraints, decisions, operations, and change routes legible | Stale narrative that contradicts executable behavior |
 
@@ -143,6 +144,7 @@ This path is deterministic and suitable for CI and GitHub Pages. It is not proof
 
 The loopback-only FastAPI service:
 
+- expose process liveness at `/api/v1/health/live` without implying that a live analytics artifact exists, while `/api/v1/health` remains artifact-aware readiness;
 - own DuckDB connections and limit writes to `app.token_recognition_overrides`;
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, timeline buckets, event pages, and time ranges on demand;
@@ -157,11 +159,28 @@ The loopback-only FastAPI service:
 
 The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It resolves an omitted wallet from request-time `EVM_WALLET_SCAN_ADDRESS` or the artifact's sole current metadata row; zero or multiple metadata wallets fail clearly and require the selector. It exposes an explicit `dashboard-api-v16` metadata projection instead of forwarding the internal mart with `select *`, then lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves exact totals, requests a stable yearly overview or one selected year's monthly buckets plus bounded token/counterparty rows, applies selected year/month UTC periods through half-open API filters, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override.
 
+## Local container distribution
+
+The supported packaged runtime uses Docker Compose. Postgres is private to the Compose network and
+persists Envio plus shared bounded raw state in a named volume. The application image contains the
+FastAPI process, bounded Envio worker, Python/dbt runtime, and reviewed source revision; its separate
+named volume holds `live.duckdb` and the account-evidence cache. The nginx dashboard image serves an
+API-mode Vite build, proxies `/api` to FastAPI over the private network, and publishes only one
+loopback host port. FastAPI binds all container interfaces only inside that private network while
+native development retains its loopback bind. Envio runs
+in production mode against the external Compose Postgres service with Hasura disabled; the stack
+never mounts the host Docker socket.
+
+`ENVIO_API_TOKEN` and an optional private `ETHEREUM_RPC_URL` enter at runtime through ignored `.env`
+configuration and are not copied into either image. Container liveness establishes only that the
+process/proxy is reachable. Product readiness still requires a successfully published, finalized
+live artifact. Named volumes survive ordinary stack shutdown; removing them is an explicit
+destructive recovery operation.
+
 ## Known implementation gaps
 
 - The static exporter retains legacy candidate-union machinery that should not expand into the local serving model.
 - The wildcard `Transfer` source does not yet disambiguate ERC-20 from ERC-721-like contracts that emit the identical signature.
-- Docker packaging is an approved direction, but service topology, volumes, health checks, secrets, and startup order are not designed or implemented.
 
 These are explicit gaps, not permissions to fill them opportunistically during unrelated work.
 

@@ -142,6 +142,12 @@ def create_app(service: QueryService | None = None, scan_manager: ScanJobManager
     )
     request_filters = DashboardFiltersDependency(query_service)
 
+    @application.get("/api/v1/health/live")
+    def liveness() -> dict:
+        """Report process liveness without claiming that analytics are ready."""
+
+        return {"status": "ok"}
+
     @application.exception_handler(DatabaseUnavailable)
     async def database_unavailable(_request, error: DatabaseUnavailable) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(error)})

@@ -82,7 +82,14 @@ GitHub Pages is a portfolio demonstration, not the complete application runtime.
 
 The exporter evaluates the nine non-empty recognition/address-evidence selections needed by the deterministic fixture demo. Complete local counts and rankings use on-demand DuckDB API queries.
 
-Docker is the intended distribution mechanism for the local product, not for GitHub Pages. Before adding it, define separate services for indexing, transformation, API, and frontend as needed; persist Postgres and DuckDB deliberately; keep secrets outside images; add health and readiness behavior; and ensure fixture-demo commands cannot overwrite live local artifacts.
+Docker Compose is the supported distribution mechanism for the live local product, not for GitHub
+Pages. It runs private persistent Postgres, one application runtime containing FastAPI plus the
+bounded Envio/dbt worker, and an nginx-served API-mode dashboard on one loopback origin. Postgres and
+analytics artifacts use separate named volumes, user keys enter only through ignored runtime
+configuration, and the application uses external-Postgres `envio start` with Hasura disabled rather
+than nested Docker. Process liveness is distinct from artifact readiness: the API may be live while
+the initial finalized scan is still producing the first valid `live.duckdb`. Fixture build/export
+commands remain outside this stack and cannot overwrite its named analytics volume.
 
 ## Scope Boundaries
 
