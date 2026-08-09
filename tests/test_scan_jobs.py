@@ -367,6 +367,77 @@ class ScanJobsTest(unittest.TestCase):
                     self.fail("existing event was not preserved")
                 self.assertEqual(event_row[0], "event-a")
 
+    def test_scan_accepts_recomputed_summary_rows_when_event_identity_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            live = Path(directory) / "live.duckdb"
+            wallet = "0x" + "a" * 40
+            transaction_hash = "0x" + "1" * 64
+            with duckdb.connect(str(live)) as connection:
+                connection.execute(
+                    """
+                    create table wallet_events (
+                      chain_id integer, wallet_address varchar,
+                      transaction_hash varchar, log_index integer
+                    )
+                    """
+                )
+                connection.execute(
+                    "insert into wallet_events values (1, ?, ?, 0)",
+                    [wallet, transaction_hash],
+                )
+                connection.execute(
+                    "create table token_summary (wallet_address varchar, transfer_count bigint)"
+                )
+                connection.execute("insert into token_summary values (?, 1)", [wallet])
+                for relation in ("counterparty_summary", "timeline_daily"):
+                    connection.execute(f"create table {relation} (wallet_address varchar)")
+                connection.execute(
+                    """
+                    create table pipeline_metadata (
+                      chain_id integer, wallet_address varchar, configured_wallet_label varchar,
+                      data_source varchar, snapshot_start_block bigint, snapshot_end_block bigint,
+                      snapshot_end_block_hash varchar, snapshot_finality_policy varchar
+                    )
+                    """
+                )
+                connection.execute(
+                    "insert into pipeline_metadata values (1, ?, 'wallet-a', 'hyperindex', 0, 10, ?, 'ethereum_finalized')",
+                    [wallet, "0x" + "a" * 64],
+                )
+
+            def worker(job, staging_path, progress: Callable[[int], None]) -> None:
+                del progress
+                with duckdb.connect(str(staging_path)) as connection:
+                    connection.execute("update token_summary set transfer_count = 2")
+                    connection.execute(
+                        "update pipeline_metadata set snapshot_end_block = ?, snapshot_end_block_hash = ? where wallet_address = ?",
+                        [job.to_block, "0x" + "b" * 64, wallet],
+                    )
+
+            manager = ScanJobManager(
+                live, resolver=resolve_wallet, worker=worker, finalized_head=lambda: 20
+            )
+            job = manager.create(wallet)
+            for _ in range(500):
+                current = manager.get(job.job_id)
+                if current and current.status in {"completed", "failed"}:
+                    break
+                time.sleep(0.01)
+            completed = manager.get(job.job_id)
+            assert completed is not None
+            self.assertEqual(completed.status, "completed", completed.error)
+            with duckdb.connect(str(live), read_only=True) as connection:
+                self.assertEqual(
+                    connection.execute("select transfer_count from token_summary").fetchone(),
+                    (2,),
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "select transaction_hash from wallet_events"
+                    ).fetchone(),
+                    (transaction_hash,),
+                )
+
     def test_failed_worker_leaves_previous_artifact_served(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             live = Path(directory) / "live.duckdb"

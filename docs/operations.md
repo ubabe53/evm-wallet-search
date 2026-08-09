@@ -174,7 +174,9 @@ one isolated bounded Envio schema, proves Envio reached the requested end, reche
 against current finalized RPC evidence, transactionally merges raw rows and a durable checkpoint,
 drops the temporary schema, and runs dbt against the staged artifact. Only one job runs at a time.
 The manager then validates provenance and preservation before atomically replacing
-`analytics/artifacts/live.duckdb`; failures never publish a partial artifact. Set
+`analytics/artifacts/live.duckdb`; it protects canonical event identities, immutable event facts,
+shared RPC observations, run history, and application overrides without requiring recomputed dbt
+summary rows to remain byte-for-byte unchanged. Failures never publish a partial artifact. Set
 `WALLET_SCAN_COMMAND` only to override this first-party subprocess contract deliberately.
 
 Envio remains a service after reaching a configured `end_block`, so the worker supervises it

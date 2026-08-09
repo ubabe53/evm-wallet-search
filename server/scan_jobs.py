@@ -378,13 +378,27 @@ class ScanJobManager:
                                 raise RuntimeError("DuckDB count query returned no row")
                             return int(row[0])
 
-                        previous_metadata_exists = count_rows(
-                            """
-                            select count(*) from duckdb_tables()
-                            where database_name = 'previous_live'
-                              and schema_name = 'main' and table_name = 'pipeline_metadata'
-                            """
-                        )
+                        previous_tables = {
+                            (item[0], item[1])
+                            for item in connection.execute(
+                                """
+                                select schema_name, table_name from duckdb_tables()
+                                where database_name = 'previous_live'
+                                """
+                            ).fetchall()
+                        }
+                        staged_tables = {
+                            (item[0], item[1])
+                            for item in connection.execute(
+                                """
+                                select schema_name, table_name from duckdb_tables()
+                                where database_name = current_database()
+                                """
+                            ).fetchall()
+                        }
+                        previous_metadata_exists = (
+                            "main", "pipeline_metadata"
+                        ) in previous_tables
                         previous_wallets = (
                             {
                                 item[0]
@@ -408,23 +422,94 @@ class ScanJobManager:
                             "token_rpc_metadata",
                             "int_token_enrichment",
                         ):
-                            previous_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where database_name = 'previous_live'
-                                  and schema_name = 'main' and table_name = ?
-                                """,
-                                [relation])
-                            if not previous_exists:
+                            if ("main", relation) not in previous_tables:
                                 continue
-                            staged_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = 'main' and table_name = ?
-                                """,
-                                [relation])
-                            if not staged_exists:
+                            if ("main", relation) not in staged_tables:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation {relation}")
+                        wallet_event_columns = {
+                            item[0]
+                            for item in connection.execute(
+                                """
+                                select column_name from duckdb_columns()
+                                where database_name = 'previous_live'
+                                  and schema_name = 'main' and table_name = 'wallet_events'
+                                """
+                            ).fetchall()
+                        }
+                        wallet_event_identity = {
+                            "chain_id", "wallet_address", "transaction_hash", "log_index"
+                        }
+                        if not wallet_event_columns:
+                            missing_events = 0
+                        elif wallet_event_identity.issubset(wallet_event_columns):
+                            missing_events = count_rows(
+                                """
+                                select count(*) from (
+                                  select chain_id, lower(wallet_address) as wallet_address,
+                                         lower(transaction_hash) as transaction_hash, log_index
+                                  from previous_live.main.wallet_events
+                                  except all
+                                  select chain_id, lower(wallet_address) as wallet_address,
+                                         lower(transaction_hash) as transaction_hash, log_index
+                                  from main.wallet_events
+                                )
+                                """
+                            )
+                        else:
+                            # Compatibility path for an older or adapter-owned artifact:
+                            # without the canonical key, require exact row preservation.
+                            missing_events = count_rows(
+                                """
+                                select count(*) from (
+                                  select * from previous_live.main.wallet_events
+                                  except all
+                                  select * from main.wallet_events
+                                )
+                                """
+                            )
+                        if missing_events:
+                            raise RuntimeError("Wallet scan artifact dropped rows from wallet_events")
+
+                        immutable_event_columns = (
+                            "chain_id", "block_number", "block_hash", "block_timestamp",
+                            "transaction_hash", "transaction_index", "transaction_from_address",
+                            "transaction_to_address", "log_index", "wallet_address",
+                            "token_address", "from_address", "to_address",
+                            "transaction_sender_relation", "transaction_target_relation",
+                            "is_indirect", "direction", "counterparty_address", "value_raw",
+                        )
+                        intermediate_columns = {
+                            item[0]
+                            for item in connection.execute(
+                                """
+                                select column_name from duckdb_columns()
+                                where database_name = 'previous_live'
+                                  and schema_name = 'main'
+                                  and table_name = 'int_wallet_transfer_events'
+                                """
+                            ).fetchall()
+                        }
+                        if set(immutable_event_columns).issubset(intermediate_columns):
+                            projection = ", ".join(immutable_event_columns)
+                            missing_facts = count_rows(
+                                f"""
+                                select count(*) from (
+                                  select {projection}
+                                  from previous_live.main.int_wallet_transfer_events
+                                  except all
+                                  select {projection}
+                                  from main.int_wallet_transfer_events
+                                )
+                                """
+                            )
+                            if missing_facts:
+                                raise RuntimeError(
+                                    "Wallet scan artifact changed or dropped immutable event facts"
+                                )
+
+                        for relation in ("token_rpc_metadata",):
+                            if ("main", relation) not in previous_tables:
+                                continue
                             missing = count_rows(
                                 f"select count(*) from (select * from previous_live.main.\"{relation}\" except all select * from main.\"{relation}\")"
                             )
@@ -436,22 +521,9 @@ class ScanJobManager:
                             "scan_generations",
                             "pipeline_runs",
                         ):
-                            previous_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where database_name = 'previous_live'
-                                  and schema_name = 'ops' and table_name = ?
-                                """,
-                                [relation])
-                            if not previous_exists:
+                            if ("ops", relation) not in previous_tables:
                                 continue
-                            staged_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = 'ops' and table_name = ?
-                                """,
-                                [relation])
-                            if not staged_exists:
+                            if ("ops", relation) not in staged_tables:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation ops.{relation}")
                             missing = count_rows(
                                 f"select count(*) from (select * from previous_live.ops.\"{relation}\" except all select * from ops.\"{relation}\")",
@@ -485,35 +557,19 @@ class ScanJobManager:
                         ).fetchall():
                             if schema_name == "main" and relation == "pipeline_metadata":
                                 continue
-                            staged_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = ? and table_name = ?
-                                """,
-                                [schema_name, relation])
-                            if not staged_exists:
+                            if (schema_name, relation) not in staged_tables:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation {schema_name}.{relation}")
-                            missing = count_rows(
-                                f"select count(*) from (select * from previous_live.\"{schema_name}\".\"{relation}\" except all select * from \"{schema_name}\".\"{relation}\")"
-                            )
-                            if missing:
-                                raise RuntimeError(f"Wallet scan artifact dropped rows from {schema_name}.{relation}")
+                            if schema_name == "app":
+                                missing = count_rows(
+                                    f"select count(*) from (select * from previous_live.\"{schema_name}\".\"{relation}\" except all select * from \"{schema_name}\".\"{relation}\")"
+                                )
+                                if missing:
+                                    raise RuntimeError(
+                                        f"Wallet scan artifact dropped rows from {schema_name}.{relation}"
+                                    )
 
-                        override_exists = count_rows(
-                            """
-                            select count(*) from duckdb_tables()
-                            where database_name = 'previous_live'
-                              and schema_name = 'app' and table_name = 'token_recognition_overrides'
-                            """
-                        )
-                        if override_exists:
-                            staged_override_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = 'app' and table_name = 'token_recognition_overrides'
-                                """
-                            )
-                            if not staged_override_exists:
+                        if ("app", "token_recognition_overrides") in previous_tables:
+                            if ("app", "token_recognition_overrides") not in staged_tables:
                                 raise RuntimeError("Wallet scan artifact dropped token-recognition overrides")
                             override_missing = count_rows(
                                 """

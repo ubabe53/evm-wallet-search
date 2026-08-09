@@ -120,7 +120,10 @@ The scan manager copies the complete live artifact into a temporary staging path
 to the bundled worker (or an explicit `WALLET_SCAN_COMMAND` override). The worker supervises bounded
 Envio indexing through persisted end-checkpoint readiness and process-group shutdown, then sequences finality validation, transactional shared-Postgres merge/checkpointing,
 temporary-schema cleanup, and dbt against that staged path. The manager then independently validates
-existing-wallet/local-state preservation and finalized provenance before atomic publication.
+existing-wallet/local-state preservation and finalized provenance before atomic publication. That
+check preserves canonical event identities, immutable event facts, shared RPC observations, run
+history, and application overrides; dbt-owned summaries may replace prior aggregate rows because
+adding events legitimately changes their counts.
 When a publication retry pins a newer finalized endpoint, the worker reuses every contiguous completed
 raw checkpoint from the still-missing start and indexes only the uncheckpointed tail.
 ```
