@@ -122,8 +122,9 @@ describe("live wallet controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start scan" }));
 
     await waitFor(() => expect(scanInput).toHaveValue(""));
-    expect(screen.getByRole("button", { name: "Scanning 0%" })).toBeInTheDocument();
-    expect(screen.getByRole("progressbar")).toHaveValue(0);
+    expect(screen.getByRole("button", { name: "Queued" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Queued" })).not.toHaveAttribute("value");
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
     expect(screen.queryByText("Live mode")).not.toBeInTheDocument();
     expect(screen.queryByText("Completed wallets:")).not.toBeInTheDocument();
   });

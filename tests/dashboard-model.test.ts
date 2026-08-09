@@ -13,6 +13,7 @@ import {
   etherscanAddressUrl,
   etherscanTokenUrl,
   etherscanTransactionUrl,
+  scanStageLabel,
   snapshotCoverageLabel,
   timelineScaleTicks,
   timelineYears,
@@ -20,6 +21,15 @@ import {
 import { metadata, summaries, timeline } from "./dashboard-fixtures";
 
 describe("dashboard model", () => {
+  it("labels scan stages without presenting coarse adapter checkpoints as percentages", () => {
+    expect(scanStageLabel({ status: "queued", progress: 0 })).toBe("Queued");
+    expect(scanStageLabel({ status: "running", progress: 1 })).toBe("Preparing scan");
+    expect(scanStageLabel({ status: "running", progress: 5 })).toBe("Indexing and building analytics");
+    expect(scanStageLabel({ status: "running", progress: 95 })).toBe("Validating and publishing");
+    expect(scanStageLabel({ status: "completed", progress: 100 })).toBe("Complete");
+    expect(scanStageLabel({ status: "failed", progress: 0 })).toBe("Failed");
+  });
+
   it("exposes binary account filters while retaining unresolved rows in the all selection", () => {
     expect(accountMatches("eoa_candidate", ["eoa_candidate"])).toBe(true);
     expect(accountMatches("contract", ["eoa_candidate"])).toBe(false);

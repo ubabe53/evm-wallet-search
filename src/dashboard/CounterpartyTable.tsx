@@ -27,8 +27,8 @@ export function CounterpartyTable({ rows }: { rows: RankedCounterparty[] }) {
         )}
         {rows.map((row, index) => (
           <tr key={row.counterparty_address}>
-            <td className="rankCell">{index + 1}</td>
-            <td className="accountCell">
+            <td className="rankCell" aria-label={`Rank ${index + 1}`}>{index + 1}</td>
+            <td className="accountCell" data-label={`#${index + 1} Account`}>
               <div>
                 <EtherscanLink
                   className="addressLink"
@@ -41,11 +41,11 @@ export function CounterpartyTable({ rows }: { rows: RankedCounterparty[] }) {
               </div>
               <small>Last active {new Date(row.last_seen_at).toLocaleDateString()}</small>
             </td>
-            <td className="activityCell">
+            <td className="activityCell" data-label="Activity">
               <strong>{row.transfer_count.toLocaleString("en-US")}</strong>
               <small>{row.token_count.toLocaleString("en-US")} {row.token_count === 1 ? "token" : "tokens"}</small>
             </td>
-            <td>
+            <td className="counterpartyDirectionCell" data-label="Inbound / Outbound">
               <span
                 className="flowIndicator"
                 title={`${row.inbound_transfer_count.toLocaleString("en-US")} inbound, ${row.outbound_transfer_count.toLocaleString("en-US")} outbound Transfer events`}
