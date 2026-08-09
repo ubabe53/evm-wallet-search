@@ -83,7 +83,7 @@ export function scanStage(job: Pick<ScanJobPayload, "status" | "progress">): str
   return "Validating and publishing";
 }
 
-function requireEnvioToken(environment: NodeJS.ProcessEnv = process.env): void {
+export function requireEnvioToken(environment: NodeJS.ProcessEnv = process.env): void {
   const token = environment.ENVIO_API_TOKEN?.trim();
   if (!token) {
     throw new Error(
@@ -110,7 +110,7 @@ async function persistDefaultWallet(walletAddress: string): Promise<void> {
   await writeFile(RUNTIME_ENV_PATH, `EVM_WALLET_SCAN_ADDRESS=${walletAddress}\n`, { mode: 0o600 });
 }
 
-async function compose(
+export async function compose(
   arguments_: string[],
   runtime: Record<string, string>,
   options: { quiet?: boolean } = {},
@@ -131,7 +131,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<{ response
   return { response, payload };
 }
 
-async function waitForLiveness(baseUrl: string, timeoutMs = 180_000): Promise<void> {
+export async function waitForLiveness(baseUrl: string, timeoutMs = 180_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {

@@ -21,7 +21,7 @@ services:
       context: .
       target: application
     environment:
-      ENVIO_API_TOKEN: ${ENVIO_API_TOKEN:?Set ENVIO_API_TOKEN in .env}
+      ENVIO_API_TOKEN: ${ENVIO_API_TOKEN:-}
       ETHEREUM_RPC_URL: ${ETHEREUM_RPC_URL:-https://ethereum-rpc.publicnode.com}
       ENVIO_HASURA: "false"
       ENVIO_TUI: "false"

@@ -86,7 +86,7 @@ for the next current overview image without leaving a broken link in this README
 ## Quick start
 
 Requirements: [Bun](https://bun.sh/) and Docker Desktop. Copy the environment template and add the
-Envio HyperSync token used by live indexing. A private Ethereum mainnet RPC is optional; when it is
+Envio HyperSync token used by live indexing. A user-supplied Ethereum mainnet RPC is optional; when it is
 absent, the stack uses the documented public read-only fallback for ENS and finalized-block checks.
 
 ```sh
@@ -106,6 +106,10 @@ bun run app:status
 bun run app:logs
 bun run app:down     # preserves Postgres and analytics volumes
 ```
+
+Counterparty bytecode evidence remains an explicit, potentially RPC-intensive operation. With a
+non-empty `ETHEREUM_RPC_URL` configured, `bun run app:enrich` checkpoints only missing shared address
+evidence and atomically republishes every completed wallet projection.
 
 The deterministic fixture build remains the GitHub Pages portfolio path; it is not loaded by this
 live stack. Native component development and recovery commands remain documented in the

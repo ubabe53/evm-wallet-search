@@ -179,6 +179,25 @@ without starting an implicit 100k-plus RPC enrichment.
 
 After the next live analytics build, `pipeline_metadata` recomputes coverage against the current snapshot rather than counting every row in the cache. It reports distinct eligible, classified, failed, and not-checked nonzero/nonself counterparties plus the same reconciliation weighted by captured Transfer-signature events. This makes an intentional `--limit` run visibly partial. Cached addresses that are no longer in the current wallet population do not count toward coverage.
 
+For the packaged stack, set an explicit `ETHEREUM_RPC_URL` in `.env` and run:
+
+```sh
+bun run app:enrich
+```
+
+This explicit maintenance command stops FastAPI, collects only unresolved counterparty evidence
+into the persistent shared cache, and rebuilds every completed wallet from its recorded cumulative
+finalized interval in a temporary copy of `live.duckdb`. It verifies that immutable event facts,
+finalized coverage, run/generation history, wallet targets, and recognition overrides are unchanged
+before atomic publication, then restarts FastAPI even if collection or rebuilding fails. A failed
+publication leaves the previously served artifact intact; successfully checkpointed evidence stays
+in the separate cache and is reused on retry. The command refuses the public fallback because a
+fresh wallet can require many `eth_getCode` calls.
+
+This maintenance path does not use HyperSync and therefore does not require `ENVIO_API_TOKEN` once
+the live stack and persistent data already exist. Starting or advancing a wallet scan still requires
+the Envio token and `app:up` continues to fail fast when it is absent.
+
 The default work unit is 100 `eth_getCode` calls with two retries for unresolved calls. Providers with smaller limits can override these values without changing the evidence semantics:
 
 ```sh

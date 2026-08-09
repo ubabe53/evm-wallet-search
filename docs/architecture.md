@@ -44,6 +44,13 @@ The primary overview pairs a zero-based stacked bar timeline with the Top Counte
 
 An explicit RPC enrichment step selects every distinct event counterparty exactly once after excluding the configured wallet and zero address. It resolves one concrete `safe` block (or a configured confirmed-head fallback), batches `eth_getCode`, and checkpoints results in a separate ignored DuckDB cache. Exact 23-byte code beginning `0xef0100` preserves its target as internal `eip7702_delegated` code state but remains an EOA candidate for public presentation; empty code is `eoa_candidate`; other code is `contract`; and failed reads are retryable `unknown`. Successful rows are never automatically refreshed. The stored block number, hash, timestamp, finality policy, fetch time, and reason make the historical observation explicit; no-code evidence does not prove an EOA, personhood, control, or permanence.
 
+The packaged `app:enrich` operation requires an explicitly configured RPC and remains
+separate from `app:up`. It checkpoints only missing evidence, then reprocesses each completed
+wallet's cumulative finalized range into a staged copy so historical rows receive the shared
+classification without changing raw evidence or scan coverage. Publication requires exact
+preservation of immutable event facts, orchestration tables, wallet targets, and application
+overrides. Evidence-cache progress survives a failed analytical publication and remains retryable.
+
 Safe and ERC-4337-specific collection are intentionally removed. A deployed Safe or smart account with bytecode is ordinary contract evidence. A counterfactual address with no code can appear as an EOA candidate under this deliberately bounded binary presentation; that limitation is disclosed rather than hidden behind speculative subtype detection.
 
 Visible blockchain identifiers are Etherscan navigation targets. Token-activity symbols, their compact emitting-contract addresses, and event symbols link to `/token/{address}`, counterparty addresses link to `/address/{address}`, and event transaction controls link to `/tx/{hash}`. All navigation opens a new tab without granting the destination access to the dashboard window.

@@ -27,6 +27,7 @@
     "app:down": "bun scripts/local_stack.ts down",
     "app:status": "bun scripts/local_stack.ts status",
     "app:logs": "bun scripts/local_stack.ts logs",
+    "app:enrich": "bun scripts/local_enrich.ts",
     "app:check": "bun scripts/local_stack.ts check",
     "lint": "bun run lint:js && bun run lint:py",
     "lint:js": "oxlint --deny-warnings src indexer/src tests vite.config.ts vitest.config.ts vitest.setup.ts",

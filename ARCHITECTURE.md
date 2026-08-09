@@ -171,11 +171,18 @@ native development retains its loopback bind. Envio runs
 in production mode against the external Compose Postgres service with Hasura disabled; the stack
 never mounts the host Docker socket.
 
-`ENVIO_API_TOKEN` and an optional private `ETHEREUM_RPC_URL` enter at runtime through ignored `.env`
+`ENVIO_API_TOKEN` and an optional user-supplied `ETHEREUM_RPC_URL` enter at runtime through ignored `.env`
 configuration and are not copied into either image. Container liveness establishes only that the
 process/proxy is reachable. Product readiness still requires a successfully published, finalized
 live artifact. Named volumes survive ordinary stack shutdown; removing them is an explicit
 destructive recovery operation.
+
+Counterparty bytecode enrichment is never an implicit startup step. The packaged explicit command
+requires an explicitly configured RPC, checkpoints shared `(chain_id, address)` evidence, rebuilds every completed
+wallet over its recorded cumulative finalized interval in a staged artifact, and atomically
+publishes only after durable `ops`/`app` state, immutable event facts, and finalized coverage are
+preserved. Failed publication retains both the prior live artifact and reusable evidence-cache
+progress.
 
 ## Known implementation gaps
 
