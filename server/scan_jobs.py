@@ -243,7 +243,10 @@ class ScanJobManager:
             return []
         try:
             import duckdb
-            with duckdb.connect(str(self.live_path), read_only=True) as connection:
+            # Match QueryService's connection configuration. DuckDB rejects
+            # concurrent connections to one file when read_only differs, even
+            # when this manager performs only SELECTs.
+            with duckdb.connect(str(self.live_path), read_only=False) as connection:
                 rows = connection.execute(
                     "select chain_id, wallet_address, configured_wallet_label from pipeline_metadata order by chain_id, wallet_address"
                 ).fetchall()
@@ -262,7 +265,7 @@ class ScanJobManager:
         try:
             import duckdb
 
-            with duckdb.connect(str(self.live_path), read_only=True) as connection:
+            with duckdb.connect(str(self.live_path), read_only=False) as connection:
                 row = connection.execute(
                     """
                     select max(snapshot_end_block)

@@ -244,6 +244,15 @@ class ScanJobsTest(unittest.TestCase):
             manager = ScanJobManager(
                 live, resolver=resolve_wallet, worker=worker, finalized_head=lambda: 20
             )
+            # The dashboard query service keeps read-write connections because
+            # it owns recognition overrides. Manager reads and validation must
+            # use the same DuckDB configuration while one is active.
+            with duckdb.connect(str(live), read_only=False):
+                self.assertEqual(
+                    {item["wallet_address"] for item in manager.list_wallets()},
+                    {wallet},
+                )
+                self.assertEqual(manager._next_from_block(wallet), 11)
             job = manager.create(wallet)
             for _ in range(50):
                 current = manager.get(job.job_id)
