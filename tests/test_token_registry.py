@@ -31,7 +31,13 @@ class TokenRegistryTest(unittest.TestCase):
                 self.assertEqual(rows[address]["metadata_source"], "coingecko")
 
     def test_configuration_prefers_environment_then_yaml_then_public_fallback(self) -> None:
-        config = {"ethereum": {"rpc_url": "https://yaml.example", "public_rpc_url": "https://public.example"}}
+        config = {
+            "analytics": {"wallet_scan_postgres_dsn": "postgresql://yaml-writer"},
+            "ethereum": {
+                "rpc_url": "https://yaml.example",
+                "public_rpc_url": "https://public.example",
+            },
+        }
         self.assertEqual(
             configured_value("ETHEREUM_RPC_URL", config, "ethereum", "rpc_url", environ={"ETHEREUM_RPC_URL": "https://env.example"}),
             "https://env.example",
@@ -41,6 +47,10 @@ class TokenRegistryTest(unittest.TestCase):
         self.assertEqual(
             resolved_runtime({})["hyperindex_graphql_url"],
             DEFAULT_HYPERINDEX_GRAPHQL_URL,
+        )
+        self.assertEqual(
+            resolved_runtime(config)["wallet_scan_postgres_dsn"],
+            "postgresql://yaml-writer",
         )
 
     def test_configuration_rejects_non_mapping_yaml(self) -> None:

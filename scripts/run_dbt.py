@@ -44,6 +44,7 @@ try:
         resolve_snapshot_target,
         start_snapshot_runs,
     )
+    from .wallet_scan_raw import shared_raw_store_exists
 except ImportError:
     from artifact_paths import (
         ACCOUNT_EVIDENCE_DB_PATH,
@@ -70,11 +71,13 @@ except ImportError:
         resolve_snapshot_target,
         start_snapshot_runs,
     )
+    from wallet_scan_raw import shared_raw_store_exists
 
 
 REQUIREMENTS = ANALYTICS_DIR / "requirements.txt"
 HYPERINDEX_DSN_ENV = "DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN"
 EVM_WALLET_SCAN_ADDRESS_ENV = "EVM_WALLET_SCAN_ADDRESS"
+EVM_WALLET_SHARED_RAW_ENABLED_ENV = "EVM_WALLET_SHARED_RAW_ENABLED"
 DBT_DOCS_SUBCOMMANDS = {"generate", "serve"}
 
 
@@ -90,13 +93,27 @@ def count_hyperindex_events(dsn: str, run: SnapshotRun) -> int:
         connection.execute(
             f"attach '{escaped_dsn}' as hyperindex (type postgres, read_only)"
         )
+        shared_union = (
+            'union all select chain_id, transaction_hash, log_index, block_number, from_address, to_address '
+            'from hyperindex.wallet_scan.transfer_events'
+            if shared_raw_store_exists(dsn)
+            else ""
+        )
         row = connection.execute(
-            """
+            f"""
             select count(*)
-            from hyperindex.public."Erc20Transfer"
-            where chain_id = 1
-              and block_number between ? and ?
-              and (lower(from_address) = ? or lower(to_address) = ?)
+            from (
+              select chain_id, transaction_hash, log_index
+              from (
+                select chain_id, transaction_hash, log_index, block_number, from_address, to_address
+                from hyperindex.public."Erc20Transfer"
+                {shared_union}
+              ) raw_events
+              where chain_id = 1
+                and block_number between ? and ?
+                and (lower(from_address) = ? or lower(to_address) = ?)
+              group by chain_id, transaction_hash, log_index
+            ) deduped
             """,
             [run.from_block, run.to_block, wallet_address, wallet_address],
         ).fetchone()
@@ -124,6 +141,7 @@ def run_dbt(
     use_hyperindex: bool,
     hyperindex_dsn: str | None,
     extra_env: dict[str, str] | None = None,
+    database_path_override: Path | None = None,
 ) -> None:
     """Execute dbt against the database dedicated to the selected source mode."""
 
@@ -136,7 +154,7 @@ def run_dbt(
 
     env = os.environ.copy()
     env["DBT_PROFILES_DIR"] = str(ANALYTICS_DIR)
-    db_path = database_path(use_fixture=not use_hyperindex)
+    db_path = database_path_override or database_path(use_fixture=not use_hyperindex)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     env[DBT_DUCKDB_PATH_ENV] = str(db_path)
     env[ACCOUNT_EVIDENCE_DUCKDB_PATH_ENV] = str(ACCOUNT_EVIDENCE_DB_PATH)
@@ -149,6 +167,9 @@ def run_dbt(
                 "Set it to the Envio Postgres connection URI before running dbt."
             )
         env[HYPERINDEX_DSN_ENV] = hyperindex_dsn
+        env[EVM_WALLET_SHARED_RAW_ENABLED_ENV] = (
+            "true" if shared_raw_store_exists(hyperindex_dsn) else "false"
+        )
     else:
         # Fixture builds must never attach the live ingestion database implicitly.
         env.pop(HYPERINDEX_DSN_ENV, None)

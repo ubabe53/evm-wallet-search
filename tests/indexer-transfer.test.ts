@@ -3,8 +3,21 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import "../indexer/src/handlers/Erc20Transfer";
 import { toErc20TransferEntity } from "../indexer/src/transferEntity";
+import { configuredWalletAddresses } from "../indexer/src/wallets";
 
 describe("toErc20TransferEntity", () => {
+  it("accepts one runtime wallet for bounded scans", () => {
+    expect(configuredWalletAddresses({
+      ENVIO_WALLET_SCAN_ADDRESS: "  0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  ",
+    })).toEqual(["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]);
+  });
+
+  it("rejects malformed runtime wallet filters", () => {
+    expect(() => configuredWalletAddresses({
+      ENVIO_WALLET_SCAN_ADDRESS: "0xnot-an-address",
+    })).toThrow("canonical Ethereum address");
+  });
+
   it("creates a deterministic one-row-per-transfer entity", () => {
     const entity = toErc20TransferEntity({
       chainId: 1,

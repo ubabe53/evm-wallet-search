@@ -8,8 +8,11 @@ with expected_wallets as (
   join (
     select distinct chain_id, lower(wallet_address) as wallet_address
     from ops.pipeline_runs
-    where status = 'completed'
-      and scope_version = '{{ env_var("EVM_WALLET_SNAPSHOT_SCOPE_VERSION") }}'
+    where scope_version = '{{ env_var("EVM_WALLET_SNAPSHOT_SCOPE_VERSION") }}'
+      and (
+        status = 'completed'
+        or run_id = '{{ env_var("EVM_WALLET_SNAPSHOT_RUN_ID") }}'
+      )
   ) as scanned using (chain_id, wallet_address)
   {% endif %}
 ),

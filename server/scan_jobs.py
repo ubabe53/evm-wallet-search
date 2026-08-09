@@ -1,9 +1,4 @@
-"""Single-worker wallet scan orchestration and its stable adapter boundary.
-
-The current repository still has a single-wallet HyperIndex schema.  This module
-owns the application contract needed by the multi-wallet/indexer branch without
-claiming that the existing indexer can scan arbitrary wallets yet.
-"""
+"""Single-worker bounded wallet scans with validated atomic publication."""
 
 from __future__ import annotations
 
@@ -12,6 +7,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import uuid
@@ -21,7 +17,13 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from scripts.artifact_paths import LIVE_DB_PATH
+from scripts.project_config import resolved_runtime
 from server.ens import ResolvedScanInput, resolve_scan_input
+
+RPC_HEADERS = {
+    "Content-Type": "application/json",
+    "User-Agent": "evm-wallet-search/0.1",
+}
 
 ADDRESS_PATTERN = r"^0x[0-9a-fA-F]{40}$"
 
@@ -81,21 +83,23 @@ def resolve_wallet(value: str) -> tuple[str, str]:
 
 
 def configured_scan_worker(job: ScanJob, staging_path: Path, progress: Callable[[int], None]) -> None:
-    """Run the future indexer adapter using an explicit command contract.
+    """Run the bundled worker or an explicitly overridden adapter command.
 
-    The command must update the complete DuckDB artifact already present at
+    The worker must update the complete DuckDB artifact already present at
     WALLET_SCAN_OUTPUT_PATH. It receives the wallet-specific missing range and
-    finalized target selected by the API. No command means the installation is
-    not yet wired to the multi-wallet merge worker; importantly, no failed or
-    partial artifact is served.
+    finalized target selected by the API. WALLET_SCAN_COMMAND can override the
+    bundled implementation without changing the publication boundary.
     """
-    command_text = os.environ.get("WALLET_SCAN_COMMAND")
-    if not command_text:
-        raise RuntimeError(
-            "Wallet scan worker is not configured; set WALLET_SCAN_COMMAND from the multi-wallet indexer branch"
-        )
+    command_text = os.environ.get("WALLET_SCAN_COMMAND", "").strip()
+    command = (
+        shlex.split(command_text)
+        if command_text
+        else [sys.executable, str(Path(__file__).parents[1] / "scripts" / "wallet_scan_worker.py")]
+    )
     environment = os.environ.copy()
     environment.update({
+        "WALLET_SCAN_JOB_ID": job.job_id,
+        "WALLET_SCAN_REQUESTED_VALUE": job.requested_value,
         "WALLET_SCAN_ADDRESS": job.wallet_address,
         "WALLET_SCAN_LABEL": job.wallet_label,
         "WALLET_SCAN_FROM_BLOCK": str(job.from_block),
@@ -111,7 +115,7 @@ def configured_scan_worker(job: ScanJob, staging_path: Path, progress: Callable[
     if job.observation_timestamp:
         environment["WALLET_SCAN_OBSERVATION_TIMESTAMP"] = job.observation_timestamp
     progress(5)
-    subprocess.run(shlex.split(command_text), check=True, env=environment)
+    subprocess.run(command, check=True, env=environment)
     if not staging_path.is_file():
         raise RuntimeError("Wallet scan worker completed without producing an artifact")
     progress(95)
@@ -137,13 +141,11 @@ class ScanJobManager:
         self._active_job_id: str | None = None
 
     def _rpc_finalized_head(self) -> int:
-        url = os.environ.get("ETHEREUM_RPC_URL") or os.environ.get("PUBLIC_RPC_URL")
-        if not url:
-            raise RuntimeError("ETHEREUM_RPC_URL is required to resolve the finalized head")
+        url = self._rpc_url()
         request = __import__("urllib.request", fromlist=["Request"]).Request(
             url,
             data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "eth_getBlockByNumber", "params": ["finalized", False]}).encode(),
-            headers={"Content-Type": "application/json"},
+            headers=RPC_HEADERS,
         )
         with __import__("urllib.request", fromlist=["urlopen"]).urlopen(request, timeout=45) as response:
             payload = json.load(response)
@@ -152,18 +154,23 @@ class ScanJobManager:
             raise RuntimeError("Ethereum finalized head could not be resolved")
         return int(result["number"], 16)
 
+    @staticmethod
+    def _rpc_url() -> str:
+        url = resolved_runtime().get("ethereum_rpc_url")
+        if not url:
+            raise RuntimeError("ETHEREUM_RPC_URL is required to resolve the finalized head")
+        return str(url)
+
     def _rpc_client(self):
         manager = self
 
         class RpcClient:
             def call(self, method: str, params: list[object]) -> object:
-                url = os.environ.get("ETHEREUM_RPC_URL") or os.environ.get("PUBLIC_RPC_URL")
-                if not url:
-                    raise RuntimeError("ETHEREUM_RPC_URL is required to resolve the finalized head")
+                url = manager._rpc_url()
                 request = __import__("urllib.request", fromlist=["Request"]).Request(
                     url,
                     data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
-                    headers={"Content-Type": "application/json"},
+                    headers=RPC_HEADERS,
                 )
                 with __import__("urllib.request", fromlist=["urlopen"]).urlopen(request, timeout=45) as response:
                     payload = json.load(response)
@@ -171,7 +178,6 @@ class ScanJobManager:
                     raise RuntimeError("Ethereum RPC request failed")
                 return payload.get("result")
 
-        del manager
         return RpcClient()
 
     def _resolve_scan_input(self, value: str) -> ResolvedScanInput:
@@ -237,7 +243,10 @@ class ScanJobManager:
             return []
         try:
             import duckdb
-            with duckdb.connect(str(self.live_path), read_only=True) as connection:
+            # Match QueryService's connection configuration. DuckDB rejects
+            # concurrent connections to one file when read_only differs, even
+            # when this manager performs only SELECTs.
+            with duckdb.connect(str(self.live_path), read_only=False) as connection:
                 rows = connection.execute(
                     "select chain_id, wallet_address, configured_wallet_label from pipeline_metadata order by chain_id, wallet_address"
                 ).fetchall()
@@ -256,7 +265,7 @@ class ScanJobManager:
         try:
             import duckdb
 
-            with duckdb.connect(str(self.live_path), read_only=True) as connection:
+            with duckdb.connect(str(self.live_path), read_only=False) as connection:
                 row = connection.execute(
                     """
                     select max(snapshot_end_block)
@@ -299,6 +308,19 @@ class ScanJobManager:
             with duckdb.connect(str(staging_path), read_only=True) as connection:
                 for relation in ("pipeline_metadata", "wallet_events", "token_summary", "counterparty_summary", "timeline_daily"):
                     connection.execute(f"select count(*) from {relation}")
+                metadata_columns = {
+                    item[0]
+                    for item in connection.execute(
+                        """
+                        select column_name from duckdb_columns()
+                        where database_name = current_database()
+                          and schema_name = 'main'
+                          and table_name = 'pipeline_metadata'
+                        """
+                    ).fetchall()
+                }
+                if "generated_at" not in metadata_columns:
+                    raise RuntimeError("Wallet scan artifact metadata is missing generated_at")
                 rows = connection.execute(
                     """
                     select wallet_address, data_source, snapshot_start_block,
@@ -372,13 +394,27 @@ class ScanJobManager:
                                 raise RuntimeError("DuckDB count query returned no row")
                             return int(row[0])
 
-                        previous_metadata_exists = count_rows(
-                            """
-                            select count(*) from duckdb_tables()
-                            where database_name = 'previous_live'
-                              and schema_name = 'main' and table_name = 'pipeline_metadata'
-                            """
-                        )
+                        previous_tables = {
+                            (item[0], item[1])
+                            for item in connection.execute(
+                                """
+                                select schema_name, table_name from duckdb_tables()
+                                where database_name = 'previous_live'
+                                """
+                            ).fetchall()
+                        }
+                        staged_tables = {
+                            (item[0], item[1])
+                            for item in connection.execute(
+                                """
+                                select schema_name, table_name from duckdb_tables()
+                                where database_name = current_database()
+                                """
+                            ).fetchall()
+                        }
+                        previous_metadata_exists = (
+                            "main", "pipeline_metadata"
+                        ) in previous_tables
                         previous_wallets = (
                             {
                                 item[0]
@@ -402,23 +438,94 @@ class ScanJobManager:
                             "token_rpc_metadata",
                             "int_token_enrichment",
                         ):
-                            previous_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where database_name = 'previous_live'
-                                  and schema_name = 'main' and table_name = ?
-                                """,
-                                [relation])
-                            if not previous_exists:
+                            if ("main", relation) not in previous_tables:
                                 continue
-                            staged_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = 'main' and table_name = ?
-                                """,
-                                [relation])
-                            if not staged_exists:
+                            if ("main", relation) not in staged_tables:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation {relation}")
+                        wallet_event_columns = {
+                            item[0]
+                            for item in connection.execute(
+                                """
+                                select column_name from duckdb_columns()
+                                where database_name = 'previous_live'
+                                  and schema_name = 'main' and table_name = 'wallet_events'
+                                """
+                            ).fetchall()
+                        }
+                        wallet_event_identity = {
+                            "chain_id", "wallet_address", "transaction_hash", "log_index"
+                        }
+                        if not wallet_event_columns:
+                            missing_events = 0
+                        elif wallet_event_identity.issubset(wallet_event_columns):
+                            missing_events = count_rows(
+                                """
+                                select count(*) from (
+                                  select chain_id, lower(wallet_address) as wallet_address,
+                                         lower(transaction_hash) as transaction_hash, log_index
+                                  from previous_live.main.wallet_events
+                                  except all
+                                  select chain_id, lower(wallet_address) as wallet_address,
+                                         lower(transaction_hash) as transaction_hash, log_index
+                                  from main.wallet_events
+                                )
+                                """
+                            )
+                        else:
+                            # Compatibility path for an older or adapter-owned artifact:
+                            # without the canonical key, require exact row preservation.
+                            missing_events = count_rows(
+                                """
+                                select count(*) from (
+                                  select * from previous_live.main.wallet_events
+                                  except all
+                                  select * from main.wallet_events
+                                )
+                                """
+                            )
+                        if missing_events:
+                            raise RuntimeError("Wallet scan artifact dropped rows from wallet_events")
+
+                        immutable_event_columns = (
+                            "chain_id", "block_number", "block_hash", "block_timestamp",
+                            "transaction_hash", "transaction_index", "transaction_from_address",
+                            "transaction_to_address", "log_index", "wallet_address",
+                            "token_address", "from_address", "to_address",
+                            "transaction_sender_relation", "transaction_target_relation",
+                            "is_indirect", "direction", "counterparty_address", "value_raw",
+                        )
+                        intermediate_columns = {
+                            item[0]
+                            for item in connection.execute(
+                                """
+                                select column_name from duckdb_columns()
+                                where database_name = 'previous_live'
+                                  and schema_name = 'main'
+                                  and table_name = 'int_wallet_transfer_events'
+                                """
+                            ).fetchall()
+                        }
+                        if set(immutable_event_columns).issubset(intermediate_columns):
+                            projection = ", ".join(immutable_event_columns)
+                            missing_facts = count_rows(
+                                f"""
+                                select count(*) from (
+                                  select {projection}
+                                  from previous_live.main.int_wallet_transfer_events
+                                  except all
+                                  select {projection}
+                                  from main.int_wallet_transfer_events
+                                )
+                                """
+                            )
+                            if missing_facts:
+                                raise RuntimeError(
+                                    "Wallet scan artifact changed or dropped immutable event facts"
+                                )
+
+                        for relation in ("token_rpc_metadata",):
+                            if ("main", relation) not in previous_tables:
+                                continue
                             missing = count_rows(
                                 f"select count(*) from (select * from previous_live.main.\"{relation}\" except all select * from main.\"{relation}\")"
                             )
@@ -430,22 +537,9 @@ class ScanJobManager:
                             "scan_generations",
                             "pipeline_runs",
                         ):
-                            previous_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where database_name = 'previous_live'
-                                  and schema_name = 'ops' and table_name = ?
-                                """,
-                                [relation])
-                            if not previous_exists:
+                            if ("ops", relation) not in previous_tables:
                                 continue
-                            staged_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = 'ops' and table_name = ?
-                                """,
-                                [relation])
-                            if not staged_exists:
+                            if ("ops", relation) not in staged_tables:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation ops.{relation}")
                             missing = count_rows(
                                 f"select count(*) from (select * from previous_live.ops.\"{relation}\" except all select * from ops.\"{relation}\")",
@@ -454,13 +548,53 @@ class ScanJobManager:
                                 raise RuntimeError(f"Wallet scan artifact dropped rows from ops.{relation}")
 
                         if previous_metadata_exists:
+                            previous_metadata_columns = [
+                                item[0]
+                                for item in connection.execute(
+                                    """
+                                    select column_name from duckdb_columns()
+                                    where database_name = 'previous_live'
+                                      and schema_name = 'main'
+                                      and table_name = 'pipeline_metadata'
+                                    order by column_index
+                                    """
+                                ).fetchall()
+                            ]
+                            staged_metadata_columns = {
+                                item[0]
+                                for item in connection.execute(
+                                    """
+                                    select column_name from duckdb_columns()
+                                    where database_name = current_database()
+                                      and schema_name = 'main'
+                                      and table_name = 'pipeline_metadata'
+                                    """
+                                ).fetchall()
+                            }
+                            comparable_metadata_columns = [
+                                column
+                                for column in previous_metadata_columns
+                                if column != "generated_at"
+                            ]
+                            if set(comparable_metadata_columns) != (
+                                staged_metadata_columns - {"generated_at"}
+                            ):
+                                raise RuntimeError(
+                                    "Wallet scan artifact changed existing wallet metadata schema"
+                                )
+                            metadata_projection = ", ".join(
+                                '"' + column.replace('"', '""') + '"'
+                                for column in comparable_metadata_columns
+                            )
                             metadata_missing = count_rows(
-                                """
+                                f"""
                                 select count(*) from (
-                                  select * from previous_live.main.pipeline_metadata
+                                  select {metadata_projection}
+                                  from previous_live.main.pipeline_metadata
                                   where wallet_address <> ?
                                   except all
-                                  select * from main.pipeline_metadata
+                                  select {metadata_projection}
+                                  from main.pipeline_metadata
                                   where wallet_address <> ?
                                 )
                                 """,
@@ -479,35 +613,19 @@ class ScanJobManager:
                         ).fetchall():
                             if schema_name == "main" and relation == "pipeline_metadata":
                                 continue
-                            staged_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = ? and table_name = ?
-                                """,
-                                [schema_name, relation])
-                            if not staged_exists:
+                            if (schema_name, relation) not in staged_tables:
                                 raise RuntimeError(f"Wallet scan artifact dropped relation {schema_name}.{relation}")
-                            missing = count_rows(
-                                f"select count(*) from (select * from previous_live.\"{schema_name}\".\"{relation}\" except all select * from \"{schema_name}\".\"{relation}\")"
-                            )
-                            if missing:
-                                raise RuntimeError(f"Wallet scan artifact dropped rows from {schema_name}.{relation}")
+                            if schema_name == "app":
+                                missing = count_rows(
+                                    f"select count(*) from (select * from previous_live.\"{schema_name}\".\"{relation}\" except all select * from \"{schema_name}\".\"{relation}\")"
+                                )
+                                if missing:
+                                    raise RuntimeError(
+                                        f"Wallet scan artifact dropped rows from {schema_name}.{relation}"
+                                    )
 
-                        override_exists = count_rows(
-                            """
-                            select count(*) from duckdb_tables()
-                            where database_name = 'previous_live'
-                              and schema_name = 'app' and table_name = 'token_recognition_overrides'
-                            """
-                        )
-                        if override_exists:
-                            staged_override_exists = count_rows(
-                                """
-                                select count(*) from duckdb_tables()
-                                where schema_name = 'app' and table_name = 'token_recognition_overrides'
-                                """
-                            )
-                            if not staged_override_exists:
+                        if ("app", "token_recognition_overrides") in previous_tables:
+                            if ("app", "token_recognition_overrides") not in staged_tables:
                                 raise RuntimeError("Wallet scan artifact dropped token-recognition overrides")
                             override_missing = count_rows(
                                 """

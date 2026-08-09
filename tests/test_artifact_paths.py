@@ -1,6 +1,7 @@
 import os
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import ANY, patch
 
 from scripts import run_dbt
@@ -18,8 +19,51 @@ WALLET_B = ConfiguredWallet("0x" + "b" * 40, "wallet-b")
 
 
 class ArtifactPathsTest(unittest.TestCase):
+    def test_live_wallet_coverage_accepts_only_completed_or_exact_current_run(self) -> None:
+        sql = (
+            Path(__file__).parents[1]
+            / "analytics"
+            / "tests"
+            / "pipeline_metadata_covers_all_wallets.sql"
+        ).read_text()
+
+        self.assertIn("status = 'completed'", sql)
+        self.assertIn(
+            "or run_id = '{{ env_var(\"EVM_WALLET_SNAPSHOT_RUN_ID\") }}'",
+            sql,
+        )
+
+    def test_live_incremental_strategy_is_supported_by_duckdb(self) -> None:
+        sql = (
+            Path(__file__).parents[1]
+            / "analytics"
+            / "models"
+            / "intermediate"
+            / "int_wallet_transfer_events.sql"
+        ).read_text()
+
+        self.assertIn("incremental_strategy='delete+insert'", sql)
+        self.assertNotIn("incremental_strategy='merge'", sql)
+
+    def test_immutable_fact_check_is_scoped_to_current_wallet_interval(self) -> None:
+        sql = (
+            Path(__file__).parents[1]
+            / "analytics"
+            / "tests"
+            / "immutable_event_facts_through_enrichment.sql"
+        ).read_text()
+
+        self.assertIn("using (chain_id, wallet_address)", sql)
+        self.assertIn('env_var("EVM_WALLET_SNAPSHOT_START_BLOCK")', sql)
+        self.assertIn('env_var("EVM_WALLET_SNAPSHOT_END_BLOCK")', sql)
+        self.assertIn(
+            "using (chain_id, wallet_address, transaction_hash, log_index)",
+            sql,
+        )
+
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=False)
     @patch("duckdb.connect")
-    def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect) -> None:
+    def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect, _shared_exists) -> None:
         connection = connect.return_value.__enter__.return_value
         connection.execute.return_value.fetchone.return_value = (7,)
         run = SnapshotRun(
@@ -138,7 +182,10 @@ class ArtifactPathsTest(unittest.TestCase):
 
     @patch("scripts.run_dbt.subprocess.run")
     @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
-    def test_live_build_uses_live_database_and_read_only_source_dsn(self, _which, run) -> None:
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=True)
+    def test_live_build_uses_live_database_and_read_only_source_dsn(
+        self, _shared_exists, _which, run
+    ) -> None:
         run_dbt.run_dbt(
             "build",
             ["--vars", '{"use_fixture": false}'],
@@ -150,7 +197,26 @@ class ArtifactPathsTest(unittest.TestCase):
         environment = run.call_args.kwargs["env"]
         self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(LIVE_DB_PATH))
         self.assertEqual(environment[run_dbt.HYPERINDEX_DSN_ENV], "postgresql://secret")
+        self.assertEqual(environment[run_dbt.EVM_WALLET_SHARED_RAW_ENABLED_ENV], "true")
         self.assertEqual(environment["EVM_WALLET_SNAPSHOT_END_BLOCK"], "100")
+
+    @patch("scripts.run_dbt.subprocess.run")
+    @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=True)
+    def test_worker_live_build_uses_explicit_staging_artifact(
+        self, _shared_exists, _which, run
+    ) -> None:
+        staging = LIVE_DB_PATH.parent / "wallet-scan-job" / "live.duckdb"
+        run_dbt.run_dbt(
+            "build",
+            ["--vars", '{"use_fixture": false}'],
+            use_hyperindex=True,
+            hyperindex_dsn="postgresql://read-only",
+            database_path_override=staging,
+        )
+
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(staging))
 
     def test_live_build_requires_a_dsn(self) -> None:
         with self.assertRaisesRegex(SystemExit, "Live HyperIndex mode requires"):
