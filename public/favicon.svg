@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">EVM Wallet Search</title>
+  <desc id="desc">A compact E-shaped search mark</desc>
+  <rect width="64" height="64" rx="16" fill="#101722" />
+  <path d="M18 18h28M18 32h28M18 46h28" fill="none" stroke="#f0f6fc" stroke-linecap="round" stroke-width="6" />
+  <path d="M40 32h7" fill="none" stroke="#4ade80" stroke-linecap="round" stroke-width="6" />
+  <circle cx="49" cy="32" r="5" fill="#4ade80" />
+</svg>
