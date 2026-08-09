@@ -44,6 +44,7 @@ export function useDashboard() {
   const [apiResult, setApiResult] = useState<ApiDashboardData | null>(null);
   const [apiResultQueryKey, setApiResultQueryKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [eventLimit, setEventLimit] = useState(EVENT_PAGE_SIZE);
@@ -63,9 +64,12 @@ export function useDashboard() {
   const [recognitionActionError, setRecognitionActionError] = useState<string | null>(null);
   const [scanInput, setScanInput] = useState("");
   const [scanJob, setScanJob] = useState<ScanJob | null>(null);
+  const [scanSubmitting, setScanSubmitting] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [wallets, setWallets] = useState<WalletListItem[]>([]);
+  const [walletListRevision, setWalletListRevision] = useState(0);
   const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
+  const hasLoadedApiDataRef = useRef(false);
   const undoTimerRef = useRef<number | null>(null);
   const [selectedAccountFilters, setSelectedAccountFilters] = useState<AccountFilter[]>(ACCOUNT_FILTERS);
   const [theme, setTheme] = useState<Theme>(() => {
@@ -95,18 +99,20 @@ export function useDashboard() {
     const controller = new AbortController();
     loadWallets(controller.signal).then((result) => setWallets(result.items)).catch(() => undefined);
     return () => controller.abort();
-  }, []);
+  }, [walletListRevision]);
 
+  const activeScanJobId = scanJob && (scanJob.status === "queued" || scanJob.status === "running")
+    ? scanJob.job_id
+    : null;
   useEffect(() => {
-    if (dashboardDataMode !== "api" || !scanJob || (scanJob.status !== "queued" && scanJob.status !== "running")) return;
+    if (dashboardDataMode !== "api" || !activeScanJobId) return;
     const controller = new AbortController();
-    const poll = () => loadScanJob(scanJob.job_id, controller.signal).then((next) => {
+    const poll = () => loadScanJob(activeScanJobId, controller.signal).then((next) => {
       setScanJob(next);
       if (next.status === "completed") {
         setSelectedWalletAddress(next.wallet_address);
         apiMetadataRef.current = undefined;
         setDataRevision((current) => current + 1);
-        loadWallets(controller.signal).then((result) => setWallets(result.items)).catch(() => undefined);
       }
     }).catch((loadError: unknown) => {
       if (!(loadError instanceof Error && loadError.name === "AbortError")) {
@@ -116,7 +122,14 @@ export function useDashboard() {
     void poll();
     const timer = window.setInterval(poll, 1500);
     return () => { controller.abort(); window.clearInterval(timer); };
-  }, [scanJob]);
+  }, [activeScanJobId]);
+
+  const completedScanJobId = scanJob?.status === "completed" ? scanJob.job_id : null;
+  useEffect(() => {
+    if (dashboardDataMode === "api" && completedScanJobId) {
+      setWalletListRevision((current) => current + 1);
+    }
+  }, [completedScanJobId]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedQuery(query), 200);
@@ -172,6 +185,7 @@ export function useDashboard() {
     const requestedQueryKey = dashboardQueryKey;
     const requestedGeneration = ++dashboardLoadGenerationRef.current;
     setError(null);
+    setRefreshError(null);
     setLoadingMoreEvents(false);
     loadApiDashboardData(dashboardQuery, controller.signal, apiMetadataRef.current).then((result) => {
       if (
@@ -181,6 +195,7 @@ export function useDashboard() {
         return;
       }
       apiMetadataRef.current = result.data.metadata;
+      hasLoadedApiDataRef.current = true;
       setApiResult(result);
       setApiResultQueryKey(requestedQueryKey);
       setData(result.data);
@@ -191,7 +206,12 @@ export function useDashboard() {
       if (dashboardLoadGenerationRef.current !== requestedGeneration) {
         return;
       }
-      setError(loadError instanceof Error ? loadError.message : "Could not load live dashboard data");
+      const message = loadError instanceof Error ? loadError.message : "Could not load live dashboard data";
+      if (hasLoadedApiDataRef.current) {
+        setRefreshError(message);
+      } else {
+        setError(message);
+      }
     });
     return () => controller.abort();
   }, [dashboardQuery, dashboardQueryKey, dataRevision]);
@@ -203,11 +223,11 @@ export function useDashboard() {
 
   useEffect(
     () => setEventLimit(EVENT_PAGE_SIZE),
-    [debouncedQuery, recognitionFilter, selectedAccountFilters, selectedPeriod],
+    [debouncedQuery, recognitionFilter, selectedAccountFilters, selectedPeriod, selectedWalletAddress],
   );
   useEffect(
     () => setCounterpartyLimit(DEFAULT_COUNTERPARTY_LIMIT),
-    [debouncedQuery, recognitionFilter, selectedAccountFilters, selectedPeriod],
+    [debouncedQuery, recognitionFilter, selectedAccountFilters, selectedPeriod, selectedWalletAddress],
   );
 
   useEffect(() => () => {
@@ -396,7 +416,7 @@ export function useDashboard() {
       } : current);
       setEventLimit((current) => current + EVENT_PAGE_SIZE);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load more events");
+      setRefreshError(loadError instanceof Error ? loadError.message : "Could not load more events");
     } finally {
       if (dashboardQueryKeyRef.current === requestedQueryKey) {
         setLoadingMoreEvents(false);
@@ -472,13 +492,39 @@ export function useDashboard() {
   }
 
   async function startWalletScan() {
-    if (dashboardDataMode !== "api" || !scanInput.trim() || scanJob?.status === "queued" || scanJob?.status === "running") return;
+    if (
+      dashboardDataMode !== "api" ||
+      !scanInput.trim() ||
+      scanSubmitting ||
+      scanJob?.status === "queued" ||
+      scanJob?.status === "running"
+    ) return;
+    const requestedWallet = scanInput.trim();
     setScanError(null);
+    setScanJob(null);
+    setScanSubmitting(true);
     try {
-      setScanJob(await createScanJob(scanInput));
+      setScanJob(await createScanJob(requestedWallet));
+      setScanInput("");
     } catch (actionError) {
       setScanError(actionError instanceof Error ? actionError.message : "Could not start wallet scan");
+    } finally {
+      setScanSubmitting(false);
     }
+  }
+
+  function selectWallet(walletAddress: string) {
+    if (dashboardDataMode !== "api" || walletAddress === selectedWalletAddress) return;
+    setRefreshError(null);
+    setSelectedWalletAddress(walletAddress);
+    apiMetadataRef.current = undefined;
+  }
+
+  function retryDashboard() {
+    if (dashboardDataMode !== "api") return;
+    setRefreshError(null);
+    setWalletListRevision((current) => current + 1);
+    setDataRevision((current) => current + 1);
   }
 
   return {
@@ -496,7 +542,9 @@ export function useDashboard() {
     loadingMoreEvents,
     recognitionActionError,
     recognitionFilter,
+    refreshError,
     rankedCounterparties,
+    retryDashboard,
     selectTimelineBucket,
     selectedAccountFilters,
     selectedMonth,
@@ -521,6 +569,9 @@ export function useDashboard() {
     scanError,
     scanInput,
     scanJob,
+    scanSubmitting,
+    selectedWalletAddress,
+    selectWallet,
     setScanInput,
     startWalletScan,
     wallets,

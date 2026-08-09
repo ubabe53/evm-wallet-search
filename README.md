@@ -64,8 +64,9 @@ The local dashboard exposes:
 - token and counterparty rankings by captured event count, never cross-token quantity or value;
 - provenance that separates finalized scan coverage from observed event extrema;
 - `All`, `Recognized`, and `Other` token views plus pinned-block `EOA`/`Contract` evidence.
-- live mode wallet/ENS scan submission with progress, failure preservation, automatic switching,
-  and a completed-wallet list; fixture mode keeps these controls disabled.
+- live mode selection among completed wallets without rescanning, plus separate wallet/ENS scan
+  submission with persistent progress feedback, last-good dashboard preservation and retry on
+  refresh failure, and automatic switching; fixture mode keeps scanning disabled.
 
 Scan jobs are exposed by the local API and use the bundled bounded worker by default.
 `WALLET_SCAN_COMMAND` remains an optional adapter override. The worker indexes only the wallet's
