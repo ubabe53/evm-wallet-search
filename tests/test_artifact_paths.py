@@ -1,6 +1,7 @@
 import os
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import ANY, patch
 
 from scripts import run_dbt
@@ -18,6 +19,20 @@ WALLET_B = ConfiguredWallet("0x" + "b" * 40, "wallet-b")
 
 
 class ArtifactPathsTest(unittest.TestCase):
+    def test_live_wallet_coverage_accepts_only_completed_or_exact_current_run(self) -> None:
+        sql = (
+            Path(__file__).parents[1]
+            / "analytics"
+            / "tests"
+            / "pipeline_metadata_covers_all_wallets.sql"
+        ).read_text()
+
+        self.assertIn("status = 'completed'", sql)
+        self.assertIn(
+            "or run_id = '{{ env_var(\"EVM_WALLET_SNAPSHOT_RUN_ID\") }}'",
+            sql,
+        )
+
     @patch("scripts.run_dbt.shared_raw_store_exists", return_value=False)
     @patch("duckdb.connect")
     def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect, _shared_exists) -> None:
