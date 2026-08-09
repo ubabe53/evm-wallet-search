@@ -20,6 +20,11 @@ from scripts.artifact_paths import LIVE_DB_PATH
 from scripts.project_config import resolved_runtime
 from server.ens import ResolvedScanInput, resolve_scan_input
 
+RPC_HEADERS = {
+    "Content-Type": "application/json",
+    "User-Agent": "evm-wallet-search/0.1",
+}
+
 ADDRESS_PATTERN = r"^0x[0-9a-fA-F]{40}$"
 
 
@@ -140,7 +145,7 @@ class ScanJobManager:
         request = __import__("urllib.request", fromlist=["Request"]).Request(
             url,
             data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "eth_getBlockByNumber", "params": ["finalized", False]}).encode(),
-            headers={"Content-Type": "application/json"},
+            headers=RPC_HEADERS,
         )
         with __import__("urllib.request", fromlist=["urlopen"]).urlopen(request, timeout=45) as response:
             payload = json.load(response)
@@ -165,7 +170,7 @@ class ScanJobManager:
                 request = __import__("urllib.request", fromlist=["Request"]).Request(
                     url,
                     data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
-                    headers={"Content-Type": "application/json"},
+                    headers=RPC_HEADERS,
                 )
                 with __import__("urllib.request", fromlist=["urlopen"]).urlopen(request, timeout=45) as response:
                     payload = json.load(response)

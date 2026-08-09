@@ -28,6 +28,25 @@ class ScanJobsTest(unittest.TestCase):
             "https://configured-rpc.example",
         )
 
+    @patch(
+        "server.scan_jobs.resolved_runtime",
+        return_value={"ethereum_rpc_url": "https://configured-rpc.example"},
+    )
+    @patch("server.scan_jobs.json.load")
+    @patch("urllib.request.urlopen")
+    def test_scan_rpc_requests_use_project_user_agent(self, urlopen, load, _runtime) -> None:
+        load.return_value = {"result": {"number": "0x64"}}
+        manager = ScanJobManager()
+
+        self.assertEqual(manager._rpc_finalized_head(), 100)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header("User-agent"), "evm-wallet-search/0.1")
+
+        load.return_value = {"result": "0x1"}
+        self.assertEqual(manager._rpc_client().call("eth_chainId", []), "0x1")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header("User-agent"), "evm-wallet-search/0.1")
+
     @patch("server.scan_jobs.subprocess.run")
     def test_bundled_worker_receives_job_identity_and_original_input(self, run) -> None:
         with tempfile.TemporaryDirectory() as directory:
