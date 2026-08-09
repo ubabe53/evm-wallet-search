@@ -1,7 +1,7 @@
 {% if var('use_fixture', true) %}
   {{ config(materialized='table') }}
 {% else %}
-  {{ config(materialized='incremental', unique_key=['chain_id', 'wallet_address', 'transaction_hash', 'log_index'], incremental_strategy='merge') }}
+  {{ config(materialized='incremental', unique_key=['chain_id', 'wallet_address', 'transaction_hash', 'log_index'], incremental_strategy='delete+insert') }}
 {% endif %}
 
 with transfers as (

@@ -33,6 +33,18 @@ class ArtifactPathsTest(unittest.TestCase):
             sql,
         )
 
+    def test_live_incremental_strategy_is_supported_by_duckdb(self) -> None:
+        sql = (
+            Path(__file__).parents[1]
+            / "analytics"
+            / "models"
+            / "intermediate"
+            / "int_wallet_transfer_events.sql"
+        ).read_text()
+
+        self.assertIn("incremental_strategy='delete+insert'", sql)
+        self.assertNotIn("incremental_strategy='merge'", sql)
+
     @patch("scripts.run_dbt.shared_raw_store_exists", return_value=False)
     @patch("duckdb.connect")
     def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect, _shared_exists) -> None:
