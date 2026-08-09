@@ -7,7 +7,9 @@ events, recognition controls, and pinned-block account-type evidence.
 In live mode, completed-wallet selection belongs to the persistent analysis context and only changes
 the wallet-scoped API query. The separate scan launcher creates finalized scan jobs for new or
 incomplete targets, clears accepted input, keeps progress visible in the launcher, and switches to a
-successfully published wallet automatically.
+successfully published wallet automatically. Wallet refreshes keep the last successful wallet and
+its provenance visible until the replacement query succeeds; transient failures stay inline and can
+be retried without returning to the startup error screen.
 
 The frontend has two explicit build-time data modes:
 

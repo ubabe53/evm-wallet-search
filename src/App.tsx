@@ -50,7 +50,9 @@ export function App() {
     loadingMoreEvents,
     recognitionActionError,
     recognitionFilter,
+    refreshError,
     rankedCounterparties,
+    retryDashboard,
     selectTimelineBucket,
     selectedAccountFilters,
     selectedMonth,
@@ -113,10 +115,14 @@ export function App() {
     );
   }
 
-  const walletSelection = selectedWalletAddress ?? data.metadata.wallet_address;
+  const walletSelection = data.metadata.wallet_address;
   const walletSelectionIsListed = wallets.some(
     (wallet) => wallet.wallet_address === walletSelection,
   );
+  const walletSwitchPending = dashboardDataMode === "api" &&
+    selectedWalletAddress != null &&
+    selectedWalletAddress !== data.metadata.wallet_address &&
+    refreshError == null;
 
   return (
     <main className="shell">
@@ -289,29 +295,51 @@ export function App() {
         </div>
       </header>
 
+      {refreshError && (
+        <section className="refreshNotice" role="alert">
+          <div>
+            <strong>Dashboard refresh failed</strong>
+            <span>
+              {refreshError}. Showing the last loaded results for {data.metadata.configured_wallet_label}.
+            </span>
+          </div>
+          <button type="button" onClick={retryDashboard}>Retry</button>
+        </section>
+      )}
+
       <section className="overviewContext" aria-label="Analysis context">
         <div className="analysisSubject">
           <span className="contextLabel">Analyzing</span>
           {dashboardDataMode === "api" && wallets.length > 0 && (
-            <label className="walletSwitcher">
-              <span className="srOnly">Analyzed wallet</span>
-              <select
-                aria-label="Analyzed wallet"
-                value={walletSelection}
-                onChange={(event) => selectWallet(event.target.value)}
-              >
-                {!walletSelectionIsListed && (
-                  <option value={walletSelection}>
-                    {data.metadata.configured_wallet_label} ({compactAddress(walletSelection)})
-                  </option>
-                )}
-                {wallets.map((wallet) => (
-                  <option key={wallet.wallet_address} value={wallet.wallet_address}>
-                    {wallet.label} ({compactAddress(wallet.wallet_address)})
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="walletSwitcherControl">
+              <label className="walletSwitcher">
+                <span className="srOnly">Analyzed wallet</span>
+                <select
+                  aria-label="Analyzed wallet"
+                  aria-busy={walletSwitchPending}
+                  value={walletSelection}
+                  onChange={(event) => selectWallet(event.target.value)}
+                >
+                  {!walletSelectionIsListed && (
+                    <option value={walletSelection}>
+                      {data.metadata.configured_wallet_label} ({compactAddress(walletSelection)})
+                    </option>
+                  )}
+                  {wallets.map((wallet) => (
+                    <option key={wallet.wallet_address} value={wallet.wallet_address}>
+                      {wallet.label} ({compactAddress(wallet.wallet_address)})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {walletSwitchPending && (
+                <LoaderCircle
+                  className="scanSpinner walletSwitchSpinner"
+                  size={15}
+                  aria-label="Loading selected wallet"
+                />
+              )}
+            </div>
           )}
           <div className="subjectIdentity">
             <EtherscanLink

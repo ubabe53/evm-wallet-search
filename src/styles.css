@@ -197,6 +197,47 @@ h2 {
   gap: 6px;
 }
 
+.refreshNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--out) 50%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--out) 8%, var(--panel-bg));
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.refreshNotice div {
+  display: grid;
+  gap: 2px;
+}
+
+.refreshNotice span {
+  color: var(--muted);
+}
+
+.refreshNotice button {
+  flex: 0 0 auto;
+  border: 1px solid var(--out);
+  border-radius: 7px;
+  background: transparent;
+  padding: 6px 10px;
+  color: var(--out);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.refreshNotice button:hover,
+.refreshNotice button:focus-visible {
+  background: var(--out);
+  color: var(--panel-bg);
+  outline: none;
+}
+
 .overviewContext {
   margin-bottom: 16px;
   overflow: hidden;
@@ -236,6 +277,17 @@ h2 {
 .walletSwitcher {
   position: relative;
   min-width: 0;
+}
+
+.walletSwitcherControl {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+}
+
+.walletSwitchSpinner {
+  color: var(--accent);
 }
 
 .walletSwitcher select {
@@ -1437,7 +1489,17 @@ code {
   }
 
   .walletSwitcher,
+  .walletSwitcherControl,
   .walletSwitcher select {
+    width: 100%;
+  }
+
+  .refreshNotice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .refreshNotice button {
     width: 100%;
   }
 
