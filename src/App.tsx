@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Database,
   ExternalLink,
+  LoaderCircle,
   Moon,
   Network,
   Search,
@@ -74,11 +75,15 @@ export function App() {
     scanError,
     scanInput,
     scanJob,
+    scanSubmitting,
+    selectedWalletAddress,
+    selectWallet,
     setScanInput,
     startWalletScan,
     wallets,
   } = useDashboard();
-  const scanBusy = scanJob?.status === "queued" || scanJob?.status === "running";
+  const scanPolling = scanJob?.status === "queued" || scanJob?.status === "running";
+  const scanBusy = scanSubmitting || scanPolling;
 
   if (error) {
     return (
@@ -107,6 +112,11 @@ export function App() {
       </main>
     );
   }
+
+  const walletSelection = selectedWalletAddress ?? data.metadata.wallet_address;
+  const walletSelectionIsListed = wallets.some(
+    (wallet) => wallet.wallet_address === walletSelection,
+  );
 
   return (
     <main className="shell">
@@ -152,19 +162,23 @@ export function App() {
               aria-expanded={scanOpen}
               aria-controls="wallet-scan-panel"
             >
-              <span>Scan wallet</span>
-              <ChevronDown size={14} aria-hidden="true" />
+              {scanBusy && <LoaderCircle className="scanSpinner" size={15} aria-hidden="true" />}
+              <span>
+                {scanSubmitting
+                  ? "Starting scan"
+                  : scanPolling
+                    ? `Scanning ${scanJob?.progress ?? 0}%`
+                    : "Scan wallet"}
+              </span>
+              {!scanBusy && <ChevronDown size={14} aria-hidden="true" />}
             </button>
             {scanOpen && (
               <div className="scanLauncherPanel" id="wallet-scan-panel" aria-label="Wallet scan">
                 <div className="scanHeader">
                   <div>
-                    <strong>Change analysis wallet</strong>
+                    <strong>Scan a new wallet</strong>
                     <p>Scan from block 0 through the finalized head.</p>
                   </div>
-                  <span className={`scanHint ${dashboardDataMode === "api" ? "live" : "fixture"}`}>
-                    {dashboardDataMode === "api" ? "Live mode" : "Fixture demo"}
-                  </span>
                 </div>
                 <form className="scanForm" onSubmit={(event) => { event.preventDefault(); void startWalletScan(); }}>
                   <label>
@@ -179,23 +193,21 @@ export function App() {
                     />
                   </label>
                   <button className="scanButton" type="submit" disabled={dashboardDataMode === "static" || !scanInput.trim() || scanBusy}>
-                    {scanBusy ? "Scanning…" : "Start scan"}
+                    {scanBusy && <LoaderCircle className="scanSpinner" size={15} aria-hidden="true" />}
+                    {scanSubmitting ? "Starting scan" : scanPolling ? "Scanning" : "Start scan"}
                   </button>
                 </form>
-                {scanBusy && (
+                {scanJob && scanPolling && (
                   <div className="scanProgress" role="status" aria-live="polite">
-                    <span>Scanning {scanJob.wallet_label} · {scanJob.progress}%</span>
+                    <span className="scanProgressLabel">
+                      <span>Scanning {scanJob.wallet_label}</span>
+                      <strong>{scanJob.progress}%</strong>
+                    </span>
                     <progress max="100" value={scanJob.progress}>{scanJob.progress}%</progress>
                   </div>
                 )}
                 {scanJob?.status === "completed" && <p className="scanSuccess" role="status">Scan complete. Switched to {scanJob.wallet_label}.</p>}
                 {(scanError || scanJob?.status === "failed") && <p className="scanError" role="alert">{scanError ?? scanJob?.error}</p>}
-                {wallets.length > 0 && (
-                  <div className="walletList" aria-label="Completed wallets">
-                    <span>Completed wallets:</span>
-                    {wallets.map((wallet) => <span key={wallet.wallet_address} className={wallet.wallet_address === data.metadata.wallet_address ? "currentWallet" : ""}>{wallet.label}</span>)}
-                  </div>
-                )}
                 {dashboardDataMode === "static" && <p className="boundedNote">Wallet scanning is available only in live local mode.</p>}
               </div>
             )}
@@ -280,6 +292,27 @@ export function App() {
       <section className="overviewContext" aria-label="Analysis context">
         <div className="analysisSubject">
           <span className="contextLabel">Analyzing</span>
+          {dashboardDataMode === "api" && wallets.length > 0 && (
+            <label className="walletSwitcher">
+              <span className="srOnly">Analyzed wallet</span>
+              <select
+                aria-label="Analyzed wallet"
+                value={walletSelection}
+                onChange={(event) => selectWallet(event.target.value)}
+              >
+                {!walletSelectionIsListed && (
+                  <option value={walletSelection}>
+                    {data.metadata.configured_wallet_label} ({compactAddress(walletSelection)})
+                  </option>
+                )}
+                {wallets.map((wallet) => (
+                  <option key={wallet.wallet_address} value={wallet.wallet_address}>
+                    {wallet.label} ({compactAddress(wallet.wallet_address)})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="subjectIdentity">
             <EtherscanLink
               className="subjectAddress"
@@ -289,12 +322,14 @@ export function App() {
               <code>{compactAddress(data.metadata.wallet_address)}</code>
               <ExternalLink size={13} aria-hidden="true" />
             </EtherscanLink>
-            <span
-              className="subjectLabel"
-              title="Configured project label; not a live ENS resolution."
-            >
-              {data.metadata.configured_wallet_label}
-            </span>
+            {dashboardDataMode === "static" && (
+              <span
+                className="subjectLabel"
+                title="Configured project label; not a live ENS resolution."
+              >
+                {data.metadata.configured_wallet_label}
+              </span>
+            )}
           </div>
           <div className="subjectMeta">
             <span>Ethereum mainnet</span>

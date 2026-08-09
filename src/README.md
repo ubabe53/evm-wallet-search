@@ -4,6 +4,11 @@ This component owns the React presentation of wallet Transfer-signature analytic
 selection totals, provenance, timeline navigation, token and counterparty rankings, recent
 events, recognition controls, and pinned-block account-type evidence.
 
+In live mode, completed-wallet selection belongs to the persistent analysis context and only changes
+the wallet-scoped API query. The separate scan launcher creates finalized scan jobs for new or
+incomplete targets, clears accepted input, keeps progress visible in the launcher, and switches to a
+successfully published wallet automatically.
+
 The frontend has two explicit build-time data modes:
 
 - `api`: local development calls the loopback API over complete live DuckDB analytics.

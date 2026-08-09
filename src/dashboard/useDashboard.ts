@@ -63,6 +63,7 @@ export function useDashboard() {
   const [recognitionActionError, setRecognitionActionError] = useState<string | null>(null);
   const [scanInput, setScanInput] = useState("");
   const [scanJob, setScanJob] = useState<ScanJob | null>(null);
+  const [scanSubmitting, setScanSubmitting] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [wallets, setWallets] = useState<WalletListItem[]>([]);
   const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
@@ -472,13 +473,31 @@ export function useDashboard() {
   }
 
   async function startWalletScan() {
-    if (dashboardDataMode !== "api" || !scanInput.trim() || scanJob?.status === "queued" || scanJob?.status === "running") return;
+    if (
+      dashboardDataMode !== "api" ||
+      !scanInput.trim() ||
+      scanSubmitting ||
+      scanJob?.status === "queued" ||
+      scanJob?.status === "running"
+    ) return;
+    const requestedWallet = scanInput.trim();
     setScanError(null);
+    setScanJob(null);
+    setScanSubmitting(true);
     try {
-      setScanJob(await createScanJob(scanInput));
+      setScanJob(await createScanJob(requestedWallet));
+      setScanInput("");
     } catch (actionError) {
       setScanError(actionError instanceof Error ? actionError.message : "Could not start wallet scan");
+    } finally {
+      setScanSubmitting(false);
     }
+  }
+
+  function selectWallet(walletAddress: string) {
+    if (dashboardDataMode !== "api" || walletAddress === selectedWalletAddress) return;
+    setSelectedWalletAddress(walletAddress);
+    apiMetadataRef.current = undefined;
   }
 
   return {
@@ -521,6 +540,9 @@ export function useDashboard() {
     scanError,
     scanInput,
     scanJob,
+    scanSubmitting,
+    selectedWalletAddress,
+    selectWallet,
     setScanInput,
     startWalletScan,
     wallets,

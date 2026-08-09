@@ -1,0 +1,127 @@
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const firstWallet = "0x1111111111111111111111111111111111111111";
+const secondWallet = "0x2222222222222222222222222222222222222222";
+
+function response(payload: unknown) {
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(payload) });
+}
+
+function metadata(walletAddress: string) {
+  return {
+    configured_wallet_label: walletAddress === firstWallet ? "first.eth" : "second.eth",
+    wallet_address: walletAddress,
+    chain_id: 1,
+    data_source: "hyperindex",
+    generated_at: "2026-08-09T12:00:00+00:00",
+    snapshot_run_id: `run-${walletAddress}`,
+    snapshot_start_block: 0,
+    snapshot_end_block: 25_000_000,
+    snapshot_end_block_hash: "0xabc",
+    snapshot_finality_policy: "ethereum_finalized",
+    snapshot_scope_version: "wallet-transfer-v1",
+    transfer_count: 0,
+    event_block_number_min: null,
+    event_block_number_max: null,
+    first_event_at: null,
+    last_event_at: null,
+    account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties",
+    account_evidence_eligible_address_count: 0,
+    account_evidence_classified_address_count: 0,
+    account_evidence_failed_address_count: 0,
+    account_evidence_not_checked_address_count: 0,
+    account_evidence_eligible_event_count: 0,
+    account_evidence_classified_event_count: 0,
+    account_evidence_failed_event_count: 0,
+    account_evidence_not_checked_event_count: 0,
+    account_evidence_observation_block_number_min: null,
+    account_evidence_observation_block_number_max: null,
+    account_evidence_observation_block_timestamp_min: null,
+    account_evidence_observation_block_timestamp_max: null,
+    account_evidence_schema_version: null,
+    api_schema_version: "dashboard-api-v16",
+    database_mode: "live",
+    completeness_scope: "finalized_block_range",
+    indexer_checkpoint_recorded: true,
+    finality_status: "finalized",
+    is_sampled: false,
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+describe("live wallet controls", () => {
+  it("switches completed wallets separately and clears an accepted scan input", async () => {
+    vi.stubEnv("VITE_DATA_MODE", "api");
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/v1/wallets") {
+        return response({
+          items: [
+            { chain_id: 1, wallet_address: firstWallet, label: "first.eth", status: "completed" },
+            { chain_id: 1, wallet_address: secondWallet, label: "second.eth", status: "completed" },
+          ],
+        });
+      }
+      if (input.startsWith("/api/v1/metadata")) {
+        return response(metadata(input.includes(encodeURIComponent(secondWallet)) ? secondWallet : firstWallet));
+      }
+      if (input.startsWith("/api/v1/summary?")) {
+        return response({ transfer_count: 0, token_count: 0, counterparty_count: 0 });
+      }
+      if (input.startsWith("/api/v1/timeline?")) {
+        return response({ interval: "year", year: null, complete_matching_count: 0, returned_count: 0, items: [] });
+      }
+      if (input.startsWith("/api/v1/events?") || input.startsWith("/api/v1/tokens?") || input.startsWith("/api/v1/counterparties?")) {
+        return response({ complete_matching_count: 0, returned_count: 0, next_cursor: null, items: [] });
+      }
+      if (input === "/api/v1/scan-jobs" && init?.method === "POST") {
+        return response({
+          job_id: "job-1",
+          requested_value: "new.eth",
+          wallet_address: "0x3333333333333333333333333333333333333333",
+          wallet_label: "new.eth",
+          status: "queued",
+          progress: 0,
+          from_block: 0,
+          to_block: 25_000_100,
+          error: null,
+          created_at: "2026-08-09T12:01:00+00:00",
+          updated_at: "2026-08-09T12:01:00+00:00",
+        });
+      }
+      if (input === "/api/v1/scan-jobs/job-1") {
+        return new Promise(() => undefined);
+      }
+      throw new Error(`Unexpected request ${input}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { App } = await import("../src/App");
+
+    render(<App />);
+
+    const walletSelect = await screen.findByRole("combobox", { name: "Analyzed wallet" });
+    expect(walletSelect).toHaveValue(firstWallet);
+    fireEvent.change(walletSelect, { target: { value: secondWallet } });
+    await waitFor(() => expect(walletSelect).toHaveValue(secondWallet));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) =>
+      String(url).includes(`wallet_address=${encodeURIComponent(secondWallet)}`),
+    )).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "Scan wallet" }));
+    const scanInput = screen.getByRole("textbox", { name: "Wallet address or ENS" });
+    fireEvent.change(scanInput, { target: { value: "new.eth" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start scan" }));
+
+    await waitFor(() => expect(scanInput).toHaveValue(""));
+    expect(screen.getByRole("button", { name: "Scanning 0%" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveValue(0);
+    expect(screen.queryByText("Live mode")).not.toBeInTheDocument();
+    expect(screen.queryByText("Completed wallets:")).not.toBeInTheDocument();
+  });
+});

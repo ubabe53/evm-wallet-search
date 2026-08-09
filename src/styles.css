@@ -137,27 +137,30 @@ select {
 }
 .scanHeader { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .scanHeader strong { font-size: 0.96rem; }
-.scanPanel p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; }
-.scanHint { border: 1px solid var(--subtle-border); border-radius: 999px; padding: 0.25rem 0.55rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-.scanHint.live { background: var(--live-bg); color: var(--live-text); }
-.scanHint.fixture { background: var(--fixture-bg); color: var(--fixture-text); }
+.scanHeader p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; }
 .scanForm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.6rem; max-width: 760px; }
 .scanForm label { min-width: 0; }
 .scanInput { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 0.6rem; background: var(--control-bg); padding: 0.72rem 0.85rem; color: var(--text); outline: none; transition: border-color 140ms ease, box-shadow 140ms ease; }
 .scanInput::placeholder { color: var(--muted); }
 .scanInput:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
-.scanButton { border: 1px solid var(--accent); border-radius: 0.6rem; background: var(--accent); padding: 0.72rem 1rem; color: #fff; font-weight: 750; cursor: pointer; box-shadow: 0 4px 10px color-mix(in srgb, var(--accent) 22%, transparent); transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease; }
+.scanButton { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; border: 1px solid var(--accent); border-radius: 0.6rem; background: var(--accent); padding: 0.72rem 1rem; color: #fff; font-weight: 750; cursor: pointer; box-shadow: 0 4px 10px color-mix(in srgb, var(--accent) 22%, transparent); transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease; }
 .scanButton:hover:not(:disabled) { filter: brightness(0.94); box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 30%, transparent); transform: translateY(-1px); }
 .scanButton:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: 2px; }
 .scanButton:disabled { cursor: not-allowed; opacity: 0.55; box-shadow: none; }
 .scanProgress { display: grid; gap: 0.3rem; font-size: 0.85rem; }
+.scanProgressLabel { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .scanProgress progress { width: 100%; accent-color: var(--accent); }
 .scanSuccess { color: var(--accent) !important; }
 .scanError { color: var(--out) !important; }
-.walletList { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; color: var(--muted); font-size: 0.78rem; }
-.walletList span { padding: 0.18rem 0.4rem; border-radius: 0.3rem; background: var(--subtle-bg); }
-.walletList span:first-child { padding-left: 0; background: transparent; }
-.walletList .currentWallet { color: var(--accent); font-weight: 600; }
+.scanSpinner { flex: 0 0 auto; animation: scan-spin 900ms linear infinite; }
+
+@keyframes scan-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanSpinner { animation: none; }
+}
 
 @media (max-width: 560px) {
   .scanHeader { align-items: flex-start; }
@@ -228,6 +231,31 @@ h2 {
 .subjectIdentity {
   min-width: 0;
   gap: 8px;
+}
+
+.walletSwitcher {
+  position: relative;
+  min-width: 0;
+}
+
+.walletSwitcher select {
+  width: min(290px, 38vw);
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--control-bg);
+  padding: 0 30px 0 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.walletSwitcher select:hover,
+.walletSwitcher select:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  outline-offset: 1px;
 }
 
 .subjectAddress {
@@ -1406,6 +1434,11 @@ code {
 
   .subjectMeta {
     margin-left: 0;
+  }
+
+  .walletSwitcher,
+  .walletSwitcher select {
+    width: 100%;
   }
 
   .selectionContext strong,
