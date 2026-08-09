@@ -18,12 +18,28 @@ describe("dashboard presentation contract", () => {
     expect(styles).toMatch(/\.tokenActivityPanel\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
   });
 
-  it("fits every token-activity column on normal desktop widths", () => {
+  it("keeps token and counterparty rankings free of horizontal scrolling", () => {
     const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
 
     expect(styles).toMatch(/\.tokenActivityTable\s*\{[^}]*table-layout:\s*fixed;/s);
     expect(styles).toMatch(
-      /@media \(max-width:\s*860px\)[\s\S]*?\.tokenActivityTable\s*\{[^}]*min-width:\s*820px;/s,
+      /\.tokenTableScroll\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s,
+    );
+    expect(styles).toMatch(
+      /\.counterpartyTableScroll\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s,
+    );
+    expect(styles).not.toMatch(/\.tokenActivityTable\s*\{[^}]*min-width:/s);
+    expect(styles).not.toMatch(/\.counterpartyTable\s*\{[^}]*min-width:/s);
+  });
+
+  it("uses responsive ranking cards and themed vertical scrollbars", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+
+    expect(styles).toMatch(
+      /@media \(max-width:\s*860px\)[\s\S]*?\.tokenActivityTable tr,[\s\S]*?\.counterpartyTable tr\s*\{[^}]*display:\s*grid;/s,
+    );
+    expect(styles).toMatch(
+      /\.tokenTableScroll::-webkit-scrollbar-thumb,[\s\S]*?\.counterpartyTableScroll::-webkit-scrollbar-thumb\s*\{[^}]*border-radius:\s*999px;/s,
     );
   });
 });
