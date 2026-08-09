@@ -23,21 +23,21 @@ class RunIndexerTest(unittest.TestCase):
     def test_scan_uses_isolated_schema_and_runtime_wallet(self, run) -> None:
         wallet = "0x" + "a" * 40
         environment: dict[str, str] = {}
-        with tempfile.TemporaryDirectory() as directory, patch.object(
-            run_indexer, "INDEXER_DIR", Path(directory) / "indexer"
-        ):
-            run_indexer.run_bounded_scan(
-                [
-                    "--wallet", wallet,
-                    "--from-block", "101",
-                    "--to-block", "200",
-                    "--schema", "wallet_scan_job_123",
-                    "--indexer-port", "9082",
-                ],
-                environment,
-            )
-            self.assertTrue((run_indexer.INDEXER_DIR / ".envio").is_dir())
-            expected_directory = run_indexer.INDEXER_DIR
+        with tempfile.TemporaryDirectory() as directory:
+            indexer_directory = Path(directory) / "indexer"
+            indexer_directory.mkdir()
+            with patch.object(run_indexer, "INDEXER_DIR", indexer_directory):
+                run_indexer.run_bounded_scan(
+                    [
+                        "--wallet", wallet,
+                        "--from-block", "101",
+                        "--to-block", "200",
+                        "--schema", "wallet_scan_job_123",
+                        "--indexer-port", "9082",
+                    ],
+                    environment,
+                )
+                expected_directory = run_indexer.INDEXER_DIR
 
         self.assertEqual(environment["ENVIO_WALLET_SCAN_ADDRESS"], wallet)
         self.assertEqual(environment["ENVIO_PG_SCHEMA"], "wallet_scan_job_123")
@@ -45,6 +45,7 @@ class RunIndexerTest(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[:4], ["bunx", "envio", "start", "--restart"])
         generated_path = Path(command[5])
+        self.assertEqual(generated_path.parent, expected_directory)
         self.assertFalse(generated_path.exists())
         self.assertEqual(run.call_args.kwargs["cwd"], expected_directory)
 

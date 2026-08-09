@@ -253,8 +253,6 @@ def run_bounded_indexer(
     )
     import yaml
 
-    config_directory = INDEXER_DIR / ".envio"
-    config_directory.mkdir(parents=True, exist_ok=True)
     interval = RawIngestionInterval(
         wallet_address=scan.wallet_address,
         from_block=scan.from_block,
@@ -265,7 +263,7 @@ def run_bounded_indexer(
         mode="w",
         prefix="wallet-scan-worker-",
         suffix=".yaml",
-        dir=config_directory,
+        dir=INDEXER_DIR,
     ) as generated:
         yaml.safe_dump(config, generated, sort_keys=False)
         generated.flush()

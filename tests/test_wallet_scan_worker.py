@@ -89,6 +89,7 @@ class WalletScanWorkerTest(unittest.TestCase):
         self.assertEqual(completed.call_count, 2)
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
         self.assertEqual(popen.call_args.kwargs["env"]["ENVIO_API_TOKEN"], "token")
+        self.assertEqual(Path(popen.call_args.args[0][5]).parent, Path(__file__).parents[1] / "indexer")
         killpg.assert_called_once_with(4321, signal.SIGTERM)
         process.wait.assert_called_once_with(timeout=30)
 

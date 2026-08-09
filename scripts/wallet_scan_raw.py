@@ -319,7 +319,7 @@ def merge_bounded_ingestion(
     sql = merge_sql(schema_name, interval)
     with postgres_connection(dsn, read_only=False) as connection:
         connection.execute(
-            "call postgres_execute('shared', ?, true)",
+            "call postgres_execute('shared', ?, use_transaction := true)",
             [sql],
         )
     completed = completed_ingestion(dsn, interval)
@@ -334,6 +334,6 @@ def drop_temporary_schema(dsn: str, schema_name: str) -> None:
     schema = validate_temporary_schema(schema_name)
     with postgres_connection(dsn, read_only=False) as connection:
         connection.execute(
-            "call postgres_execute('shared', ?, true)",
+            "call postgres_execute('shared', ?, use_transaction := true)",
             [f'drop schema if exists {schema} cascade'],
         )

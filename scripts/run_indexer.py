@@ -72,13 +72,11 @@ def run_bounded_scan(arguments: list[str], env: dict[str, str]) -> None:
     )
     import yaml
 
-    temporary_config_directory = INDEXER_DIR / ".envio"
-    temporary_config_directory.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         mode="w",
         prefix="wallet-scan-",
         suffix=".yaml",
-        dir=temporary_config_directory,
+        dir=INDEXER_DIR,
     ) as generated:
         yaml.safe_dump(config, generated, sort_keys=False)
         generated.flush()

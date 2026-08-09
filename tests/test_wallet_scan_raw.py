@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from scripts.wallet_scan_raw import (
     RawIngestionInterval,
     bounded_indexer_completed,
+    drop_temporary_schema,
     merge_sql,
     validate_indexer_checkpoint,
     validate_temporary_schema,
@@ -41,6 +42,18 @@ class WalletScanRawTest(unittest.TestCase):
         for schema in ("public", "wallet_scan", "wallet_scan_job;drop schema public"):
             with self.subTest(schema=schema), self.assertRaises(ValueError):
                 validate_temporary_schema(schema)
+
+    @patch("scripts.wallet_scan_raw.postgres_connection")
+    def test_schema_cleanup_uses_named_postgres_transaction_argument(self, connect) -> None:
+        connection = MagicMock()
+        connect.return_value.__enter__.return_value = connection
+
+        drop_temporary_schema("postgresql://test", "wallet_scan_job_123")
+
+        self.assertEqual(
+            connection.execute.call_args.args[0],
+            "call postgres_execute('shared', ?, use_transaction := true)",
+        )
 
     def test_rejects_invalid_interval_provenance(self) -> None:
         invalid = RawIngestionInterval(
