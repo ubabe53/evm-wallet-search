@@ -2,6 +2,12 @@ with raw_transfers as (
   {% if var('use_fixture', true) %}
     select 'fixture' as source_name, * from {{ ref('raw_transfer_events_fixture') }}
   {% else %}
+    {% set public_raw_enabled = env_var('EVM_WALLET_PUBLIC_RAW_ENABLED', 'false') == 'true' %}
+    {% set shared_raw_enabled = env_var('EVM_WALLET_SHARED_RAW_ENABLED', 'false') == 'true' %}
+    {% if not public_raw_enabled and not shared_raw_enabled %}
+      {{ exceptions.raise_compiler_error('Live staging requires at least one available Postgres raw transfer relation') }}
+    {% endif %}
+    {% if public_raw_enabled %}
     -- Force the unconstrained Postgres numeric to text before DuckDB scans it.
     -- depends_on: {{ source('hyperindex', 'transfer_event') }}
     select
@@ -23,8 +29,11 @@ with raw_transfers as (
       'hyperindex',
       'select chain_id, block_number, block_hash, block_timestamp, transaction_hash, transaction_index, transaction_from_address, transaction_to_address, log_index, token_address, from_address, to_address, value_raw::text as value_raw from public."Erc20Transfer" where block_number between {{ env_var("EVM_WALLET_SNAPSHOT_START_BLOCK") }} and {{ env_var("EVM_WALLET_SNAPSHOT_END_BLOCK") }}'
     )
-    {% if env_var('EVM_WALLET_SHARED_RAW_ENABLED', 'false') == 'true' %}
+    {% endif %}
+    {% if public_raw_enabled and shared_raw_enabled %}
     union all
+    {% endif %}
+    {% if shared_raw_enabled %}
     -- depends_on: {{ source('bounded_wallet_scan', 'transfer_event') }}
     select
       'bounded_scan' as source_name,

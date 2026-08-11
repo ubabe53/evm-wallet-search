@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: hyperindex
-    description: HyperIndex Postgres ingestion persistence attached read-only and only during live dbt builds.
+    description: Optional normal-indexer HyperIndex Postgres persistence attached read-only and only during live dbt builds.
     database: hyperindex
     schema: public
     quoting:
