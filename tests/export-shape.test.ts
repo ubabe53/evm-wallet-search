@@ -27,8 +27,14 @@ describe("dashboard export shape", () => {
     expect(metadata.finality_status).toBe("not_recorded");
     expect(metadata.snapshot_start_block).toBeNull();
     expect(metadata.snapshot_end_block).toBeNull();
-    expect(metadata.event_block_number_min).toBe(17_000_001);
-    expect(metadata.event_block_number_max).toBe(17_006_000);
+    expect(metadata.data_source).toBe("fixture");
+    expect(metadata.transfer_count).toBeGreaterThan(10);
+    expect(metadata.complete_event_count).toBe(metadata.transfer_count);
+    expect(metadata.exported_event_count).toBe(metadata.complete_event_count);
+    expect(metadata.event_block_number_min).toBe(14_000_001);
+    expect(metadata.event_block_number_max).toBe(27_000_001);
+    expect(Math.max(...events.map((event: { block_timestamp: string }) =>
+      Date.parse(event.block_timestamp)))).toBeLessThanOrEqual(Date.parse(metadata.generated_at));
     expect(events.every((event: Record<string, unknown>) =>
       !("wallet_id" in event) && !("ens" in event) &&
       typeof event.chain_id === "number" && typeof event.wallet_address === "string")).toBe(true);
@@ -41,8 +47,7 @@ describe("dashboard export shape", () => {
     expect(timeline.every((row: Record<string, unknown>) =>
       !("wallet_id" in row) &&
       typeof row.chain_id === "number" && typeof row.wallet_address === "string")).toBe(true);
-    expect(["fixture", "hyperindex"]).toContain(metadata.data_source);
-    expect(typeof metadata.is_sampled).toBe("boolean");
+    expect(metadata.is_sampled).toBe(false);
     expect(metadata.account_evidence_schema_version).toBeNull();
     expect(metadata.account_evidence_observation_block_number_min).toBeNull();
     expect(metadata.account_evidence_observation_block_number_max).toBeNull();
@@ -196,6 +201,29 @@ describe("dashboard export shape", () => {
     expect(new Set(summaries.counterparties.map((row: { account_type: string }) => row.account_type))).toEqual(
       new Set(["unknown"]),
     );
+    expect(metadata.account_evidence_classified_address_count).toBe(0);
+    expect(metadata.account_evidence_failed_address_count).toBe(0);
+    expect(metadata.account_evidence_not_checked_address_count).toBe(
+      metadata.account_evidence_eligible_address_count,
+    );
+    expect(new Set(events.map((event: { block_timestamp: string }) =>
+      event.block_timestamp.slice(0, 4)))).toEqual(new Set(["2022", "2023", "2024", "2025", "2026"]));
+    expect(new Set(events.map((event: { direction: string }) => event.direction))).toEqual(
+      new Set(["in", "out", "self"]),
+    );
+    expect(new Set(events.map((event: { recognition_status: string }) =>
+      event.recognition_status))).toEqual(new Set(["recognized", "other"]));
+    expect(events.some((event: { is_indirect: boolean | null }) => event.is_indirect === true)).toBe(true);
+    expect(events.some((event: { is_indirect: boolean | null }) => event.is_indirect === false)).toBe(true);
+    expect(events.some((event: { is_indirect: boolean | null }) => event.is_indirect == null)).toBe(true);
+    expect(summaries.tokens).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        token_address: "0x9999999999999999999999999999999999999999",
+        token_name: "Synthetic Example Token",
+        token_symbol: "EXAMPLE",
+        recognition_status: "other",
+      }),
+    ]));
     expect(events.every((event: {
       transfer_id: string;
       transaction_hash: string;

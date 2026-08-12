@@ -101,7 +101,7 @@ Fixture mode exists for deterministic tests and the fixture-backed GitHub Pages 
 bun run analytics:build:fixture
 ```
 
-The seven fixture transfer rows live in `analytics/seeds/raw_transfer_events_fixture.csv`. They cover direct, indirect, self-transfer, and legacy-unknown transaction-envelope evidence while preserving emitted Transfer fields and canonical block hashes. There is no account-evidence fixture: the fixture build uses an empty typed relation, so it never invents address classifications. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays a fixture badge.
+The compact fixture transfer set lives in `analytics/seeds/raw_transfer_events_fixture.csv`. Its dates, block identifiers, and participant pairs are synthetic examples—not historical `vitalik.eth` activity—and span five UTC years so the demo can exercise year/month navigation, a bounded 10-row event view, direct and confirmed-indirect direction evidence, self-transfer handling, multiple tokens and counterparties, and both recognition filters. There is no account-evidence fixture: the fixture build uses an empty typed relation, so it never invents address classifications. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, and the demo displays its synthetic provenance, unrecorded coverage, exported/complete fixture counts, sampling state, and configured-label caveat.
 
 `bun run analytics:build` remains an alias for `analytics:build:fixture` so existing CI and contributor commands stay deterministic. The exporter reads only the fixture database and may overwrite only the ignored files under `public/data/`.
 
@@ -338,6 +338,9 @@ The full test command builds `analytics/artifacts/fixture.duckdb`, exports fixtu
 1. Set the repository Actions variable `ENABLE_GITHUB_PAGES` to `true`.
 2. In repository Pages settings, select GitHub Actions as the source if GitHub does not configure it automatically.
 3. Run the Deploy workflow manually once, or merge a change into `main` and let successful CI trigger it.
+4. Verify the published repository subpath, including `data/meta.json`, hashed assets, and `favicon.svg`; the workflow builds with `/${repository-name}/` as the Vite base.
+5. Set the repository homepage URL to the verified Pages URL.
+6. Capture a current screenshot only from that verified fixture deployment, following `docs/images/README.md`; do not substitute or fabricate an image.
 
 The demo site does not expire after one day; only the separate CI download artifact does. If private-repository Pages is unavailable on the current plan, keep the gate disabled and connect the fixture-demo build to a static host that supports private Git integration, such as Cloudflare Pages, Netlify, or Vercel. Set the host's build command to `bun run test && bun run dashboard:build` and its output directory to `dist`.
 

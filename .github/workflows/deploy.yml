@@ -61,7 +61,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build fixture analytics
-        run: bun run analytics:build
+        run: bun run analytics:build:fixture
 
       - name: Export dashboard data
         run: bun run export:dashboard

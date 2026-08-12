@@ -131,6 +131,7 @@ export function App() {
     selectedWalletAddress != null &&
     selectedWalletAddress !== data.metadata.wallet_address &&
     refreshError == null;
+  const fixtureMetadata = "exported_event_count" in data.metadata ? data.metadata : null;
 
   return (
     <main className="shell">
@@ -388,8 +389,32 @@ export function App() {
         </div>
       </section>
 
+      {fixtureMetadata && (
+        <aside className="fixtureDisclosure" aria-label="Fixture demo disclosure">
+          <div>
+            <strong>Synthetic fixture demo</strong>
+            <span>
+              Deterministic example events for the configured demo address—not live
+              {" vitalik.eth "}history or evidence of HyperIndex completeness. Transfer-signature
+              rows do not prove token standard, intent, or economic ownership.
+            </span>
+          </div>
+          <div className="fixtureExportBoundary">
+            <strong>
+              {fixtureMetadata.exported_event_count.toLocaleString("en-US")}
+              {" / "}
+              {fixtureMetadata.complete_event_count.toLocaleString("en-US")}
+            </strong>
+            <span>
+              fixture events exported · {fixtureMetadata.is_sampled ? "bounded subset" : "not sampled"}
+              {" · account-type evidence intentionally absent"}
+            </span>
+          </div>
+        </aside>
+      )}
+
       <section className="stats" aria-label="Current selection summary">
-        <Stat icon={Activity} label="Transfers" value={stats.transferCount.toString()} />
+        <Stat icon={Activity} label="Captured events" value={stats.transferCount.toString()} />
         <Stat icon={Database} label="Tokens" value={stats.tokenCount.toString()} />
         <Stat icon={Network} label="Counterparties" value={stats.counterpartyCount.toString()} />
       </section>

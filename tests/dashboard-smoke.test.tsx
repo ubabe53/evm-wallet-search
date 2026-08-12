@@ -116,6 +116,13 @@ describe("App", () => {
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
     expect(screen.getByText("Coverage not recorded")).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
+      .toHaveTextContent("Synthetic fixture demo");
+    expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
+      .toHaveTextContent("not live vitalik.eth history or evidence of HyperIndex completeness");
+    expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
+      .toHaveTextContent("2 / 2fixture events exported · not sampled");
+    expect(screen.getByText("Captured events", { selector: ".stat span" })).toBeInTheDocument();
     expect(screen.getByText(/Generated Nov 14, 2023(?:,| at) 10:15 PM UTC/)).toBeInTheDocument();
     expect(screen.getByText("Activity Timeline")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Timeline year" })).toHaveValue("");

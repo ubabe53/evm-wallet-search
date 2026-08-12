@@ -80,8 +80,11 @@ commands are in the [operations guide](docs/operations.md#native-component-devel
   submission with stage-based progress, last-good dashboard preservation, retry, and automatic
   switching after validated publication.
 
-Fixture mode keeps scan and recognition-write controls disabled. Its fixture badge, bounded
-payload, and unrecorded scan coverage are part of the contract, not caveats to hide.
+Fixture mode keeps scan and recognition-write controls disabled. Its persistent disclosure marks
+the rows as synthetic examples rather than live `vitalik.eth` history or HyperIndex completeness
+evidence, shows exported-versus-complete event counts and sampling state, and labels the primary
+total `Captured events`. Its fixture badge, bounded payload, and unrecorded scan coverage are part
+of the contract, not caveats to hide.
 
 ## Scope and limitations
 

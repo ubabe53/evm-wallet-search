@@ -2,7 +2,7 @@ version: 2
 
 seeds:
   - name: raw_transfer_events_fixture
-    description: Deterministic captured-event fixture used by dbt tests and the static portfolio demo. {{ doc('bounded_fixture') }}
+    description: Deterministic synthetic captured-event examples used by dbt tests and the static portfolio demo; not historical claims about the configured address. {{ doc('bounded_fixture') }}
     meta:
       grain: one captured Transfer-signature log
       primary_key: [chain_id, transaction_hash, log_index]
@@ -122,7 +122,7 @@ seeds:
         description: Nullable machine-readable RPC or ABI decoding error.
 
   - name: token_rpc_metadata_fixture
-    description: Deterministic RPC metadata observation fixture used to test precedence and partial metadata behavior.
+    description: Deterministic synthetic RPC metadata observation fixture used to test precedence, example display labels, and partial metadata behavior.
     meta:
       grain: one fixture RPC metadata attempt per token contract
       primary_key: [token_address]

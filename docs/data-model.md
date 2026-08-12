@@ -16,6 +16,8 @@ Deduplicates wallet-relevant Transfer-signature entities by the canonical `(chai
 
 `block_hash` is provided with each HyperIndex event and retained as event-level canonical-block evidence. In HyperIndex mode, `value_raw` is cast to text inside Postgres through `postgres_query` before DuckDB scans it. This lossless transport cast avoids converting unconstrained Postgres numeric values to floating point or scientific notation and preserves the exact integer emitted as the event's third value. Both live and fixture inputs already expose text, so staging does not apply a second redundant cast. The value remains unscaled raw evidence; its meaning is not guaranteed to be a fungible quantity until token standard is disambiguated.
 
+The checked-in fixture contains a compact set of synthetic example events spanning five UTC calendar years. Its composition deliberately exercises inbound, outbound, self, direct, confirmed-indirect, and legacy-unknown sender evidence; five emitting contracts; both recognition states; repeated and distinct counterparties; monthly timeline navigation; and the dashboard's 10-row event disclosure. Fixture dates, block numbers, hashes, and participant pairs are deterministic examples, not assertions that these events occurred together on Ethereum. The configured `vitalik.eth` address and label provide presentation context only. No fixture row is a claim about that address's live or historical activity, and the fixture does not establish HyperIndex coverage.
+
 Live staging reads whichever durable raw relations exist in the same persistent Postgres database: Envio's normal `public."Erc20Transfer"` entity table, the worker-owned `wallet_scan.transfer_events` table populated by isolated bounded jobs, or both. At least one must exist. Both have the same event grain and exact fields. When both are available, staging compares every evidence field for repeated canonical keys and fails the build on any mismatch; equivalent duplicates use an explicit normal-source-first order. This is shared raw persistence, not a per-wallet table: one event involving two scanned wallets is still stored once.
 
 ### `wallet_scan.ingestion_runs` (Postgres)
@@ -255,4 +257,5 @@ dbt tests enforce:
 - Exact EIP-7702 code remains internal code state under an EOA-candidate primary type.
 - Successful cached observations cannot be overwritten automatically, while failed code reads remain retryable.
 - Fixture builds contain no account-evidence rows and keep their provenance bounds null.
+- Fixture builds retain more than one event page, a five-year/month navigation domain, all three directions, direct/indirect/unknown sender evidence, both recognition states, and an empty account-evidence relation.
 - The fixture export's nine recognition/address-evidence token and counterparty candidate unions plus client aggregation from account cells back to displayed token and timeline grains.
