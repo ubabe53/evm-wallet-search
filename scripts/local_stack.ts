@@ -83,6 +83,13 @@ export function scanStage(job: Pick<ScanJobPayload, "status" | "progress">): str
   return "Validating and publishing";
 }
 
+export function elapsedScanTime(startedAt: number, now = Date.now()): string {
+  const elapsedSeconds = Math.max(0, Math.floor((now - startedAt) / 1_000));
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds.toString().padStart(2, "0")}s` : `${seconds}s`;
+}
+
 export function requireEnvioToken(environment: NodeJS.ProcessEnv = process.env): void {
   const token = environment.ENVIO_API_TOKEN?.trim();
   if (!token) {
@@ -175,12 +182,18 @@ async function createInitialScan(baseUrl: string, wallet: string): Promise<ScanJ
 async function waitForScan(baseUrl: string, initial: ScanJobPayload): Promise<ScanJobPayload> {
   if (initial.status === "completed") return initial;
   let previousStage = "";
+  let lastHeartbeat = Date.now();
+  const startedAt = lastHeartbeat;
   let current = initial;
   while (current.status === "queued" || current.status === "running") {
     const stage = scanStage(current);
     if (stage !== previousStage) {
       console.log(`  ${stage}`);
       previousStage = stage;
+      lastHeartbeat = Date.now();
+    } else if (Date.now() - lastHeartbeat >= 15_000) {
+      console.log(`  Still ${stage.toLowerCase()} · elapsed ${elapsedScanTime(startedAt)}`);
+      lastHeartbeat = Date.now();
     }
     await Bun.sleep(1_500);
     const result = await fetchJson<ScanJobPayload>(

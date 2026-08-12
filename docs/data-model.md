@@ -216,6 +216,8 @@ The `/api/v1` service currently advertises response schema `dashboard-api-v16`. 
 
 - `GET /health/live`: process liveness only; `200 {"status":"ok"}` does not claim that an analytics artifact has been published;
 - `GET /health`: artifact-aware readiness and provenance for the currently selected live wallet;
+- `GET /scan-jobs/active`: the one queued or running process-local job, or `null`, for local client
+  activity recovery; it is not durable scan history;
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, contiguous finalized snapshot bounds, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema remain separate from the indexer checkpoint;
 - `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;

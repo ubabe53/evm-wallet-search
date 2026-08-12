@@ -60,6 +60,7 @@ describe("live wallet controls", () => {
   it("switches completed wallets separately and clears an accepted scan input", async () => {
     vi.stubEnv("VITE_DATA_MODE", "api");
     const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/v1/scan-jobs/active") return response({ job: null });
       if (input === "/api/v1/wallets") {
         return response({
           items: [
@@ -133,6 +134,7 @@ describe("live wallet controls", () => {
     vi.stubEnv("VITE_DATA_MODE", "api");
     let failSecondWallet = true;
     const fetchMock = vi.fn((input: string) => {
+      if (input === "/api/v1/scan-jobs/active") return response({ job: null });
       if (input === "/api/v1/wallets") {
         return response({
           items: [
@@ -191,6 +193,7 @@ describe("live wallet controls", () => {
     let refreshSignal: AbortSignal | undefined;
     let resolveWalletRefresh: (() => void) | undefined;
     const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/v1/scan-jobs/active") return response({ job: null });
       if (input === "/api/v1/wallets") {
         walletRequestCount += 1;
         if (walletRequestCount === 1) {
@@ -278,5 +281,47 @@ describe("live wallet controls", () => {
     await waitFor(() => expect(
       Array.from(walletSelect.options).find((option) => option.value === newWallet)?.textContent,
     ).toContain("new.eth"));
+  });
+
+  it("shows a discovered first scan instead of the unavailable-artifact error", async () => {
+    vi.stubEnv("VITE_DATA_MODE", "api");
+    const activeJob = {
+      job_id: "first-scan",
+      requested_value: "first.eth",
+      wallet_address: firstWallet,
+      wallet_label: "first.eth",
+      status: "running",
+      progress: 5,
+      from_block: 0,
+      to_block: 25_000_000,
+      error: null,
+      created_at: "2026-08-12T08:00:00+00:00",
+      updated_at: "2026-08-12T08:00:05+00:00",
+    } as const;
+    const fetchMock = vi.fn((input: string) => {
+      if (input === "/api/v1/scan-jobs/active") return response({ job: activeJob });
+      if (input === "/api/v1/wallets") return response({ items: [] });
+      if (input === "/api/v1/scan-jobs/first-scan") return new Promise(() => undefined);
+      if (input.startsWith("/api/v1/metadata")) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          json: () => Promise.resolve({ detail: "Analytics database unavailable" }),
+        });
+      }
+      throw new Error(`Unexpected request ${input}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { App } = await import("../src/App");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Building wallet analytics" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("first.eth")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Indexing and building analytics" }))
+      .not.toHaveAttribute("value");
+    expect(screen.getByText("Blocks 0–25,000,000")).toBeInTheDocument();
+    expect(screen.queryByText(/Build live analytics/)).not.toBeInTheDocument();
   });
 });

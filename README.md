@@ -67,7 +67,9 @@ The local dashboard exposes:
 - `All`, `Recognized`, and `Other` token views plus pinned-block `EOA`/`Contract` evidence.
 - live mode selection among completed wallets without rescanning, plus separate wallet/ENS scan
   submission with honest stage-based activity feedback, last-good dashboard preservation and retry on
-  refresh failure, and automatic switching; fixture mode keeps scanning disabled.
+  refresh failure, and automatic switching; during a first scan the browser shows its finalized block
+  range, named stage, and elapsed time instead of an unavailable-artifact error; fixture mode keeps
+  scanning disabled.
 
 Scan jobs are exposed by the local API and use the bundled bounded worker by default.
 `WALLET_SCAN_COMMAND` remains an optional adapter override. The worker indexes only the wallet's
@@ -99,7 +101,9 @@ An ENS name is also accepted. The command builds the images locally, starts pers
 analytics volumes, scans only the wallet's missing range through a recorded Ethereum finalized
 block, waits for validated atomic DuckDB publication, and then prints the loopback dashboard URL.
 The first scan begins at block 0 and can take time for a highly active wallet. No live wallet is
-hardcoded and the fixture Vitalik target is never used as a fallback.
+hardcoded and the fixture Vitalik target is never used as a fallback. While it runs, the command
+prints periodic elapsed-time heartbeats and the browser reports the same honest named stages at the
+loopback URL; neither surface invents a percentage from the worker's coarse checkpoints.
 
 ```sh
 bun run app:status

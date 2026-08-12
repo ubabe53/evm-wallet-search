@@ -403,6 +403,10 @@ export function loadScanJob(jobId: string, signal?: AbortSignal): Promise<ScanJo
   return fetchJson<ScanJob>(`/api/v1/scan-jobs/${encodeURIComponent(jobId)}`, signal);
 }
 
+export function loadActiveScanJob(signal?: AbortSignal): Promise<{ job: ScanJob | null }> {
+  return fetchJson<{ job: ScanJob | null }>("/api/v1/scan-jobs/active", signal);
+}
+
 export function loadWallets(signal?: AbortSignal): Promise<{ items: WalletListItem[] }> {
   return fetchJson<{ items: WalletListItem[] }>("/api/v1/wallets", signal);
 }

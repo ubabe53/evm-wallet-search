@@ -32,6 +32,9 @@ describe("live token-recognition controls", () => {
     vi.stubEnv("VITE_DATA_MODE", "api");
     let override: "recognized" | "other" | null = null;
     const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/v1/scan-jobs/active") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ job: null }) });
+      }
       if (input === "/api/v1/metadata") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({
           configured_wallet_label: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",
@@ -151,6 +154,7 @@ describe("live token-recognition controls", () => {
     }]);
 
     const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/v1/scan-jobs/active") return ok({ job: null });
       if (input === "/api/v1/metadata") {
         return ok({
           configured_wallet_label: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",

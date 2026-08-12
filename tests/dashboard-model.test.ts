@@ -11,6 +11,7 @@ import {
   aggregateTokenSummaries,
   bucketTimelineRows,
   etherscanAddressUrl,
+  elapsedTimeLabel,
   etherscanTokenUrl,
   etherscanTransactionUrl,
   scanStageLabel,
@@ -28,6 +29,11 @@ describe("dashboard model", () => {
     expect(scanStageLabel({ status: "running", progress: 95 })).toBe("Validating and publishing");
     expect(scanStageLabel({ status: "completed", progress: 100 })).toBe("Complete");
     expect(scanStageLabel({ status: "failed", progress: 0 })).toBe("Failed");
+  });
+
+  it("formats elapsed scan time without implying completion", () => {
+    expect(elapsedTimeLabel("2026-08-12T08:00:00Z", Date.parse("2026-08-12T08:02:05Z")))
+      .toBe("2m 05s");
   });
 
   it("exposes binary account filters while retaining unresolved rows in the all selection", () => {

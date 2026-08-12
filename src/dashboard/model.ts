@@ -29,6 +29,13 @@ export function scanStageLabel(job: Pick<ScanJob, "status" | "progress">): strin
   return "Validating and publishing";
 }
 
+export function elapsedTimeLabel(startedAt: string, now = Date.now()): string {
+  const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1_000));
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds.toString().padStart(2, "0")}s` : `${seconds}s`;
+}
+
 export function etherscanAddressUrl(address: string): string {
   return `${ETHERSCAN_BASE_URL}/address/${address}`;
 }

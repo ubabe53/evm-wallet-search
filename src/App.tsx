@@ -9,8 +9,8 @@ import {
   Search,
   Sun,
 } from "lucide-react";
-import { useRef, useState } from "react";
-import { dashboardDataMode } from "./data";
+import { useEffect, useRef, useState } from "react";
+import { dashboardDataMode, type ScanJob } from "./data";
 import { ActivityTimeline } from "./dashboard/ActivityTimeline";
 import { CounterpartyTable } from "./dashboard/CounterpartyTable";
 import { EventList } from "./dashboard/EventList";
@@ -27,6 +27,7 @@ import {
   accountEvidenceObservationBlockLabel,
   compactAddress,
   etherscanAddressUrl,
+  elapsedTimeLabel,
   generatedAtLabel,
   scanStageLabel,
   snapshotCoverageLabel,
@@ -38,6 +39,7 @@ export function App() {
   const touchActivation = useRef(false);
   const {
     apiResult,
+    activeScanDiscoveryComplete,
     apiResultIsCurrent,
     availableTimelineYears,
     changeTimelineYear,
@@ -89,6 +91,10 @@ export function App() {
   const scanBusy = scanSubmitting || scanPolling;
   const scanStage = scanJob ? scanStageLabel(scanJob) : null;
 
+  if (dashboardDataMode === "api" && !data && scanJob && scanJob.status !== "completed") {
+    return <InitialScanState job={scanJob} />;
+  }
+
   if (error) {
     return (
       <main className="shell">
@@ -105,7 +111,7 @@ export function App() {
     );
   }
 
-  if (!data || !stats || !filtered) {
+  if (!activeScanDiscoveryComplete || !data || !stats || !filtered) {
     return (
       <main className="shell">
         <section className="empty">
@@ -506,6 +512,49 @@ export function App() {
           )}
         </div>
       )}
+    </main>
+  );
+}
+
+function InitialScanState({ job }: { job: ScanJob }) {
+  const [now, setNow] = useState(Date.now());
+  const active = job.status === "queued" || job.status === "running";
+
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  const stage = scanStageLabel(job);
+  return (
+    <main className="shell">
+      <section className="initialScan" aria-live="polite">
+        <div className="initialScanIcon" aria-hidden="true">
+          {active ? <LoaderCircle className="scanSpinner" size={24} /> : <Database size={24} />}
+        </div>
+        <div className="initialScanCopy">
+          <p className="initialScanEyebrow">Ethereum mainnet · finalized blocks</p>
+          <h1>{active ? "Building wallet analytics" : "Wallet scan failed"}</h1>
+          <p className="initialScanWallet">{job.wallet_label}</p>
+        </div>
+        {active && (
+          <div className="initialScanProgress" role="status">
+            <div className="scanProgressLabel">
+              <strong>{stage}</strong>
+              <span>Elapsed {elapsedTimeLabel(job.created_at, now)}</span>
+            </div>
+            <progress aria-label={stage} />
+            <p>Blocks {job.from_block.toLocaleString()}–{job.to_block.toLocaleString()}</p>
+          </div>
+        )}
+        {!active && <p className="scanError" role="alert">{job.error ?? "The scan worker stopped before publication."}</p>}
+        <p className="initialScanNote">
+          {active
+            ? "The first scan can take a while. This page will open the dashboard automatically when the validated artifact is published."
+            : "No partial analytics were published. Check the app terminal for the worker error, then retry the scan."}
+        </p>
+      </section>
     </main>
   );
 }

@@ -168,6 +168,39 @@ select {
   .scanButton { width: 100%; }
 }
 
+.initialScan {
+  display: grid;
+  width: min(680px, 100%);
+  min-height: 70vh;
+  margin: 0 auto;
+  align-content: center;
+  gap: 1.15rem;
+}
+
+.initialScanIcon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: 12px;
+  background: var(--live-bg);
+  color: var(--live-text);
+}
+
+.initialScanCopy { display: grid; gap: 0.35rem; }
+.initialScanCopy h1 { margin: 0; font-size: clamp(1.8rem, 5vw, 2.7rem); letter-spacing: -0.035em; }
+.initialScanEyebrow { margin: 0; color: var(--accent); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.initialScanWallet { margin: 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.initialScanProgress { display: grid; gap: 0.6rem; padding: 1.1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-bg); }
+.initialScanProgress progress { width: 100%; height: 8px; accent-color: var(--accent); }
+.initialScanProgress p,
+.initialScanNote { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.55; }
+
+@media (max-width: 560px) {
+  .initialScanProgress .scanProgressLabel { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
+}
+
 h1,
 h2,
 p {
