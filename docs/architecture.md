@@ -103,7 +103,8 @@ commands remain outside this stack and cannot overwrite its named analytics volu
 - Included: wallet-relevant `Transfer(address,address,uint256)` logs on Ethereum mainnet, interpreted by ERC-20-oriented models with the explicit limitation that the source does not prove token standard.
 - Included: nullable top-level transaction sender and target fields selected on those events.
 - Included: exact raw third values plus separately sourced token-decimals metadata; normalized token amounts are deferred until an exact consumer contract is defined.
-- Excluded: traces, internal calls, state deltas, native ETH transfers, approvals, swaps, NFT-specific disambiguation/interpretation, USD pricing, and arbitrary wallet lookup.
+- Included: loopback-only scan submission for one explicit normalized address or conservatively validated ASCII ENS name per finalized interval.
+- Excluded: traces, internal calls, state deltas, native ETH transfers, approvals, swaps, NFT-specific disambiguation/interpretation, USD pricing, and a publicly hosted arbitrary-wallet scanning service.
 
 ## Documentation Rule
 
