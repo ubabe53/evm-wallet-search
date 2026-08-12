@@ -184,6 +184,11 @@ def create_app(service: QueryService | None = None, scan_manager: ScanJobManager
             status = 409 if "already running" in str(error) else 503
             raise HTTPException(status_code=status, detail=str(error)) from error
 
+    @application.get("/api/v1/scan-jobs/active")
+    def active_scan_job() -> dict:
+        job = jobs.active()
+        return {"job": scan_job_payload(job) if job is not None else None}
+
     @application.get("/api/v1/scan-jobs/{job_id}")
     def scan_job(job_id: str) -> dict:
         job = jobs.get(job_id)

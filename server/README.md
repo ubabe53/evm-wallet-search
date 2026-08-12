@@ -54,7 +54,7 @@ reindex history, or expose an HTTP dashboard route.
 
 ### Scan jobs
 
-Live mode also exposes `POST /api/v1/scan-jobs`, `GET /api/v1/scan-jobs/{job_id}`, and `GET /api/v1/wallets`. These are local orchestration endpoints only. The manager enforces one worker, wallet-specific missing-to-finalized bounds, staging of the complete artifact, preservation validation, and atomic artifact replacement. The bundled worker owns bounded Envio collection, shared-Postgres raw merge/checkpointing, and the staged dbt build; `WALLET_SCAN_COMMAND` may explicitly replace that subprocess without changing the manager's publication checks. Fixture mode has no scan controls.
+Live mode also exposes `POST /api/v1/scan-jobs`, `GET /api/v1/scan-jobs/active`, `GET /api/v1/scan-jobs/{job_id}`, and `GET /api/v1/wallets`. These are local orchestration endpoints only. Active-job discovery is process-local and returns the one queued/running job or `null`; durable scan truth remains in Postgres checkpoints and the published DuckDB artifact. The manager enforces one worker, wallet-specific missing-to-finalized bounds, staging of the complete artifact, preservation validation, and atomic artifact replacement. The bundled worker owns bounded Envio collection, shared-Postgres raw merge/checkpointing, and the staged dbt build; `WALLET_SCAN_COMMAND` may explicitly replace that subprocess without changing the manager's publication checks. Fixture mode has no scan controls.
 
 Do not add ingestion, general database writes, fixture serving, public binding, or browser-held
 credentials without an explicit architecture and data-contract decision.
