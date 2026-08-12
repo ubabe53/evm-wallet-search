@@ -22,20 +22,28 @@ describe("dashboard export shape", () => {
     expect("ens" in metadata).toBe(false);
     expect(typeof metadata.configured_wallet_label).toBe("string");
     expect(metadata.export_schema_version).toBe("dashboard-export-v1");
-    expect(metadata.completeness_scope).toBe("duckdb_snapshot");
-    expect(metadata.indexer_checkpoint_recorded).toBe(false);
-    expect(metadata.finality_status).toBe("not_recorded");
-    expect(metadata.snapshot_start_block).toBeNull();
-    expect(metadata.snapshot_end_block).toBeNull();
+    expect(metadata.completeness_scope).toBe("finalized_block_range");
+    expect(metadata.indexer_checkpoint_recorded).toBe(true);
+    expect(metadata.finality_status).toBe("finalized");
+    expect(metadata.snapshot_start_block).toBe(0);
+    expect(metadata.snapshot_end_block).toBe(25_739_543);
+    expect(metadata.snapshot_end_block_hash).toBe(
+      "0x5374be585630353358d7c6a0b20106fc74c45577264cbe6a70ad8e4b0ed5f484",
+    );
+    expect(metadata.snapshot_source).toBe("envio_hyperindex");
+    expect(metadata.snapshot_schema_version).toBe("mainnet-demo-snapshot-v1");
+    expect(metadata.wallet_attribution_source_url).toBe(
+      "https://manual.gitcoin.co/introduction-and-overview/dao-finances",
+    );
     expect(metadata.data_source).toBe("fixture");
-    expect(metadata.configured_wallet_label).toBe("Example wallet");
-    expect(metadata.wallet_address).toBe("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-    expect(metadata.transfer_count).toBe(100);
+    expect(metadata.configured_wallet_label).toBe("Gitcoin Schelling Point multisig");
+    expect(metadata.wallet_address).toBe("0x11c24f0031b4c35e2e9353764edc61299291e0af");
+    expect(metadata.transfer_count).toBe(90);
     expect(metadata.complete_event_count).toBe(metadata.transfer_count);
     expect(metadata.exported_event_count).toBe(metadata.complete_event_count);
-    expect(events).toHaveLength(100);
-    expect(metadata.event_block_number_min).toBe(14_000_001);
-    expect(metadata.event_block_number_max).toBe(27_000_001);
+    expect(events).toHaveLength(90);
+    expect(metadata.event_block_number_min).toBe(15_616_484);
+    expect(metadata.event_block_number_max).toBe(20_442_331);
     expect(Math.max(...events.map((event: { block_timestamp: string }) =>
       Date.parse(event.block_timestamp)))).toBeLessThanOrEqual(Date.parse(metadata.generated_at));
     expect(events.every((event: Record<string, unknown>) =>
@@ -51,11 +59,12 @@ describe("dashboard export shape", () => {
       !("wallet_id" in row) &&
       typeof row.chain_id === "number" && typeof row.wallet_address === "string")).toBe(true);
     expect(metadata.is_sampled).toBe(false);
-    expect(metadata.account_evidence_schema_version).toBeNull();
-    expect(metadata.account_evidence_observation_block_number_min).toBeNull();
-    expect(metadata.account_evidence_observation_block_number_max).toBeNull();
-    expect(metadata.account_evidence_observation_block_timestamp_min).toBeNull();
-    expect(metadata.account_evidence_observation_block_timestamp_max).toBeNull();
+    expect(metadata.account_evidence_schema_version).toBe("account-evidence-v2");
+    expect(metadata.account_evidence_observation_block_number_min).toBe(25_739_638);
+    expect(metadata.account_evidence_observation_block_number_max).toBe(25_739_638);
+    expect(metadata.account_evidence_observation_block_timestamp_min).toBeTruthy();
+    expect(metadata.account_evidence_observation_block_timestamp_max).toBeTruthy();
+    expect(metadata.account_evidence_classified_address_count).toBe(49);
     expect(metadata.account_evidence_population_scope).toBe("distinct_nonzero_nonself_event_counterparties");
     expect(metadata.account_evidence_eligible_address_count).toBe(
       metadata.account_evidence_classified_address_count +
@@ -202,31 +211,30 @@ describe("dashboard export shape", () => {
     expect(events.every((event: { counterparty_account_type: string }) =>
       accountTypes.includes(event.counterparty_account_type))).toBe(true);
     expect(new Set(summaries.counterparties.map((row: { account_type: string }) => row.account_type))).toEqual(
-      new Set(["unknown"]),
+      new Set(["eoa_candidate", "contract"]),
     );
-    expect(metadata.account_evidence_classified_address_count).toBe(0);
+    expect(metadata.account_evidence_classified_address_count).toBe(49);
     expect(metadata.account_evidence_failed_address_count).toBe(0);
-    expect(metadata.account_evidence_not_checked_address_count).toBe(
-      metadata.account_evidence_eligible_address_count,
-    );
+    expect(metadata.account_evidence_not_checked_address_count).toBe(0);
     expect(new Set(events.map((event: { block_timestamp: string }) =>
-      event.block_timestamp.slice(0, 4)))).toEqual(new Set(["2022", "2023", "2024", "2025", "2026"]));
+      event.block_timestamp.slice(0, 4)))).toEqual(new Set(["2022", "2023", "2024"]));
     expect(new Set(events.map((event: { direction: string }) => event.direction))).toEqual(
-      new Set(["in", "out", "self"]),
+      new Set(["in", "out"]),
     );
     expect(new Set(events.map((event: { recognition_status: string }) =>
       event.recognition_status))).toEqual(new Set(["recognized", "other"]));
     expect(events.some((event: { is_indirect: boolean | null }) => event.is_indirect === true)).toBe(true);
     expect(events.some((event: { is_indirect: boolean | null }) => event.is_indirect === false)).toBe(true);
-    expect(events.some((event: { is_indirect: boolean | null }) => event.is_indirect == null)).toBe(true);
     expect(summaries.tokens).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        token_address: "0x9999999999999999999999999999999999999999",
-        token_name: "Synthetic Example Token",
-        token_symbol: "EXAMPLE",
-        recognition_status: "other",
+        token_address: "0xde30da39c46104798bb5aa3fe8b9e0e1f348163f",
+        token_name: "Gitcoin",
+        token_symbol: "GTC",
+        recognition_status: "recognized",
       }),
     ]));
+    expect(summaries.tokens.some((token: { recognition_status: string }) =>
+      token.recognition_status === "other")).toBe(true);
     expect(events.every((event: {
       transfer_id: string;
       transaction_hash: string;

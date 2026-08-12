@@ -22,7 +22,7 @@ class FixtureSeedTest(unittest.TestCase):
     def test_checked_in_seed_is_reproducible(self) -> None:
         self.assertEqual(SEED_PATH.read_text(), render_fixture_csv())
 
-    def test_public_fixture_has_exact_event_contract_and_synthetic_identity(self) -> None:
+    def test_synthetic_test_fixture_has_exact_event_contract_and_identity(self) -> None:
         self.assertEqual(len(self.rows), 100)
         self.assertEqual(
             len({(row["chain_id"], row["transaction_hash"], row["log_index"]) for row in self.rows}),
@@ -43,7 +43,7 @@ class FixtureSeedTest(unittest.TestCase):
             for row in self.rows
         ))
 
-    def test_public_fixture_is_ordered_and_exercises_dashboard_scenarios(self) -> None:
+    def test_synthetic_test_fixture_is_ordered_and_exercises_edge_scenarios(self) -> None:
         block_numbers = [int(row["block_number"]) for row in self.rows]
         timestamps = [int(row["block_timestamp"]) for row in self.rows]
         self.assertEqual(block_numbers, sorted(block_numbers))

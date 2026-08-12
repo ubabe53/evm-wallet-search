@@ -1,6 +1,10 @@
 with raw_transfers as (
   {% if var('use_fixture', true) %}
+    {% if var('fixture_dataset', 'demo') == 'synthetic' %}
     select 'fixture' as source_name, * from {{ ref('raw_transfer_events_fixture') }}
+    {% else %}
+    select 'mainnet_demo' as source_name, * from {{ ref('raw_transfer_events_demo') }}
+    {% endif %}
   {% else %}
     {% set public_raw_enabled = env_var('EVM_WALLET_PUBLIC_RAW_ENABLED', 'false') == 'true' %}
     {% set shared_raw_enabled = env_var('EVM_WALLET_SHARED_RAW_ENABLED', 'false') == 'true' %}

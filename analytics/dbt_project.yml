@@ -11,6 +11,7 @@ docs-paths: ["docs"]
 
 vars:
   use_fixture: true
+  fixture_dataset: demo
 
 on-run-start:
   - "{{ drop_retired_analytics_relations() }}"
@@ -29,7 +30,24 @@ seeds:
     +quote_columns: false
     wallets:
       +full_refresh: true
+    wallets_demo:
+      +full_refresh: true
     raw_transfer_events_fixture:
+      +column_types:
+        chain_id: integer
+        block_number: bigint
+        block_hash: varchar
+        block_timestamp: bigint
+        transaction_hash: varchar
+        transaction_index: integer
+        transaction_from_address: varchar
+        transaction_to_address: varchar
+        log_index: integer
+        token_address: varchar
+        from_address: varchar
+        to_address: varchar
+        value_raw: varchar
+    raw_transfer_events_demo:
       +column_types:
         chain_id: integer
         block_number: bigint
@@ -64,3 +82,44 @@ seeds:
         fetched_at: varchar
         fetch_status: varchar
         error_code: varchar
+    token_rpc_metadata_demo:
+      +column_types:
+        token_address: varchar
+        name: varchar
+        symbol: varchar
+        decimals: integer
+        rpc_block_number: bigint
+        fetched_at: varchar
+        fetch_status: varchar
+        error_code: varchar
+    account_evidence_demo:
+      +column_types:
+        chain_id: integer
+        address: varchar
+        account_type: varchar
+        code_state: varchar
+        code_size_bytes: bigint
+        observation_block_number: bigint
+        observation_block_hash: varchar
+        observation_block_timestamp: varchar
+        finality_policy: varchar
+        eip7702_delegation_target: varchar
+        fetch_status: varchar
+        reason_code: varchar
+        evidence_schema_version: varchar
+        fetched_at: varchar
+    demo_snapshot:
+      +column_types:
+        chain_id: integer
+        wallet_address: varchar
+        snapshot_run_id: varchar
+        snapshot_generation_id: varchar
+        snapshot_start_block: bigint
+        snapshot_end_block: bigint
+        snapshot_end_block_hash: varchar
+        snapshot_finality_policy: varchar
+        snapshot_scope_version: varchar
+        snapshot_generated_at: varchar
+        snapshot_source: varchar
+        snapshot_schema_version: varchar
+        wallet_attribution_source_url: varchar

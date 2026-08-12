@@ -255,12 +255,17 @@ class DashboardApiTest(unittest.TestCase):
                 connection.execute(
                     """
                     insert into ops.pipeline_runs values (
-                      'run-1', 1, '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
-                      'Example wallet', 0, ?, ?, ?, 'completed', current_timestamp,
+                      'run-1', 1, ?, ?, 0, ?, ?, ?, 'completed', current_timestamp,
                       'wallet-transfer-signature-v1'
                     )
                     """,
-                    [snapshot_end_block, "0x" + "a" * 64, event_count],
+                    [
+                        FIXTURE_WALLET_ADDRESS,
+                        FIXTURE_WALLET_LABEL,
+                        snapshot_end_block,
+                        "0x" + "a" * 64,
+                        event_count,
+                    ],
                 )
                 connection.execute(
                     """

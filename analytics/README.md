@@ -12,7 +12,8 @@ source provenance, or make token-standard, legitimacy, ownership, or historical-
 | Mode | Input | Artifact | Consumer |
 | --- | --- | --- | --- |
 | Live | Read-only HyperIndex Postgres plus offline inputs and the ignored account-evidence cache | `artifacts/live.duckdb` | Loopback API |
-| Fixture | Checked-in deterministic seeds and an empty typed account-evidence relation | `artifacts/fixture.duckdb` | Tests and bounded static export |
+| Historical demo | Checked-in finalized Gitcoin snapshot with pinned token and account evidence | `artifacts/fixture.duckdb` | Bounded static export and contract tests |
+| Synthetic test | Generated semantic edge cases and an empty typed account-evidence relation | `artifacts/fixture.duckdb` | Deterministic dbt/unit tests only |
 
 The artifacts are isolated. Fixture validation must never overwrite or serve the live database.
 Files under `artifacts/` and generated dbt output under `target/` are local build products, not
@@ -37,14 +38,16 @@ Run from the repository root:
 
 ```sh
 bun run analytics:build:fixture
+bun run analytics:build:test-fixture
 bun run analytics:build:hyperindex
 bun run analytics:docs:generate
 bun run analytics:docs:serve
 bun run test:analytics
 ```
 
-`test:analytics` tests the already materialized fixture artifact; build the fixture models first.
-The fixture build is deterministic. The live build requires HyperIndex progress, a Postgres DSN,
+`test:analytics` tests the already materialized fixture artifact; build the intended dataset first.
+Both fixture builds are deterministic and offline. The default uses the reviewed historical demo;
+`analytics:build:test-fixture` selects synthetic edge cases. The live build requires HyperIndex progress, a Postgres DSN,
 and Ethereum finality evidence, and records attempted intervals in `ops.pipeline_runs`.
 
 ## Contracts

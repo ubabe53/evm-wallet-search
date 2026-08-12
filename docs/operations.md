@@ -95,15 +95,19 @@ ethereum:
 
 ## Fixture Demo Mode
 
-Fixture mode exists for deterministic tests and the fixture-backed GitHub Pages portfolio demo. It is not the primary local application mode and does not stand in for HyperIndex verification.
+Fixture mode exists for reproducible tests and the snapshot-backed GitHub Pages portfolio demo. It is not the primary local application mode and does not stand in for testing a fresh live scan.
 
 ```sh
 bun run analytics:build:fixture
 ```
 
-The public fixture transfer set lives in `analytics/seeds/raw_transfer_events_fixture.csv` and contains exactly 100 deterministic rows for the fixed `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` target labeled `Example wallet`. Its dates, block identifiers, hashes, addresses, and participant pairs are synthetic examples—not claims that those combinations occurred on Ethereum—and span five UTC years and at least 40 months so the demo can exercise year/month navigation, a bounded 10-row event view, direct and confirmed-indirect direction evidence, self-transfer handling, multiple tokens and counterparties, and both recognition filters. Regenerate it with `python3 scripts/generate_fixture_events.py --write`; `python3 scripts/generate_fixture_events.py --check` verifies the checked-in CSV without rewriting it. There is no account-evidence fixture: the fixture build uses an empty typed relation, so it never invents address classifications. Wallet and token seeds live in `analytics/seeds/wallets.csv` and `analytics/seeds/token_metadata.csv`. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN from the dbt child process, and never attach HyperIndex. Exported `meta.json` records `data_source: fixture`, exports all 100 events without sampling under the current contract, and displays synthetic provenance, unrecorded coverage, exported/complete counts, sampling state, and configured-label caveat.
+The default public dataset is a reviewed historical mainnet snapshot for the Gitcoin Schelling Point multisig. `raw_transfer_events_demo.csv` contains all 90 Transfer-signature rows captured from block 0 through finalized block 25,739,543; `token_rpc_metadata_demo.csv` contains pinned self-declared metadata for all nine emitting contracts; `account_evidence_demo.csv` contains complete bytecode observations for 49 eligible counterparties at safe block 25,739,638. `demo_snapshot.csv` supplies dbt with the finalized run contract, while `demo_snapshot_manifest.json` records extraction bounds, hashes, generation, no-sampling state, and the official Gitcoin attribution URL. Fixture builds write `analytics/artifacts/fixture.duckdb`, remove any live Postgres DSN, and never attach HyperIndex or contact RPC. Exported `meta.json` records all historical boundaries and remains explicit that the static data is not live.
 
-`bun run analytics:build` remains an alias for `analytics:build:fixture` so existing CI and contributor commands stay deterministic. The exporter reads only the fixture database and may overwrite only the ignored files under `public/data/`.
+Regenerating the mainnet demo is an explicit networked publication task, not an ordinary build. First produce and independently validate a complete one-wallet `live.duckdb`, then run `python3 scripts/generate_mainnet_demo.py --source-db /path/to/live.duckdb` with an Ethereum RPC configured. The generator verifies canonical finalized evidence, queries a concrete safe enrichment block, requires usable token metadata and complete counterparty observations, and replaces each reviewed demo seed and manifest file atomically. Review the resulting set and provenance before commit; never point this operation at fixture data.
+
+The separate synthetic dataset remains available only for deterministic semantic tests through `bun run analytics:build:test-fixture`. It contains 100 generated examples at `raw_transfer_events_fixture.csv`, uses the synthetic wallet/token seeds, and intentionally exposes an empty typed account-evidence relation. Regenerate it with `python3 scripts/generate_fixture_events.py --write` or verify it with `--check`.
+
+`bun run analytics:build` remains an alias for `analytics:build:fixture`. The exporter reads only the historical fixture database and may overwrite only the ignored files under `public/data/`; it rejects the synthetic dataset.
 
 ## dbt Data Catalog
 
@@ -121,7 +125,7 @@ Inspect the catalog locally at `http://127.0.0.1:8081`:
 bun run analytics:docs:serve
 ```
 
-The supported documentation workflow always uses the deterministic fixture artifact and strips any ambient HyperIndex DSN. It documents the same schemas, lineage, materializations, and semantic contracts used by live builds, but its catalog row counts and observed values are fixture data—not live freshness or finalized coverage evidence. Stop the server with Ctrl-C. Use `bun run analytics:docs:check` in automation when the fixture artifact has already been built.
+The supported documentation workflow always uses the reproducible historical fixture artifact and strips any ambient HyperIndex DSN. It documents the same schemas, lineage, materializations, and semantic contracts used by live builds. Catalog rows preserve the checked-in snapshot's recorded historical provenance but do not establish current freshness. Stop the server with Ctrl-C. Use `bun run analytics:docs:check` in automation when the fixture artifact has already been built.
 
 ## Token Registry
 
@@ -308,7 +312,7 @@ Run this only after the fixture build. It creates:
 - `public/data/events.json`
 - `public/data/meta.json`
 
-These files are the static GitHub Pages demonstration contract. `meta.json` advertises `dashboard-export-v1`, includes observed fixture block/time extrema, keeps cumulative scan coverage explicitly unrecorded, and calculates each complete/exported count and sampling flag from the exact DuckDB relation delivered. The files must remain bounded, identify fixture provenance, and never claim to be complete HyperIndex history. Files are replaced atomically so readers never observe a partially written individual JSON file.
+These files are the static GitHub Pages demonstration contract. `meta.json` advertises `dashboard-export-v1`, identifies `mainnet-demo-snapshot-v1`, records HyperIndex source plus finalized scan bounds separately from event extrema, links official wallet attribution, and calculates each complete/exported count and sampling flag from the exact DuckDB relation delivered. The files must remain bounded and must never imply freshness beyond their endpoint. Files are replaced atomically so readers never observe a partially written individual JSON file.
 
 The exporter bounds its fixture rows across the nine non-empty recognition/address-evidence selections the static dashboard supports. The live dashboard computes only the requested selection through DuckDB-backed API endpoints.
 
@@ -327,7 +331,7 @@ checking TypeScript with `tsc`, and checking Python with Pyright. Install
 tools are pinned and configured for high-signal checks so the gate stays fast and
 avoids repository-wide style churn.
 
-The full test command builds `analytics/artifacts/fixture.duckdb`, exports fixture JSON, runs JS tests, and runs dbt tests against that fixture artifact. It can overwrite ignored fixture JSON under `public/data`, but it does not modify `analytics/artifacts/live.duckdb` or attach HyperIndex.
+The full test command first builds and tests the synthetic semantic dataset, then builds and tests the historical mainnet demo, validates its manifest/seeds, exports static JSON, and runs JS/Python checks. It can overwrite ignored JSON under `public/data`, but it does not modify `analytics/artifacts/live.duckdb`, attach HyperIndex, or contact RPC.
 
 ## GitHub CI and Deployment
 

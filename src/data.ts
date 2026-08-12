@@ -114,9 +114,12 @@ type ArtifactMetadata = {
 
 export type PipelineMetadata = ArtifactMetadata & {
   export_schema_version: "dashboard-export-v1";
-  completeness_scope: "duckdb_snapshot";
-  indexer_checkpoint_recorded: false;
-  finality_status: "not_recorded";
+  snapshot_source: "envio_hyperindex";
+  snapshot_schema_version: "mainnet-demo-snapshot-v1";
+  wallet_attribution_source_url: string;
+  completeness_scope: "finalized_block_range";
+  indexer_checkpoint_recorded: true;
+  finality_status: "finalized";
   complete_event_count: number;
   complete_token_summary_row_count: number;
   complete_counterparty_summary_row_count: number;

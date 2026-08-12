@@ -47,6 +47,8 @@ that intervening blocks were scanned.
 {% enddocs %}
 
 {% docs bounded_fixture %}
-Deterministic fixture input used for tests and the static portfolio demo. It does not establish
-HyperIndex coverage, live freshness, or production provenance.
+Checked-in offline input. The default static portfolio dataset preserves one historical mainnet
+HyperIndex snapshot, its finalized scan boundary, and pinned enrichment evidence; it does not
+establish current freshness. A separate synthetic dataset exercises deterministic semantic edge
+cases and makes no chain-coverage claim.
 {% enddocs %}

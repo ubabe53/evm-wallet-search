@@ -1,0 +1,10 @@
+token_address,name,symbol,decimals,rpc_block_number,fetched_at,fetch_status,error_code
+0x0f5435ae8633d0af4ffba77b1130d95448b30702,UЅDC,UЅDC,6,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0x6b175474e89094c44da98b954eedeac495271d0f,Dai Stablecoin,DAI,18,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,USD Coin,USDC,6,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0xb8ac53afccebc44aac33d0c30e2ae0783e7fde5f,# get-usdc.net,Visit https://get-usdc.net to claim rewards,6,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0xc623144ca6c1d943be8e518a45a7b195b7e6df1d,Tеthеr UЅD,UЅDТ,6,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0xcdbd4089c2f98da715e52127680f87afdb183a2e,(aatu.site),This token holders can claim reward token. Please Visit https://aatu.site and claim rewards.,18,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0xd96d9ed4be8091c3528480336d16897062d9128d,# usdgift.net,Visit usdgift.net to claim rewards,6,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0xdac17f958d2ee523a2206206994597c13d831ec7,Tether USD,USDT,6,25739638,2026-08-12T15:03:35.155197+00:00,complete,
+0xde30da39c46104798bb5aa3fe8b9e0e1f348163f,Gitcoin,GTC,18,25739638,2026-08-12T15:03:35.155197+00:00,complete,

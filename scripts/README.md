@@ -19,6 +19,7 @@ side effects of deterministic fixture or dbt commands.
 | [`snapshot_runs.py`](snapshot_runs.py) | Resolve and record contiguous finalized scan attempts |
 | [`run_api.py`](run_api.py) | Bootstrap dependencies and bind FastAPI to loopback |
 | [`export_dashboard.py`](export_dashboard.py) | Export bounded fixture JSON atomically |
+| [`generate_mainnet_demo.py`](generate_mainnet_demo.py) | Extract a reviewed finalized live snapshot and collect pinned demo enrichment |
 | [`sync_token_registry.py`](sync_token_registry.py) | Explicitly refresh exact-address registry evidence |
 | [`enrich_token_metadata.py`](enrich_token_metadata.py) | Collect pinned-block self-declared token metadata |
 | [`enrich_counterparty_types.py`](enrich_counterparty_types.py) | Checkpoint pinned-block bytecode evidence |
@@ -39,6 +40,7 @@ bun run indexer:dev
 bun run indexer:scan -- --wallet 0x... --from-block 100 --to-block 200 --schema wallet_scan_example
 bun run wallet-scan:worker # normally invoked by the API with its WALLET_SCAN_* contract
 bun run analytics:build:fixture
+bun run analytics:build:test-fixture
 bun run analytics:build:hyperindex
 bun run export:dashboard
 bun run tokens:refresh
@@ -70,7 +72,9 @@ Networked or potentially expensive commands are explicit:
   account evidence, atomically rebuilds all completed wallets, and restarts the API on success or failure.
 
 Fixture builds and exports are deterministic and must remain isolated from live Postgres and
-`live.duckdb`.
+`live.duckdb`. `generate_mainnet_demo.py` is different: it is an explicit maintainer-only networked
+publication step requiring a verified live artifact and RPC, and must never run during CI or an
+ordinary fixture build.
 
 ## Contracts
 

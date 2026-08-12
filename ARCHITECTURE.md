@@ -45,7 +45,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Orchestration and enrichment | `scripts/` | Run dbt/indexer/API commands, refresh explicit enrichment inputs, and produce the fixture demo export | An implicit network/backfill step during ordinary builds |
 | Complete live analytical store | `analytics/artifacts/live.duckdb` | Hold additive HyperIndex-derived analytics for all completed wallets, durable wallet targets, wallet-scoped finalized scan generations, wallet-grained snapshot-run history, shared enrichment projections, and the application-owned token-recognition override table | A checked-in artifact, browser-delivered database, or general application database |
 | Local account evidence store | `analytics/artifacts/account_evidence.duckdb` | Checkpoint one successful pinned bytecode observation per event counterparty, with retryable failures | A checked-in seed, an implicit build-time RPC job, or proof of permanent identity |
-| Deterministic demo store | `analytics/artifacts/fixture.duckdb` | Build fixture-only analytics for tests and static export | A source for local live analytics |
+| Historical demo store | `analytics/artifacts/fixture.duckdb` | Build checked-in finalized snapshot analytics for static export; build the separate synthetic dataset for semantic tests | A source for local live analytics or a claim of current chain state |
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
 | Fixture demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON only to the explicit fixture/static build | The complete-history local serving architecture |
 | Dashboard | `src/` | Present activity timeline, summary, rankings, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
@@ -85,11 +85,11 @@ A captured `Transfer(address,address,uint256)` log establishes that a contract e
 
 ### Enrichment evidence
 
-Token metadata, registry membership, RPC responses, ENS resolution, and bytecode observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The fixture's `Example wallet` value remains a configured synthetic presentation label, while an explicit live build or scan job resolves an ENS-shaped label at one finalized block and records its source and observation provenance through the selected wallet's run/worker contract. Non-ENS labels use the canonical configured address as direct-input provenance.
+Token metadata, registry membership, RPC responses, ENS resolution, and bytecode observations are sourced and time-varying. Every such enrichment must retain its source plus an observation time/block or version/reason sufficient to audit the derived classification. Safe and ERC-4337-specific collection are intentionally absent; deployed instances fall under ordinary contract-code evidence. The static demo's Gitcoin label is official public attribution for its pinned address, not ENS evidence. An explicit live build or scan job resolves an ENS-shaped label at one finalized block and records its source and observation provenance through the selected wallet's run/worker contract. Non-ENS labels use the canonical configured address as direct-input provenance.
 
 ### Delivery boundary
 
-Complete local counts live in DuckDB and are returned by the local API with filters, bounds, limits, and provenance. Static JSON is a bounded fixture demo and must never imply complete live-wallet history.
+Complete local counts live in DuckDB and are returned by the local API with filters, bounds, limits, and provenance. Static JSON is a pinned historical snapshot and must never imply live freshness. It may claim only the finalized range, unsampled event set, and enrichment observations recorded in its manifest.
 
 ## Stable invariants
 
@@ -134,10 +134,10 @@ The indexer and live analytics are explicit operations. A live build chooses the
 ### Fixture demo path
 
 ```text
-checked-in fixtures → dbt → DuckDB → bounded JSON exporter → React/static hosting
+checked-in finalized demo snapshot → dbt → DuckDB → bounded JSON exporter → React/static hosting
 ```
 
-This path is deterministic and suitable for CI and GitHub Pages. It is not proof of live-source integration behavior. Fixture builds write only `analytics/artifacts/fixture.duckdb` and deliberately remove the HyperIndex DSN from dbt's environment. Live builds write only `analytics/artifacts/live.duckdb`; fixture validation cannot overwrite that cache.
+This path is deterministic and suitable for CI and GitHub Pages. Its recorded provenance comes from one completed live collection, but replaying checked-in rows is not proof that current live-source integration still works. Fixture builds write only `analytics/artifacts/fixture.duckdb` and deliberately remove the HyperIndex DSN from dbt's environment. Live builds write only `analytics/artifacts/live.duckdb`; fixture validation cannot overwrite that cache.
 
 ## Local API boundary
 
