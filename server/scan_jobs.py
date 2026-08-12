@@ -64,10 +64,11 @@ class ScanInputResolver(Protocol):
 
 
 def resolve_wallet(value: str) -> tuple[str, str]:
-    """Resolve canonical addresses and the configured ENS adapter.
+    """Resolve addresses and the pinned fixture label for legacy/test callers.
 
-    ENS is intentionally an adapter: live ENS resolution belongs to the future
-    multi-wallet branch and must add resolver source and observation metadata.
+    This deterministic compatibility adapter intentionally performs no network resolution.
+    Production ``ScanJobManager`` instances use ``resolve_scan_input`` instead, preserving
+    resolver source and finalized observation metadata.
     """
     normalized = value.strip()
     import re
@@ -78,7 +79,7 @@ def resolve_wallet(value: str) -> tuple[str, str]:
     if normalized.lower() == "vitalik.eth":
         return "0xd8da6bf26964af9d7eed9e03e53415d37aa96045", normalized.lower()
     if normalized.lower().endswith(".eth"):
-        raise ValueError("ENS resolution is not configured for this name yet")
+        raise ValueError("The deterministic legacy/test adapter recognizes only vitalik.eth")
     raise ValueError("Enter a valid Ethereum address or ENS name")
 
 

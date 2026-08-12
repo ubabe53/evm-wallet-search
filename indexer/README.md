@@ -6,7 +6,8 @@ normalized `Erc20Transfer` entity for each configured-wallet
 
 Despite the entity and contract names, the source is only ERC-20-intended. ERC-721 emits the
 same signature, and this component does not disambiguate standards. It also does not collect
-native ETH transfers, traces, internal calls, approvals, or arbitrary wallets.
+native ETH transfers, traces, internal calls, or approvals. Each normal or bounded run is
+explicitly scoped to configured wallet targets; the indexer is not an unbounded public scanner.
 
 ## Important files
 

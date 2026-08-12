@@ -95,7 +95,7 @@ ethereum:
 
 ## Fixture Demo Mode
 
-Fixture mode exists for deterministic tests and the eventual GitHub Pages portfolio demo. It is not the primary local application mode and does not stand in for HyperIndex verification.
+Fixture mode exists for deterministic tests and the fixture-backed GitHub Pages portfolio demo. It is not the primary local application mode and does not stand in for HyperIndex verification.
 
 ```sh
 bun run analytics:build:fixture

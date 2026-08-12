@@ -1,8 +1,22 @@
 {
   "name": "evm-wallet-search",
   "version": "0.1.0",
+  "description": "Explore Ethereum wallet Transfer-signature activity through local finalized scans or a bounded fixture demo.",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ubabe53/evm-wallet-search.git"
+  },
+  "keywords": [
+    "ethereum",
+    "analytics",
+    "envio",
+    "dbt",
+    "duckdb",
+    "fastapi",
+    "react"
+  ],
   "scripts": {
     "indexer:codegen": "python3 scripts/run_indexer.py codegen",
     "indexer:dev": "python3 scripts/run_indexer.py dev",

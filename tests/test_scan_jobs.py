@@ -543,6 +543,10 @@ class ScanJobsTest(unittest.TestCase):
             self.assertEqual(address, "0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
             self.assertEqual(label, "vitalik.eth")
 
+    def test_legacy_resolver_does_not_impersonate_live_ens_resolution(self) -> None:
+        with self.assertRaisesRegex(ValueError, "legacy/test adapter"):
+            resolve_wallet("wallet.eth")
+
     def test_rejects_artifact_from_different_finalized_chain_hash(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             live = Path(directory) / "live.duckdb"

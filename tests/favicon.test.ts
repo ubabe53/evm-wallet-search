@@ -2,11 +2,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("dashboard favicon contract", () => {
-  it("declares the local SVG favicon in the Vite HTML shell", () => {
+describe("dashboard document metadata contract", () => {
+  it("declares local publication metadata in the Vite HTML shell", () => {
     const html = readFileSync(resolve(process.cwd(), "index.html"), "utf8");
 
     expect(html).toMatch(/<link\s+rel="icon"\s+href="%BASE_URL%favicon\.svg"\s+type="image\/svg\+xml"\s*\/>/);
+    expect(html).toContain("<title>EVM Wallet Search · Ethereum Transfer Analytics</title>");
+    expect(html).toContain('name="description"');
+    expect(html).toContain("Explore Ethereum wallet Transfer-signature activity");
+    expect(html).toContain("local finalized scans or a bounded fixture demo");
     expect(html).not.toMatch(/https?:\/\//);
   });
 
