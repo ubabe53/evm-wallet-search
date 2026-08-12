@@ -1,9 +1,12 @@
 # EVM Wallet Search
 
-An evidence-first Ethereum transfer analytics application. Give the local product an Ethereum
-address or supported ENS name and it indexes the wallet's missing finalized range with Envio
-HyperIndex, builds reproducible DuckDB analytics with dbt, and serves them through a loopback
-FastAPI API to a React dashboard.
+A dashboard for exploring a wallet’s token activity on Ethereum, with each result connected to the
+underlying transaction and blockchain data.
+
+Give the local product an Ethereum address or supported ENS name and it processes the wallet's
+missing finalized `Transfer(address,address,uint256)` ranges with Envio HyperIndex, builds
+reproducible DuckDB analytics with dbt, and serves them through a loopback FastAPI API to a React
+dashboard.
 
 The project is Ethereum mainnet only (`chain_id = 1`). It treats
 `Transfer(address,address,uint256)` as emitted contract evidence—not as proof of token standard,

@@ -9,7 +9,8 @@ describe("dashboard document metadata contract", () => {
     expect(html).toMatch(/<link\s+rel="icon"\s+href="%BASE_URL%favicon\.svg"\s+type="image\/svg\+xml"\s*\/>/);
     expect(html).toContain("<title>EVM Wallet Search · Ethereum Transfer Analytics</title>");
     expect(html).toContain('name="description"');
-    expect(html).toContain("Evidence-first Ethereum Transfer-signature analytics");
+    expect(html).toContain("Explore Ethereum wallet Transfer-signature activity");
+    expect(html).toContain("local finalized scans or a bounded fixture demo");
     expect(html).not.toMatch(/https?:\/\//);
   });
 

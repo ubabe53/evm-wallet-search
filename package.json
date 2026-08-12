@@ -1,7 +1,7 @@
 {
   "name": "evm-wallet-search",
   "version": "0.1.0",
-  "description": "Evidence-first Ethereum Transfer-signature analytics with Envio, dbt, DuckDB, FastAPI, and React.",
+  "description": "Explore Ethereum wallet Transfer-signature activity through local finalized scans or a bounded fixture demo.",
   "private": true,
   "type": "module",
   "repository": {
