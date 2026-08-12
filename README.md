@@ -20,9 +20,9 @@ the same signature, and the wildcard indexer does not yet disambiguate it from E
 | **Packaged local live product** | The primary application, run with Docker Compose on one loopback origin. It accepts a normalized address or conservatively validated ASCII ENS name and retains every successfully published wallet. | Exact calculations over complete local rows inside each wallet's recorded contiguous range through an Ethereum `finalized` block; rankings and event pages disclose their limits. It is not a publicly hosted scanner. |
 | **Fixture-backed portfolio demo** | A static React build for GitHub Pages or another static host. It demonstrates the interface without a database, RPC credentials, or scan controls. | Small, bounded JSON generated from checked-in fixture rows. It does not establish live HyperIndex coverage or complete wallet history. |
 
-These paths are selected at build time and cannot be mixed at runtime. The fixture `vitalik.eth`
-label is pinned demo configuration only; it is never a live API fallback or evidence of live ENS
-resolution.
+These paths are selected at build time and cannot be mixed at runtime. The fixed synthetic fixture
+address and `Example wallet` label are demo configuration only; they are never a live API fallback
+or evidence of live ENS resolution.
 
 ## Dashboard preview
 
@@ -48,7 +48,7 @@ An ENS name is also accepted. The `app:up` command builds the images, starts per
 and analytics volumes, scans only the wallet's missing range through a recorded finalized block,
 waits for validated atomic DuckDB publication, and prints the loopback dashboard URL. A first scan
 begins at block 0 and can take time for a highly active wallet. No live target is hardcoded, and the
-fixture Vitalik target is never used as a fallback.
+synthetic fixture target is never used as a fallback.
 
 While a scan runs, the command and browser report elapsed time and the same honest named stages;
 neither invents a percentage from the worker's coarse checkpoints.
@@ -80,8 +80,11 @@ commands are in the [operations guide](docs/operations.md#native-component-devel
   submission with stage-based progress, last-good dashboard preservation, retry, and automatic
   switching after validated publication.
 
-Fixture mode keeps scan and recognition-write controls disabled. Its fixture badge, bounded
-payload, and unrecorded scan coverage are part of the contract, not caveats to hide.
+Fixture mode keeps scan and recognition-write controls disabled. Its persistent disclosure marks
+the 100 rows as synthetic examples rather than live wallet history or HyperIndex completeness
+evidence, shows exported-versus-complete event counts and sampling state, and labels the primary
+total `Captured events`. Its fixture badge, bounded payload, and unrecorded scan coverage are part
+of the contract, not caveats to hide.
 
 ## Scope and limitations
 

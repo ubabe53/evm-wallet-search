@@ -26,8 +26,8 @@ from scripts.snapshot_runs import (
 from server.ens import ResolvedScanInput
 
 WALLET = ConfiguredWallet(
-    address="0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-    label="vitalik.eth",
+    address="0x4444444444444444444444444444444444444444",
+    label="wallet.eth",
 )
 
 
@@ -228,8 +228,8 @@ class SnapshotRunsTest(unittest.TestCase):
 
     def test_persists_scan_input_resolution_provenance_in_selected_wallet_run(self) -> None:
         resolved = ResolvedScanInput(
-            " Vitalik.ETH ",
-            "vitalik.eth",
+            " Wallet.ETH ",
+            "wallet.eth",
             WALLET.address,
             "ens-registry:0xregistry/resolver:0xresolver",
             75,
@@ -253,7 +253,7 @@ class SnapshotRunsTest(unittest.TestCase):
                 [run.run_id],
             ).fetchone()
         self.assertEqual(row, (
-            " Vitalik.ETH ", "vitalik.eth", WALLET.address,
+            " Wallet.ETH ", "wallet.eth", WALLET.address,
             "ens-registry:0xregistry/resolver:0xresolver", 75, "0x" + "c" * 64,
             datetime(2026, 1, 2, tzinfo=timezone.utc),
         ))
@@ -348,7 +348,7 @@ class SnapshotRunsTest(unittest.TestCase):
                   run_id, chain_id, generation_id, wallet_address, wallet_label, from_block, to_block,
                   to_block_hash, events_found, status, completed_at, scope_version
                 ) values (
-                  'gap', 1, 'generation-gap', ?, 'vitalik.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
+                  'gap', 1, 'generation-gap', ?, 'wallet.eth', 4, 10, ?, 0, 'completed', current_timestamp, ?
                 )
                 """,
                 [WALLET.address, "0x" + "a" * 64, "wallet-transfer-signature-v1"],

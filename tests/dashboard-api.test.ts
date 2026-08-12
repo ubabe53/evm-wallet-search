@@ -34,26 +34,26 @@ describe("live dashboard API adapter", () => {
     const fetchMock = vi.fn((input: string, init?: RequestInit) => {
       if (input === "/api/v1/scan-jobs") {
         expect(init?.method).toBe("POST");
-        expect(init?.body).toBe(JSON.stringify({ wallet: "vitalik.eth" }));
+        expect(init?.body).toBe(JSON.stringify({ wallet: "wallet.eth" }));
         return response({ job_id: "job-1", status: "queued", wallet_address: "0x1" });
       }
       if (input === "/api/v1/scan-jobs/active") return response({ job: null });
       if (input === "/api/v1/scan-jobs/job-1") return response({ job_id: "job-1", status: "completed" });
-      if (input === "/api/v1/wallets") return response({ items: [{ wallet_address: "0x1", label: "vitalik.eth", chain_id: 1, status: "completed" }] });
+      if (input === "/api/v1/wallets") return response({ items: [{ wallet_address: "0x1", label: "wallet.eth", chain_id: 1, status: "completed" }] });
       throw new Error(`Unexpected request ${input}`);
     });
     vi.stubGlobal("fetch", fetchMock);
-    expect((await createScanJob("vitalik.eth")).job_id).toBe("job-1");
+    expect((await createScanJob("wallet.eth")).job_id).toBe("job-1");
     expect((await loadActiveScanJob()).job).toBeNull();
     expect((await loadScanJob("job-1")).status).toBe("completed");
-    expect((await loadWallets()).items[0].label).toBe("vitalik.eth");
+    expect((await loadWallets()).items[0].label).toBe("wallet.eth");
   });
 
   it("loads exact counts and bounded collections without static fixture files", async () => {
     const fetchMock = vi.fn((input: string) => {
       if (input === "/api/v1/metadata") {
         return response({
-          configured_wallet_label: "vitalik.eth",
+          configured_wallet_label: "Configured wallet",
           wallet_address: "0xwallet",
           data_source: "hyperindex",
         });

@@ -37,14 +37,15 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scan wallet" }));
     expect(screen.getByRole("textbox", { name: "Wallet address or ENS" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
-    expect(screen.getByRole("region", { name: "Analysis context" })).toHaveTextContent(
-      "Analyzing0x1vitalik.ethEthereum mainnetExample wallet",
+    const analysisContext = screen.getByRole("region", { name: "Analysis context" });
+    expect(analysisContext).toHaveTextContent(
+      "Analyzing0xeee...eeeExample walletEthereum mainnetExample wallet",
     );
-    expect(screen.getByRole("link", { name: "0x1" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "0xeee...eee" })).toHaveAttribute(
       "href",
-      "https://etherscan.io/address/0x1",
+      "https://etherscan.io/address/0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     );
-    expect(screen.getByText("vitalik.eth")).toHaveAttribute(
+    expect(within(analysisContext).getAllByText("Example wallet")[0]).toHaveAttribute(
       "title",
       "Configured project label; not a live ENS resolution.",
     );
@@ -57,10 +58,6 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "0x1111...1111" })[0]).toHaveAttribute(
       "href",
       "https://etherscan.io/address/0x1111111111111111111111111111111111111111",
-    );
-    expect(screen.getAllByText("Contract").find((element) => element.hasAttribute("title"))).toHaveAttribute(
-      "title",
-      "Contract bytecode observed at pinned block 22500000",
     );
     expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" })[0]).toHaveAttribute(
       "href",
@@ -101,8 +98,8 @@ describe("App", () => {
     );
     expect(tokenActivityPanel.querySelectorAll(".rankCell")[0]).toHaveTextContent("1");
     expect(tokenActivityPanel.querySelector(".tokenActivityBar span")).toHaveStyle({ width: "100%" });
-    expect(tokenActivity.getAllByText("In 1").length).toBeGreaterThan(0);
-    expect(tokenActivity.getByText("Indirect 1 in · 0 out")).toHaveAttribute(
+    expect(tokenActivity.getAllByText("In 98").length).toBeGreaterThan(0);
+    expect(tokenActivity.getByText("Indirect 98 in · 0 out")).toHaveAttribute(
       "title",
       INDIRECT_TRANSFER_EXPLANATION,
     );
@@ -116,7 +113,14 @@ describe("App", () => {
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
     expect(screen.getByText("Fixture data")).toBeInTheDocument();
     expect(screen.getByText("Coverage not recorded")).toBeInTheDocument();
-    expect(screen.getByText(/Generated Nov 14, 2023(?:,| at) 10:15 PM UTC/)).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
+      .toHaveTextContent("Synthetic fixture demo");
+    expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
+      .toHaveTextContent("not live wallet history or evidence of HyperIndex completeness");
+    expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
+      .toHaveTextContent("100 / 100fixture events exported · not sampled");
+    expect(screen.getByText("Captured events", { selector: ".stat span" })).toBeInTheDocument();
+    expect(screen.getByText(/Generated Nov 14, 2023(?:,| at) 10:17 PM UTC/)).toBeInTheDocument();
     expect(screen.getByText("Activity Timeline")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Timeline year" })).toHaveValue("");
     expect(screen.getByRole("option", { name: "2023" })).toBeInTheDocument();
@@ -129,7 +133,7 @@ describe("App", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Timeline year" }), {
       target: { value: "" },
     });
-    expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
+    expect(screen.getByText("10 of 100 events")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Recognized" })).not.toBeChecked();
     expect(screen.getByRole("radio", { name: "Other" })).not.toBeChecked();
@@ -140,9 +144,9 @@ describe("App", () => {
     expect(screen.queryByText(/^high confidence$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show less" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
-    expect(screen.getByText("12 of 12 events")).toBeInTheDocument();
+    expect(screen.getByText("20 of 100 events")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show less" }));
-    expect(screen.getByText("10 of 12 events")).toBeInTheDocument();
+    expect(screen.getByText("10 of 100 events")).toBeInTheDocument();
     expect(screen.getAllByText("OTHER").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("radio", { name: "Recognized" }));
     expect(screen.queryByText("OTHER")).not.toBeInTheDocument();

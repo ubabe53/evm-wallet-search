@@ -37,7 +37,7 @@ describe("live token-recognition controls", () => {
       }
       if (input === "/api/v1/metadata") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          configured_wallet_label: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",
+          configured_wallet_label: "Configured wallet", wallet_address: "0x1", data_source: "hyperindex",
           generated_at: "2025-01-01T00:00:00Z", transfer_count: 1,
           account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties",
           account_evidence_eligible_address_count: 1,
@@ -157,7 +157,7 @@ describe("live token-recognition controls", () => {
       if (input === "/api/v1/scan-jobs/active") return ok({ job: null });
       if (input === "/api/v1/metadata") {
         return ok({
-          configured_wallet_label: "vitalik.eth", wallet_address: "0x1", data_source: "hyperindex",
+          configured_wallet_label: "Configured wallet", wallet_address: "0x1", data_source: "hyperindex",
           generated_at: "2025-01-01T00:00:00Z", transfer_count: 1,
           account_evidence_population_scope: "distinct_nonzero_nonself_event_counterparties",
           account_evidence_eligible_address_count: 1,

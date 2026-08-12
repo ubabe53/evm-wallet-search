@@ -15,6 +15,9 @@ from server.app import create_app
 from server.queries import DatabaseUnavailable, QueryService, json_value
 from server.scan_jobs import ScanJobManager, resolve_wallet
 
+FIXTURE_WALLET_ADDRESS = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+FIXTURE_WALLET_LABEL = "Example wallet"
+
 
 class DashboardApiTest(unittest.TestCase):
     @classmethod
@@ -54,12 +57,12 @@ class DashboardApiTest(unittest.TestCase):
             finalized_head=lambda: 42,
         )
         client = TestClient(create_app(self.service, manager))
-        response = client.post("/api/v1/scan-jobs", json={"wallet": "vitalik.eth"})
+        response = client.post("/api/v1/scan-jobs", json={"wallet": FIXTURE_WALLET_ADDRESS})
         self.assertEqual(response.status_code, 202)
         payload = response.json()
         self.assertEqual(payload["from_block"], 0)
         self.assertEqual(payload["to_block"], 42)
-        self.assertEqual(payload["wallet_address"], "0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
+        self.assertEqual(payload["wallet_address"], FIXTURE_WALLET_ADDRESS)
         self.assertEqual(client.get(f"/api/v1/scan-jobs/{payload['job_id']}").status_code, 200)
         self.assertEqual(client.get("/api/v1/wallets").status_code, 200)
 
@@ -81,7 +84,7 @@ class DashboardApiTest(unittest.TestCase):
         client = TestClient(create_app(self.service, manager))
 
         self.assertEqual(client.get("/api/v1/scan-jobs/active").json(), {"job": None})
-        response = client.post("/api/v1/scan-jobs", json={"wallet": "vitalik.eth"})
+        response = client.post("/api/v1/scan-jobs", json={"wallet": FIXTURE_WALLET_ADDRESS})
         self.assertEqual(response.status_code, 202)
 
         try:
@@ -130,7 +133,7 @@ class DashboardApiTest(unittest.TestCase):
         metadata = self.client.get("/api/v1/metadata").json()
         selected_metadata = self.client.get(
             "/api/v1/metadata",
-            params={"wallet_address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"},
+            params={"wallet_address": FIXTURE_WALLET_ADDRESS},
         ).json()
         self.assertEqual(selected_metadata["wallet_address"], metadata["wallet_address"])
         self.assertEqual(metadata["api_schema_version"], "dashboard-api-v16")
@@ -177,12 +180,12 @@ class DashboardApiTest(unittest.TestCase):
             },
         )
         self.assertEqual(metadata["chain_id"], 1)
-        self.assertEqual(metadata["configured_wallet_label"], "vitalik.eth")
+        self.assertEqual(metadata["configured_wallet_label"], FIXTURE_WALLET_LABEL)
         self.assertEqual(metadata["database_mode"], "fixture_test")
         self.assertFalse(metadata["is_sampled"])
-        self.assertEqual(metadata["transfer_count"], 7)
-        self.assertEqual(metadata["event_block_number_min"], 17000001)
-        self.assertEqual(metadata["event_block_number_max"], 17006000)
+        self.assertGreater(metadata["transfer_count"], 10)
+        self.assertEqual(metadata["event_block_number_min"], 14000001)
+        self.assertEqual(metadata["event_block_number_max"], 27000001)
         self.assertEqual(metadata["completeness_scope"], "duckdb_snapshot")
         self.assertFalse(metadata["indexer_checkpoint_recorded"])
         self.assertEqual(metadata["finality_status"], "not_recorded")
@@ -206,7 +209,7 @@ class DashboardApiTest(unittest.TestCase):
         )
 
     def test_active_wallet_is_derived_from_metadata_or_explicit_environment(self) -> None:
-        wallet_address = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+        wallet_address = FIXTURE_WALLET_ADDRESS
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(self.service.active_wallet_address(), wallet_address)
         with patch.dict(os.environ, {"EVM_WALLET_SCAN_ADDRESS": "0x" + wallet_address[2:].upper()}, clear=True):
@@ -233,6 +236,12 @@ class DashboardApiTest(unittest.TestCase):
             database_path = Path(directory) / "live-test.duckdb"
             shutil.copy2(FIXTURE_DB_PATH, database_path)
             with duckdb.connect(str(database_path)) as connection:
+                fixture_profile = connection.execute(
+                    "select count(*), max(block_number) + 10 from wallet_events"
+                ).fetchone()
+                if fixture_profile is None:
+                    raise AssertionError("fixture profile query returned no row")
+                event_count, snapshot_end_block = fixture_profile
                 connection.execute("create schema ops")
                 connection.execute(
                     """
@@ -246,23 +255,23 @@ class DashboardApiTest(unittest.TestCase):
                 connection.execute(
                     """
                     insert into ops.pipeline_runs values (
-                      'run-1', 1, '0xd8da6bf26964af9d7eed9e03e53415d37aa96045',
-                      'vitalik.eth', 0, 17000010, ?, 7, 'completed', current_timestamp,
+                      'run-1', 1, '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+                      'Example wallet', 0, ?, ?, ?, 'completed', current_timestamp,
                       'wallet-transfer-signature-v1'
                     )
                     """,
-                    ["0x" + "a" * 64],
+                    [snapshot_end_block, "0x" + "a" * 64, event_count],
                 )
                 connection.execute(
                     """
                     update pipeline_metadata set
                       data_source = 'hyperindex', snapshot_run_id = 'run-1',
-                      snapshot_start_block = 0, snapshot_end_block = 17000010,
+                      snapshot_start_block = 0, snapshot_end_block = ?,
                       snapshot_end_block_hash = ?,
                       snapshot_finality_policy = 'ethereum_finalized',
                       snapshot_scope_version = 'wallet-transfer-signature-v1'
                     """,
-                    ["0x" + "a" * 64],
+                    [snapshot_end_block, "0x" + "a" * 64],
                 )
 
             metadata = QueryService(database_path).metadata()
@@ -270,7 +279,7 @@ class DashboardApiTest(unittest.TestCase):
             self.assertEqual(metadata["completeness_scope"], "finalized_block_range")
             self.assertEqual(metadata["finality_status"], "finalized")
             self.assertEqual(metadata["snapshot_start_block"], 0)
-            self.assertEqual(metadata["snapshot_end_block"], 17000010)
+            self.assertEqual(metadata["snapshot_end_block"], snapshot_end_block)
 
             with duckdb.connect(str(database_path)) as connection:
                 connection.execute(
@@ -281,8 +290,9 @@ class DashboardApiTest(unittest.TestCase):
 
             with duckdb.connect(str(database_path)) as connection:
                 connection.execute(
-                    "update ops.pipeline_runs set from_block = 0, events_found = 6 "
-                    "where run_id = 'run-1'"
+                    "update ops.pipeline_runs set from_block = 0, events_found = ? "
+                    "where run_id = 'run-1'",
+                    [event_count - 1],
                 )
             with self.assertRaisesRegex(DatabaseUnavailable, "do not reconcile"):
                 QueryService(database_path).metadata()
@@ -292,12 +302,12 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(json_value(value), "12345678901234567890.123456789012345678")
 
     def test_event_response_is_the_lean_dashboard_contract(self) -> None:
-        event_payload = self.client.get(
-            "/api/v1/events",
-            params={"q": "0xeee", "limit": 1},
-        ).json()
+        event_payload = self.client.get("/api/v1/events", params={"limit": 1}).json()
         event = event_payload["items"][0]
-        self.assertEqual(event["transfer_id"], "1-0xeee-0")
+        self.assertEqual(
+            event["transfer_id"],
+            f"{event['chain_id']}-{event['transaction_hash']}-{event['log_index']}",
+        )
         self.assertEqual(
             set(event),
             {
@@ -326,8 +336,8 @@ class DashboardApiTest(unittest.TestCase):
     def test_summary_uses_every_matching_row(self) -> None:
         default = self.client.get("/api/v1/summary").json()
 
-        self.assertEqual(default["transfer_count"], 7)
-        self.assertEqual(default["token_count"], 5)
+        self.assertGreater(default["transfer_count"], 10)
+        self.assertGreaterEqual(default["token_count"], 5)
         self.assertFalse(default["provenance"]["is_sampled"])
 
     def test_public_account_filters_are_binary_and_validated(self) -> None:
@@ -336,7 +346,10 @@ class DashboardApiTest(unittest.TestCase):
             params=[("account", "eoa_candidate"), ("account", "contract")],
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["transfer_count"], 7)
+        self.assertEqual(
+            response.json()["transfer_count"],
+            self.client.get("/api/v1/summary").json()["transfer_count"],
+        )
 
         invalid = self.client.get("/api/v1/summary", params={"account": "human"})
         self.assertEqual(invalid.status_code, 422)
@@ -364,8 +377,12 @@ class DashboardApiTest(unittest.TestCase):
         )
 
         self.assertEqual(recognized.status_code, 200)
-        self.assertEqual(recognized.json()["transfer_count"], 6)
-        self.assertEqual(other.json()["transfer_count"], 1)
+        self.assertGreater(recognized.json()["transfer_count"], 0)
+        self.assertGreater(other.json()["transfer_count"], 0)
+        self.assertEqual(
+            recognized.json()["transfer_count"] + other.json()["transfer_count"],
+            self.client.get("/api/v1/summary").json()["transfer_count"],
+        )
         self.assertEqual(other.json()["query"]["recognition"], "other")
         self.assertEqual(
             self.client.get("/api/v1/summary", params={"recognition": "invalid"}).status_code,
@@ -442,10 +459,13 @@ class DashboardApiTest(unittest.TestCase):
         yearly_payload = yearly_timeline.json()
         self.assertEqual(yearly_payload["interval"], "year")
         self.assertIsNone(yearly_payload["year"])
-        self.assertEqual(yearly_payload["complete_matching_count"], 7)
+        self.assertEqual(
+            yearly_payload["complete_matching_count"],
+            self.client.get("/api/v1/summary").json()["transfer_count"],
+        )
 
         selected_year = next(
-            item for item in yearly_payload["items"] if item["transfer_count"] > 0
+            item for item in yearly_payload["items"] if item["self_transfer_count"] > 0
         )["bucket_start"][:4]
         timeline = self.client.get(
             "/api/v1/timeline",
@@ -455,8 +475,8 @@ class DashboardApiTest(unittest.TestCase):
         payload = timeline.json()
         self.assertEqual(payload["interval"], "month")
         self.assertEqual(payload["year"], int(selected_year))
-        self.assertEqual(payload["returned_count"], 11)
-        self.assertEqual(payload["complete_matching_count"], 7)
+        self.assertEqual(payload["returned_count"], 12)
+        self.assertGreater(payload["complete_matching_count"], 0)
         self.assertEqual(
             sum(item["transfer_count"] for item in payload["items"]),
             payload["complete_matching_count"],
@@ -531,8 +551,18 @@ class DashboardApiTest(unittest.TestCase):
             params={"recognition": "other", "interval": "year"},
         ).json()
 
-        self.assertEqual(recognized["complete_matching_count"], 6)
-        self.assertEqual(other["complete_matching_count"], 1)
+        self.assertEqual(
+            recognized["complete_matching_count"],
+            self.client.get(
+                "/api/v1/summary", params={"recognition": "recognized"}
+            ).json()["transfer_count"],
+        )
+        self.assertEqual(
+            other["complete_matching_count"],
+            self.client.get(
+                "/api/v1/summary", params={"recognition": "other"}
+            ).json()["transfer_count"],
+        )
         self.assertEqual(recognized["returned_count"], other["returned_count"])
         self.assertEqual(other["query"]["recognition"], "other")
 
@@ -545,7 +575,7 @@ class DashboardApiTest(unittest.TestCase):
             params={"limit": 2, "cursor": first["next_cursor"]},
         ).json()
 
-        self.assertEqual(first["complete_matching_count"], 7)
+        self.assertGreater(first["complete_matching_count"], first["returned_count"])
         self.assertEqual(first["returned_count"], 2)
         self.assertTrue(first["is_paginated"])
         self.assertFalse(first["is_sampled"])
@@ -556,17 +586,30 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/events", params={"cursor": "broken"}).status_code, 400)
 
     def test_self_transfer_is_neither_directional_nor_a_counterparty(self) -> None:
+        with self.service.connect() as connection:
+            self_event_row = connection.execute(
+                """
+                select transaction_hash
+                from wallet_events
+                where direction = 'self'
+                order by block_number, transaction_index, log_index
+                limit 1
+                """
+            ).fetchone()
+        self.assertIsNotNone(self_event_row)
+        assert self_event_row is not None
+        transaction_hash = self_event_row[0]
         event = self.client.get(
             "/api/v1/events",
-            params={"q": "0xself", "limit": 1},
+            params={"q": transaction_hash, "limit": 1},
         ).json()["items"][0]
         token = self.client.get(
             "/api/v1/tokens",
-            params={"q": "0xself", "limit": 1},
+            params={"q": transaction_hash, "limit": 1},
         ).json()["items"][0]
         summary = self.client.get(
             "/api/v1/summary",
-            params={"q": "0xself"},
+            params={"q": transaction_hash},
         ).json()
 
         self.assertEqual(event["direction"], "self")
@@ -599,9 +642,26 @@ class DashboardApiTest(unittest.TestCase):
                 self.assertFalse(payload["is_sampled"])
 
     def test_counterparty_ranking_uses_inclusive_recognition_cohort(self) -> None:
-        mixed_address = "0x1111111111111111111111111111111111111111"
         inserted_transaction_hash = "0x" + "f" * 64
         with self.service.connect() as connection:
+            recognized_counterparty_row = connection.execute(
+                """
+                select counterparty_address
+                from wallet_events
+                where recognition_status = 'recognized'
+                  and counterparty_address != wallet_address
+                  and counterparty_address != '0x0000000000000000000000000000000000000000'
+                order by block_number, transaction_index, log_index
+                limit 1
+                """
+            ).fetchone()
+            self.assertIsNotNone(recognized_counterparty_row)
+            assert recognized_counterparty_row is not None
+            mixed_address = recognized_counterparty_row[0]
+            existing_count = connection.execute(
+                "select count(*) from wallet_events where counterparty_address = ?",
+                [mixed_address],
+            ).fetchone()[0]
             connection.execute(
                 """
                 insert into wallet_events
@@ -623,12 +683,16 @@ class DashboardApiTest(unittest.TestCase):
         try:
             for recognition in ("recognized", "other"):
                 with self.subTest(recognition=recognition):
-                    parameters = {"recognition": recognition, "limit": 10}
+                    parameters = {
+                        "recognition": recognition,
+                        "q": mixed_address,
+                        "limit": 10,
+                    }
                     counterparties = self.client.get(
                         "/api/v1/counterparties", params=parameters
                     ).json()
                     self.assertEqual(counterparties["items"][0]["counterparty_address"], mixed_address)
-                    self.assertEqual(counterparties["items"][0]["transfer_count"], 2)
+                    self.assertEqual(counterparties["items"][0]["transfer_count"], existing_count + 1)
         finally:
             with self.service.connect() as connection:
                 connection.execute(

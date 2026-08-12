@@ -52,14 +52,14 @@ describe("dashboard model", () => {
   });
 
   it("shows account coverage with explicit address and event denominators", () => {
-    expect(accountEvidenceCoverageLabel(metadata)).toBe("address types 2/3");
+    expect(accountEvidenceCoverageLabel(metadata)).toBe("address types 0/2");
     expect(accountEvidenceCoverageDescription(metadata)).toContain(
-      "2 of 3 nonzero, nonself counterparties classified (66.7%)",
+      "0 of 2 nonzero, nonself counterparties classified (0%)",
     );
     expect(accountEvidenceCoverageDescription(metadata)).toContain(
-      "3 of 4 captured transfers have classified counterparties (75%)",
+      "0 of 99 captured transfers have classified counterparties (0%)",
     );
-    expect(accountEvidenceCoverageDescription(metadata)).toContain("0 failed; 1 not checked");
+    expect(accountEvidenceCoverageDescription(metadata)).toContain("0 failed; 2 not checked");
   });
 
   it("labels only verified finalized snapshot coverage", () => {
@@ -91,10 +91,10 @@ describe("dashboard model", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      transfer_count: 5,
-      inbound_transfer_count: 2,
-      outbound_transfer_count: 3,
-      token_count: 3,
+      transfer_count: 100,
+      inbound_transfer_count: 98,
+      outbound_transfer_count: 2,
+      token_count: 2,
     });
   });
 

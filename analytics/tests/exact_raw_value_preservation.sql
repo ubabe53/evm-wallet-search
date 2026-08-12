@@ -5,8 +5,8 @@
 with expected as (
   select
     1 as chain_id,
-    '0xeee' as transaction_hash,
-    0 as log_index,
+    '0x000000000000000000000000000000000000000000000000000000000a10005e' as transaction_hash,
+    1 as log_index,
     '0x9999999999999999999999999999999999999999' as token_address,
     '{{ max_uint256 }}' as value_raw
 ),

@@ -22,7 +22,7 @@ Treat documentation as part of the implementation. If code and documentation dis
 ## Current product boundary
 
 - Ethereum mainnet only (`chain_id = 1`).
-- One wallet interval is indexed/transformed per run, while the complete live artifact retains every successfully published wallet; the pinned `vitalik.eth` target is fixture/demo configuration only and is never a live API fallback.
+- One wallet interval is indexed/transformed per run, while the complete live artifact retains every successfully published wallet; the fixed `Example wallet` target is synthetic fixture/demo configuration only and is never a live API fallback.
 - One `Transfer(address,address,uint256)` event signature, intended for ERC-20 analytics. ERC-721 uses the same signature, and the current wildcard indexer does not disambiguate standards; never claim every captured row is proven ERC-20.
 - HyperIndex Postgres is ingestion persistence: Envio owns normal `public` state, while bounded jobs merge validated canonical events and durable interval checkpoints into the shared `wallet_scan` schema. `analytics/artifacts/live.duckdb` is the complete local analytics artifact and stores one `ops.pipeline_runs` row per attempted finalized snapshot interval. Deterministic tests and static-demo export use the separate `analytics/artifacts/fixture.duckdb`.
 - The local read-only FastAPI service in `server/` queries only `analytics/artifacts/live.duckdb`; it must reject fixture provenance.
@@ -38,7 +38,7 @@ Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, 
 - Store raw token quantities as arbitrary-precision integers or exact strings. Never aggregate quantities across token contracts.
 - Define direction relative to the configured wallet and keep self-transfer and zero-address policies explicit.
 - A `Transfer` log proves emission, not intent, economic ownership, transaction initiation, standards compliance, or historical account type.
-- Token symbols/names, registry recognition, ENS resolution, and account type are sourced, time-varying enrichment—not identity facts. Live ENS resolution records its resolver source and finalized observation time/block/hash; the configured fixture `vitalik.eth` value alone remains only a pinned project label.
+- Token symbols/names, registry recognition, ENS resolution, and account type are sourced, time-varying enrichment—not identity facts. Live ENS resolution records its resolver source and finalized observation time/block/hash; the configured fixture `Example wallet` value remains only a synthetic pinned project label.
 - Do not infer token reputation or legitimacy from names, symbols, registry absence, or wallet-token activity patterns. The dashboard exposes only `All`, `Recognized`, and `Other`: recognition means exact-address registry membership or a manual local override and is not a safety claim.
 - `eoa_candidate` means no bytecode was observed at a pinned block. It does not prove personhood, control, permanence, or EOA history.
 - Live account evidence is an ignored local DuckDB cache. Successful bytecode observations are not automatically refreshed; failures remain retryable. Do not reintroduce Safe/ERC-4337 RPC collection or a generated account-evidence CSV without a new architecture decision.
