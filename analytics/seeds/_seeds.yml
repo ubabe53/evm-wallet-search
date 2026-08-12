@@ -2,7 +2,7 @@ version: 2
 
 seeds:
   - name: raw_transfer_events_fixture
-    description: Deterministic synthetic captured-event examples used by dbt tests and the static portfolio demo; not historical claims about the configured address. {{ doc('bounded_fixture') }}
+    description: Exactly 100 deterministic synthetic captured-event examples used by dbt tests and the static portfolio demo; the example dates, identifiers, addresses, and participant pairs are not claims about Ethereum history. {{ doc('bounded_fixture') }}
     meta:
       grain: one captured Transfer-signature log
       primary_key: [chain_id, transaction_hash, log_index]

@@ -19,7 +19,7 @@ with fixture_profile as (
   from {{ ref('wallet_events') }}
 ),
 failures as (
-  select 'fixture_event_pagination' as failure from fixture_profile where event_count <= 10
+  select 'fixture_exact_event_contract' as failure from fixture_profile where event_count != 100
   union all
   select 'fixture_token_breadth' from fixture_profile where token_count < 5
   union all
@@ -44,7 +44,7 @@ failures as (
     select 1
     from {{ ref('pipeline_metadata') }}
     where data_source = 'fixture'
-      and transfer_count > 10
+      and transfer_count = 100
       and snapshot_run_id is null
       and snapshot_start_block is null
       and snapshot_end_block is null

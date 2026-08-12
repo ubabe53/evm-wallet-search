@@ -7,7 +7,7 @@ where
       or token_name != 'Synthetic Example Token' or token_symbol != 'EXAMPLE'
       or token_decimals != 6))
   or
-  (transaction_hash = '0xeee'
+  (transaction_hash = '0x000000000000000000000000000000000000000000000000000000000a10005e'
     and value_raw != '115792089237316195423570985008687907853269984665640564039457584007913129639935')
   or
   (token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'

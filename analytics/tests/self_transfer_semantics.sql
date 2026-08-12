@@ -32,8 +32,8 @@ where not exists (
   select 1
   from {{ ref('int_wallet_transfer_events') }}
   where chain_id = 1
-    and transaction_hash = '0xself'
-    and log_index = 0
+    and transaction_hash = '0x000000000000000000000000000000000000000000000000000000000a100013'
+    and log_index = 1
     and direction = 'self'
 )
 
@@ -43,8 +43,8 @@ select 'fixture_token_summary_reconciliation' as failure
 where not exists (
   select 1
   from {{ ref('token_summary') }}
-  where token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-    and self_transfer_count = 1
+  where token_address = '0x9999999999999999999999999999999999999999'
+    and self_transfer_count = 5
     and transfer_count = inbound_transfer_count + outbound_transfer_count + self_transfer_count
 )
 
@@ -55,7 +55,7 @@ where not exists (
   select 1
   from {{ ref('timeline_daily') }}
   where direction = 'self'
-    and token_address = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    and token_address = '0x9999999999999999999999999999999999999999'
     and transfer_count = 1
 )
 {% endif %}

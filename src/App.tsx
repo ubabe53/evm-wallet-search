@@ -394,9 +394,9 @@ export function App() {
           <div>
             <strong>Synthetic fixture demo</strong>
             <span>
-              Deterministic example events for the configured demo address—not live
-              {" vitalik.eth "}history or evidence of HyperIndex completeness. Transfer-signature
-              rows do not prove token standard, intent, or economic ownership.
+              Deterministic example events for a synthetic configured address—not live wallet
+              history or evidence of HyperIndex completeness. Transfer-signature rows do not
+              prove token standard, intent, or economic ownership.
             </span>
           </div>
           <div className="fixtureExportBoundary">

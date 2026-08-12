@@ -28,9 +28,12 @@ describe("dashboard export shape", () => {
     expect(metadata.snapshot_start_block).toBeNull();
     expect(metadata.snapshot_end_block).toBeNull();
     expect(metadata.data_source).toBe("fixture");
-    expect(metadata.transfer_count).toBeGreaterThan(10);
+    expect(metadata.configured_wallet_label).toBe("Example wallet");
+    expect(metadata.wallet_address).toBe("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+    expect(metadata.transfer_count).toBe(100);
     expect(metadata.complete_event_count).toBe(metadata.transfer_count);
     expect(metadata.exported_event_count).toBe(metadata.complete_event_count);
+    expect(events).toHaveLength(100);
     expect(metadata.event_block_number_min).toBe(14_000_001);
     expect(metadata.event_block_number_max).toBe(27_000_001);
     expect(Math.max(...events.map((event: { block_timestamp: string }) =>
