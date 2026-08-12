@@ -321,6 +321,8 @@ describe("live wallet controls", () => {
     expect(screen.getByText("first.eth")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Indexing and building analytics" }))
       .not.toHaveAttribute("value");
+    expect(screen.getByRole("status")).toHaveTextContent("Indexing and building analytics");
+    expect(screen.getByRole("status")).not.toHaveTextContent("Elapsed");
     expect(screen.getByText("Blocks 0–25,000,000")).toBeInTheDocument();
     expect(screen.queryByText(/Build live analytics/)).not.toBeInTheDocument();
   });

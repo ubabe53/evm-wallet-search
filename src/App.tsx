@@ -529,7 +529,7 @@ function InitialScanState({ job }: { job: ScanJob }) {
   const stage = scanStageLabel(job);
   return (
     <main className="shell">
-      <section className="initialScan" aria-live="polite">
+      <section className="initialScan">
         <div className="initialScanIcon" aria-hidden="true">
           {active ? <LoaderCircle className="scanSpinner" size={24} /> : <Database size={24} />}
         </div>
@@ -539,9 +539,9 @@ function InitialScanState({ job }: { job: ScanJob }) {
           <p className="initialScanWallet">{job.wallet_label}</p>
         </div>
         {active && (
-          <div className="initialScanProgress" role="status">
+          <div className="initialScanProgress">
             <div className="scanProgressLabel">
-              <strong>{stage}</strong>
+              <strong role="status" aria-live="polite">{stage}</strong>
               <span>Elapsed {elapsedTimeLabel(job.created_at, now)}</span>
             </div>
             <progress aria-label={stage} />
