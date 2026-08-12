@@ -26,7 +26,7 @@ side effects of deterministic fixture or dbt commands.
 | [`artifact_paths.py`](artifact_paths.py) | Centralize isolated DuckDB artifact locations |
 | [`check_dbt_docs.py`](check_dbt_docs.py) | Enforce dbt documentation coverage and ownership metadata |
 | [`codex_review_gate.sh`](codex_review_gate.sh) | Run the configured staged-diff pre-commit review |
-| [`local_stack.ts`](local_stack.ts) | Build, start, monitor, inspect, and stop the persistent local Compose product |
+| [`local_stack.ts`](local_stack.ts) | Build, start, monitor with named stages and elapsed heartbeats, inspect, and stop the persistent local Compose product |
 | [`local_enrich.ts`](local_enrich.ts) | Stop/restart the packaged API around explicit RPC evidence collection and atomic rebuild |
 | [`rebuild_live_enrichment.py`](rebuild_live_enrichment.py) | Rebuild every completed wallet projection from cumulative raw coverage and validate preservation before publication |
 

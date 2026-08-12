@@ -225,6 +225,17 @@ class ScanJobManager:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def active(self) -> ScanJob | None:
+        """Return the one process-local queued or running job, when present."""
+
+        with self._lock:
+            job = (
+                self._jobs.get(self._active_job_id)
+                if self._active_job_id is not None
+                else None
+            )
+            return job if job is not None and job.status in {"queued", "running"} else None
+
     def list_wallets(self) -> list[dict[str, object]]:
         wallets: dict[str, dict[str, object]] = {}
         with self._lock:

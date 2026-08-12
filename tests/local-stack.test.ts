@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   appPort,
+  elapsedScanTime,
   normalizeInitialWallet,
   parseEnvironmentFile,
   scanStage,
@@ -48,5 +49,10 @@ describe("local Docker stack launcher", () => {
       "Validating and publishing",
     );
     expect(scanStage({ status: "completed", progress: 100 })).toBe("Complete");
+  });
+
+  test("formats elapsed scan time for terminal heartbeats", () => {
+    expect(elapsedScanTime(1_000, 13_000)).toBe("12s");
+    expect(elapsedScanTime(1_000, 126_000)).toBe("2m 05s");
   });
 });

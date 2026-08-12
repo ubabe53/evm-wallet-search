@@ -10,7 +10,10 @@ In live mode, completed-wallet selection belongs to the persistent analysis cont
 the wallet-scoped API query. The separate scan launcher creates finalized scan jobs for new or
 incomplete targets, clears accepted input, keeps progress visible in the launcher, and switches to a
 successfully published wallet automatically. Scan status uses named adapter stages and an indeterminate
-activity bar rather than treating coarse worker checkpoints as exact percentages. Wallet refreshes keep the last successful wallet and
+activity bar rather than treating coarse worker checkpoints as exact percentages. On a first run,
+the live adapter discovers the process-local active job before requesting analytics, presents its
+wallet, finalized block range, stage, and elapsed time, and opens the dashboard automatically after
+publication. Wallet refreshes keep the last successful wallet and
 its provenance visible until the replacement query succeeds; transient failures stay inline and can
 be retried without returning to the startup error screen.
 

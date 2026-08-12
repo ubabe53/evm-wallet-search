@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   loadApiDashboardData,
+  loadActiveScanJob,
   loadNextApiEvents,
   createScanJob,
   loadScanJob,
@@ -36,12 +37,14 @@ describe("live dashboard API adapter", () => {
         expect(init?.body).toBe(JSON.stringify({ wallet: "vitalik.eth" }));
         return response({ job_id: "job-1", status: "queued", wallet_address: "0x1" });
       }
+      if (input === "/api/v1/scan-jobs/active") return response({ job: null });
       if (input === "/api/v1/scan-jobs/job-1") return response({ job_id: "job-1", status: "completed" });
       if (input === "/api/v1/wallets") return response({ items: [{ wallet_address: "0x1", label: "vitalik.eth", chain_id: 1, status: "completed" }] });
       throw new Error(`Unexpected request ${input}`);
     });
     vi.stubGlobal("fetch", fetchMock);
     expect((await createScanJob("vitalik.eth")).job_id).toBe("job-1");
+    expect((await loadActiveScanJob()).job).toBeNull();
     expect((await loadScanJob("job-1")).status).toBe("completed");
     expect((await loadWallets()).items[0].label).toBe("vitalik.eth");
   });
