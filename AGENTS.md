@@ -29,7 +29,7 @@ Treat documentation as part of the implementation. If code and documentation dis
 - The React app has two explicit build-time modes: local development queries the live API, while the fixture-demo build reads generated JSON. Do not add a runtime switch that can mix them.
 - Static JSON is only the bounded fixture-backed GitHub Pages demo path. Account-type evidence has no checked-in fixture; fixture builds expose an empty typed relation.
 
-Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, USD prices, and an implemented Docker stack are outside the current MVP. Adding one requires an explicit architecture and data-contract decision.
+Native ETH transfers, traces, calls, approvals, NFT-specific interpretation/UI, and USD prices are outside the current MVP. The implemented Docker Compose stack is the supported live local distribution path; adding another deployment target requires an explicit architecture and data-contract decision.
 
 ## Non-negotiable data semantics
 
