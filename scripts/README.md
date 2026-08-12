@@ -26,6 +26,9 @@ side effects of deterministic fixture or dbt commands.
 | [`artifact_paths.py`](artifact_paths.py) | Centralize isolated DuckDB artifact locations |
 | [`check_dbt_docs.py`](check_dbt_docs.py) | Enforce dbt documentation coverage and ownership metadata |
 | [`codex_review_gate.sh`](codex_review_gate.sh) | Run the configured staged-diff pre-commit review |
+| [`local_stack.ts`](local_stack.ts) | Build, start, monitor with named stages and elapsed heartbeats, inspect, and stop the persistent local Compose product |
+| [`local_enrich.ts`](local_enrich.ts) | Stop/restart the packaged API around explicit RPC evidence collection and atomic rebuild |
+| [`rebuild_live_enrichment.py`](rebuild_live_enrichment.py) | Rebuild every completed wallet projection from cumulative raw coverage and validate preservation before publication |
 
 ## Commands
 
@@ -42,6 +45,11 @@ bun run tokens:refresh
 bun run labels:enrich --limit 100
 bun run addresses:enrich
 bun run api:dev
+bun run app:up -- 0x...
+bun run app:status
+bun run app:logs
+bun run app:down
+bun run app:enrich
 ```
 
 Networked or potentially expensive commands are explicit:
@@ -56,6 +64,10 @@ Networked or potentially expensive commands are explicit:
   bounded network index before updating only the supplied staged DuckDB path.
 - `analytics:build:hyperindex` reads live progress/finality and writes a live snapshot attempt.
 - `tokens:refresh`, `labels:enrich`, and `addresses:enrich` contact external sources.
+- `app:up` builds local images and submits a networked finalized wallet scan; it reports ready only
+  after atomic live-artifact publication. `app:down` preserves named data volumes.
+- `app:enrich` requires an explicit RPC, stops the packaged API, checkpoints missing shared
+  account evidence, atomically rebuilds all completed wallets, and restarts the API on success or failure.
 
 Fixture builds and exports are deterministic and must remain isolated from live Postgres and
 `live.duckdb`.

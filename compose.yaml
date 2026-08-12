@@ -1,0 +1,72 @@
+name: evm-wallet-search
+
+services:
+  postgres:
+    image: postgres:18.1-alpine
+    environment:
+      POSTGRES_DB: envio
+      POSTGRES_USER: envio
+      POSTGRES_PASSWORD: envio-local-only
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U envio -d envio"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      target: application
+    environment:
+      ENVIO_API_TOKEN: ${ENVIO_API_TOKEN:-}
+      ETHEREUM_RPC_URL: ${ETHEREUM_RPC_URL:-https://ethereum-rpc.publicnode.com}
+      ENVIO_HASURA: "false"
+      ENVIO_TUI: "false"
+      EVM_WALLET_API_HOST: 0.0.0.0
+      ENVIO_PG_HOST: postgres
+      ENVIO_PG_PORT: "5432"
+      ENVIO_PG_USER: envio
+      ENVIO_PG_PASSWORD: envio-local-only
+      ENVIO_PG_DATABASE: envio
+      DBT_ENV_SECRET_HYPERINDEX_POSTGRES_DSN: postgresql://envio:envio-local-only@postgres:5432/envio
+      WALLET_SCAN_POSTGRES_DSN: postgresql://envio:envio-local-only@postgres:5432/envio
+      EVM_WALLET_SCAN_ADDRESS: ${EVM_WALLET_SCAN_ADDRESS:-}
+      WALLET_SCAN_INDEXER_TIMEOUT_SECONDS: ${WALLET_SCAN_INDEXER_TIMEOUT_SECONDS:-7200}
+    volumes:
+      - analytics-data:/app/analytics/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=5)"
+      interval: 3s
+      timeout: 6s
+      retries: 40
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: dashboard
+    ports:
+      - "127.0.0.1:${EVM_WALLET_APP_PORT:-5173}:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  analytics-data:

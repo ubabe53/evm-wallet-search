@@ -62,8 +62,11 @@ class ArtifactPathsTest(unittest.TestCase):
         )
 
     @patch("scripts.run_dbt.shared_raw_store_exists", return_value=False)
+    @patch("scripts.run_dbt.public_raw_store_exists", return_value=True)
     @patch("duckdb.connect")
-    def test_raw_event_count_is_mainnet_and_wallet_scoped(self, connect, _shared_exists) -> None:
+    def test_raw_event_count_is_mainnet_and_wallet_scoped(
+        self, connect, _public_exists, _shared_exists
+    ) -> None:
         connection = connect.return_value.__enter__.return_value
         connection.execute.return_value.fetchone.return_value = (7,)
         run = SnapshotRun(
@@ -82,6 +85,33 @@ class ArtifactPathsTest(unittest.TestCase):
         count_query = connection.execute.call_args_list[2].args[0]
         self.assertIn("chain_id = 1", count_query)
         self.assertIn("lower(from_address) = ? or lower(to_address) = ?", count_query)
+        self.assertIn('hyperindex.public."Erc20Transfer"', count_query)
+        self.assertNotIn("hyperindex.wallet_scan.transfer_events", count_query)
+
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=True)
+    @patch("scripts.run_dbt.public_raw_store_exists", return_value=False)
+    @patch("duckdb.connect")
+    def test_raw_event_count_supports_bounded_store_without_public_table(
+        self, connect, _public_exists, _shared_exists
+    ) -> None:
+        connection = connect.return_value.__enter__.return_value
+        connection.execute.return_value.fetchone.return_value = (3,)
+        run = SnapshotRun(
+            run_id="run",
+            chain_id=1,
+            wallet_address=WALLET_A.address,
+            wallet_label=WALLET_A.label,
+            from_block=3,
+            to_block=100,
+            to_block_hash="0x" + "a" * 64,
+            scope_version="wallet-transfer-signature-v1",
+            generation_id="generation",
+        )
+
+        self.assertEqual(run_dbt.count_hyperindex_events("postgresql://secret", run), 3)
+        count_query = connection.execute.call_args_list[2].args[0]
+        self.assertNotIn('hyperindex.public."Erc20Transfer"', count_query)
+        self.assertIn("hyperindex.wallet_scan.transfer_events", count_query)
 
     def test_scan_wallet_address_is_normalized_and_selected(self) -> None:
         selected = run_dbt.select_scan_wallet([WALLET_A, WALLET_B], "  " + WALLET_B.address.upper() + "  ")
@@ -183,8 +213,9 @@ class ArtifactPathsTest(unittest.TestCase):
     @patch("scripts.run_dbt.subprocess.run")
     @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
     @patch("scripts.run_dbt.shared_raw_store_exists", return_value=True)
+    @patch("scripts.run_dbt.public_raw_store_exists", return_value=False)
     def test_live_build_uses_live_database_and_read_only_source_dsn(
-        self, _shared_exists, _which, run
+        self, _public_exists, _shared_exists, _which, run
     ) -> None:
         run_dbt.run_dbt(
             "build",
@@ -197,14 +228,16 @@ class ArtifactPathsTest(unittest.TestCase):
         environment = run.call_args.kwargs["env"]
         self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(LIVE_DB_PATH))
         self.assertEqual(environment[run_dbt.HYPERINDEX_DSN_ENV], "postgresql://secret")
+        self.assertEqual(environment[run_dbt.EVM_WALLET_PUBLIC_RAW_ENABLED_ENV], "false")
         self.assertEqual(environment[run_dbt.EVM_WALLET_SHARED_RAW_ENABLED_ENV], "true")
         self.assertEqual(environment["EVM_WALLET_SNAPSHOT_END_BLOCK"], "100")
 
     @patch("scripts.run_dbt.subprocess.run")
     @patch("scripts.run_dbt.shutil.which", return_value="/usr/bin/dbt")
     @patch("scripts.run_dbt.shared_raw_store_exists", return_value=True)
+    @patch("scripts.run_dbt.public_raw_store_exists", return_value=False)
     def test_worker_live_build_uses_explicit_staging_artifact(
-        self, _shared_exists, _which, run
+        self, _public_exists, _shared_exists, _which, run
     ) -> None:
         staging = LIVE_DB_PATH.parent / "wallet-scan-job" / "live.duckdb"
         run_dbt.run_dbt(
@@ -217,6 +250,19 @@ class ArtifactPathsTest(unittest.TestCase):
 
         environment = run.call_args.kwargs["env"]
         self.assertEqual(environment[run_dbt.DBT_DUCKDB_PATH_ENV], str(staging))
+
+    @patch("scripts.run_dbt.shared_raw_store_exists", return_value=False)
+    @patch("scripts.run_dbt.public_raw_store_exists", return_value=False)
+    def test_live_build_rejects_postgres_without_any_raw_store(
+        self, _public_exists, _shared_exists
+    ) -> None:
+        with self.assertRaisesRegex(RuntimeError, "No live raw transfer relation"):
+            run_dbt.run_dbt(
+                "build",
+                ["--vars", '{"use_fixture": false}'],
+                use_hyperindex=True,
+                hyperindex_dsn="postgresql://secret",
+            )
 
     def test_live_build_requires_a_dsn(self) -> None:
         with self.assertRaisesRegex(SystemExit, "Live HyperIndex mode requires"):

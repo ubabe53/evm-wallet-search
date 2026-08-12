@@ -7,6 +7,8 @@ from scripts.wallet_scan_raw import (
     completed_ingestion_prefix,
     drop_temporary_schema,
     merge_sql,
+    public_raw_store_exists,
+    shared_raw_store_exists,
     validate_indexer_checkpoint,
     validate_temporary_schema,
     verify_finalized_hash,
@@ -38,6 +40,21 @@ class WalletScanRawTest(unittest.TestCase):
         self.assertIn("from wallet_scan_job_123.envio_chains", sql)
         self.assertIn("progress_block >= 200", sql)
         self.assertIn("ready_at is not null", sql)
+
+    @patch("scripts.wallet_scan_raw.postgres_connection")
+    def test_raw_store_detection_uses_exact_postgres_relations(self, connect) -> None:
+        connection = MagicMock()
+        connect.return_value.__enter__.return_value = connection
+        connection.execute.return_value.fetchone.return_value = (1,)
+
+        self.assertTrue(public_raw_store_exists("postgresql://test"))
+        self.assertEqual(connection.execute.call_args.args[1], ["public", "Erc20Transfer"])
+
+        self.assertTrue(shared_raw_store_exists("postgresql://test"))
+        self.assertEqual(
+            connection.execute.call_args.args[1],
+            ["wallet_scan", "transfer_events"],
+        )
 
     def test_rejects_persistent_or_unsafe_temporary_schema(self) -> None:
         for schema in ("public", "wallet_scan", "wallet_scan_job;drop schema public"):

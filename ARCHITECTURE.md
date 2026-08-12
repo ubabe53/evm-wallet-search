@@ -49,6 +49,7 @@ The frontend selects exactly one path at build time: local development uses boun
 | Local API | `server/` | Validate filters, execute exact bounded queries, and mutate only local token-recognition overrides in the live artifact | An ingestion service, general database writer, or fixture-data server |
 | Fixture demo contract | `public/data/`, `src/data.ts` | Serve bounded generated JSON only to the explicit fixture/static build | The complete-history local serving architecture |
 | Dashboard | `src/` | Present activity timeline, summary, rankings, provenance, and event views | A direct Postgres, DuckDB, RPC, or secret-bearing client |
+| Local distribution | `Dockerfile`, `compose.yaml`, `docker/` | Package persistent Postgres, the API/worker/dbt runtime, and the API-mode dashboard behind one loopback web origin | Nested Docker, fixture/live mixing, public database ports, or an image containing user secrets |
 | Tests | `tests/`, `analytics/tests/`, `analytics/models/unit_tests.yml` | Enforce UI, export, enrichment, grain, and semantic contracts | A substitute for documenting system intent and boundaries |
 | Context layer | `AGENTS.md`, this file, `README.md`, `docs/` | Make constraints, decisions, operations, and change routes legible | Stale narrative that contradicts executable behavior |
 
@@ -64,7 +65,7 @@ Rules:
 
 - The browser never receives Postgres/RPC credentials or direct database access.
 - HyperIndex Postgres is the ingestion source, not the application query interface.
-- The shared raw helper never mutates Envio's normal `public` checkpoint state. It accepts only a temporary `wallet_scan_<job>` schema whose Envio-owned progress row proves the requested start/end was fully processed, re-verifies the endpoint hash through an authoritative finalized-block resolver, and transactionally validates and merges immutable event facts into `wallet_scan.transfer_events`. `wallet_scan.ingestion_runs` is the durable interval checkpoint contract, including for proven-complete zero-event ranges. The bundled scan worker is the explicit boundary that sequences bounded indexing, this merge, staged dbt, cleanup, and manager-owned atomic publication.
+- The shared raw helper never mutates Envio's normal `public` checkpoint state. It accepts only a temporary `wallet_scan_<job>` schema whose Envio-owned progress row proves the requested start/end was fully processed, re-verifies the endpoint hash through an authoritative finalized-block resolver, and transactionally validates and merges immutable event facts into `wallet_scan.transfer_events`. `wallet_scan.ingestion_runs` is the durable interval checkpoint contract, including for proven-complete zero-event ranges. Live dbt reads the normal Envio raw relation, this shared bounded relation, or both according to exact relation availability and rejects a database with neither. The bundled scan worker is the explicit boundary that sequences bounded indexing, this merge, staged dbt, cleanup, and manager-owned atomic publication.
 - DuckDB analytics schemas are derived and reproducible; event identity and exact raw values originate upstream and remain preserved. Orchestration owns `ops.pipeline_runs`, while the isolated `app.token_recognition_overrides` table is mutable local product state; dbt models rewrite neither schema.
 - Enrichment joins onto event facts. It may add sourced interpretation but must not rewrite immutable event evidence.
 - `int_wallet_transfer_events` is the shared, materialized semantic event relation. It keeps the
@@ -102,7 +103,7 @@ Complete local counts live in DuckDB and are returned by the local API with filt
 - No-code-at-block means `eoa_candidate`, not proven EOA/personhood/control.
 - Account-evidence coverage is measured against the current snapshot's distinct nonzero, nonself event counterparties. Classified, failed, and not-checked address and event counts must reconcile to that population; cached rows outside it do not count.
 - Live completeness is a contiguous range of completed snapshot runs from the configured HyperIndex start through an Ethereum `finalized` block; event-bearing block extrema do not establish that range.
-- Scan jobs accept only a normalized Ethereum address or a safely normalized ENS name. ENS resolution uses the pinned mainnet registry dependency at a finalized block; the typed observation is handed to the explicit worker adapter, which owns persistence of the original input, normalized name, resolved address, resolver source, block number/hash, and observation timestamp in the selected wallet's output artifact. Unresolved names never enter indexing.
+- Scan jobs accept only a normalized Ethereum address or a safely normalized ENS name. ENS resolution uses the pinned mainnet registry dependency at a finalized block; the typed observation is handed to the explicit worker adapter, which owns persistence of the original input, normalized name, resolved address, resolver source, block number/hash, and observation timestamp in the selected wallet's output artifact. Unresolved names never enter indexing. `GET /api/v1/scan-jobs/active` exposes the one queued or running process-local job to local clients; durable completion remains represented by Postgres checkpoints and the published DuckDB artifact.
 - `pipeline_metadata` keeps cumulative scan bounds separate from observed event block/time extrema and reconciles its complete event count with the semantic and delivery event relations.
 - Token names, symbols, and wallet-token activity patterns are never scored as reputation or legitimacy evidence; the public token labels are only `Recognized` and `Other`.
 - Bounded outputs disclose their complete matching count, returned count, limits, provenance, and sampling state where applicable.
@@ -143,6 +144,7 @@ This path is deterministic and suitable for CI and GitHub Pages. It is not proof
 
 The loopback-only FastAPI service:
 
+- expose process liveness at `/api/v1/health/live` without implying that a live analytics artifact exists, while `/api/v1/health` remains artifact-aware readiness;
 - own DuckDB connections and limit writes to `app.token_recognition_overrides`;
 - validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, timeline buckets, event pages, and time ranges on demand;
@@ -157,11 +159,35 @@ The loopback-only FastAPI service:
 
 The API opens one short-lived DuckDB connection per request rather than sharing a thread-unsafe global connection. It resolves an omitted wallet from request-time `EVM_WALLET_SCAN_ADDRESS` or the artifact's sole current metadata row; zero or multiple metadata wallets fail clearly and require the selector. It exposes an explicit `dashboard-api-v16` metadata projection instead of forwarding the internal mart with `select *`, then lazily creates the application-owned override table after validating live provenance. The table is keyed by `(chain_id, token_address)` and accepts only `recognized` or `other`; deleting a row restores the automatic registry result. Ranked endpoints return exact calculations ordered over every matching mart row together with `complete_matching_count`, `returned_count`, `limit`, and `is_truncated`. Event pages use an opaque keyset cursor and return `is_paginated`; neither mechanism is sampling. Production mode refuses a fixture-built database. The React API adapter preserves exact totals, requests a stable yearly overview or one selected year's monthly buckets plus bounded token/counterparty rows, applies selected year/month UTC periods through half-open API filters, follows the opaque event cursor, and offers a four-second undo that restores the exact prior override.
 
+## Local container distribution
+
+The supported packaged runtime uses Docker Compose. Postgres is private to the Compose network and
+persists Envio plus shared bounded raw state in a named volume. The application image contains the
+FastAPI process, bounded Envio worker, Python/dbt runtime, and reviewed source revision; its separate
+named volume holds `live.duckdb` and the account-evidence cache. The nginx dashboard image serves an
+API-mode Vite build, proxies `/api` to FastAPI over the private network, and publishes only one
+loopback host port. FastAPI binds all container interfaces only inside that private network while
+native development retains its loopback bind. Envio runs
+in production mode against the external Compose Postgres service with Hasura disabled; the stack
+never mounts the host Docker socket.
+
+`ENVIO_API_TOKEN` and an optional user-supplied `ETHEREUM_RPC_URL` enter at runtime through ignored `.env`
+configuration and are not copied into either image. Container liveness establishes only that the
+process/proxy is reachable. Product readiness still requires a successfully published, finalized
+live artifact. Named volumes survive ordinary stack shutdown; removing them is an explicit
+destructive recovery operation.
+
+Counterparty bytecode enrichment is never an implicit startup step. The packaged explicit command
+requires an explicitly configured RPC, checkpoints shared `(chain_id, address)` evidence, rebuilds every completed
+wallet over its recorded cumulative finalized interval in a staged artifact, and atomically
+publishes only after durable `ops`/`app` state, immutable event facts, and finalized coverage are
+preserved. Failed publication retains both the prior live artifact and reusable evidence-cache
+progress.
+
 ## Known implementation gaps
 
 - The static exporter retains legacy candidate-union machinery that should not expand into the local serving model.
 - The wildcard `Transfer` source does not yet disambiguate ERC-20 from ERC-721-like contracts that emit the identical signature.
-- Docker packaging is an approved direction, but service topology, volumes, health checks, secrets, and startup order are not designed or implemented.
 
 These are explicit gaps, not permissions to fill them opportunistically during unrelated work.
 

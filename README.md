@@ -22,7 +22,7 @@ selected top-level transaction sender/target evidence, exact-address token recog
 pinned-block bytecode observations for counterparties.
 
 It does not include native ETH transfers, traces, internal calls, approvals, NFT-specific
-interpretation, arbitrary wallet lookup, USD prices, or an implemented Docker distribution.
+interpretation, arbitrary wallet lookup, or USD prices.
 Recognition means registry membership or a manual local override—not safety. `EOA` presentation
 means no bytecode was observed at one pinned block—not proof of personhood, control, permanence,
 or account history.
@@ -67,7 +67,9 @@ The local dashboard exposes:
 - `All`, `Recognized`, and `Other` token views plus pinned-block `EOA`/`Contract` evidence.
 - live mode selection among completed wallets without rescanning, plus separate wallet/ENS scan
   submission with honest stage-based activity feedback, last-good dashboard preservation and retry on
-  refresh failure, and automatic switching; fixture mode keeps scanning disabled.
+  refresh failure, and automatic switching; during a first scan the browser shows its finalized block
+  range, named stage, and elapsed time instead of an unavailable-artifact error; fixture mode keeps
+  scanning disabled.
 
 Scan jobs are exposed by the local API and use the bundled bounded worker by default.
 `WALLET_SCAN_COMMAND` remains an optional adapter override. The worker indexes only the wallet's
@@ -85,29 +87,37 @@ for the next current overview image without leaving a broken link in this README
 
 ## Quick start
 
-Requirements: [Bun](https://bun.sh/) and Python 3. Install the reviewed Python dependency ranges
-explicitly; the dbt wrapper's limited bootstrap is only a fallback when dbt is absent.
+Requirements: [Bun](https://bun.sh/) and Docker Desktop. Copy the environment template and add the
+Envio HyperSync token used by live indexing. A user-supplied Ethereum mainnet RPC is optional; when it is
+absent, the stack uses the documented public read-only fallback for ENS and finalized-block checks.
 
 ```sh
-bun install
-python3 -m pip install -r requirements-dev.txt
-bun run analytics:build:fixture
-bun run export:dashboard
-bun run dashboard:dev:fixture
+cp .env.example .env
+# Edit .env and set ENVIO_API_TOKEN.
+bun run app:up -- 0xYOUR_ETHEREUM_ADDRESS
 ```
 
-Open the local URL printed by Vite. This runs only the deterministic fixture path; it does not
-start HyperIndex or produce live-wallet analytics.
+An ENS name is also accepted. The command builds the images locally, starts persistent Postgres and
+analytics volumes, scans only the wallet's missing range through a recorded Ethereum finalized
+block, waits for validated atomic DuckDB publication, and then prints the loopback dashboard URL.
+The first scan begins at block 0 and can take time for a highly active wallet. No live wallet is
+hardcoded and the fixture Vitalik target is never used as a fallback. While it runs, the command
+prints periodic elapsed-time heartbeats and the browser reports the same honest named stages at the
+loopback URL; neither surface invents a percentage from the worker's coarse checkpoints.
 
-For the primary local product, Docker, an Envio token, a read-only HyperIndex Postgres DSN for
-manual builds, and an explicit write-capable wallet-scan DSN are also required. The scan worker
-uses its one DSN for persistence and a read-only dbt attachment to that same database. Ethereum RPC can use the configured public fallback. Follow the
-[live setup and recovery guide](docs/operations.md#local-setup) rather than treating the fixture
-quick start as a production workflow. Set `EVM_WALLET_SCAN_ADDRESS` for both the live build and
-the local API process when selecting a wallet. The live API has no hardcoded wallet fallback: if
-the variable is unset, it derives the wallet from the artifact's sole current metadata row and
-fails clearly if no unique wallet is available. The pinned Vitalik target belongs only to
-fixture/demo configuration.
+```sh
+bun run app:status
+bun run app:logs
+bun run app:down     # preserves Postgres and analytics volumes
+```
+
+Counterparty bytecode evidence remains an explicit, potentially RPC-intensive operation. With a
+non-empty `ETHEREUM_RPC_URL` configured, `bun run app:enrich` checkpoints only missing shared address
+evidence and atomically republishes every completed wallet projection.
+
+The deterministic fixture build remains the GitHub Pages portfolio path; it is not loaded by this
+live stack. Native component development and recovery commands remain documented in the
+[operations guide](docs/operations.md#native-component-development).
 
 ## Repository map
 

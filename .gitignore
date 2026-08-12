@@ -1,6 +1,7 @@
 node_modules/
 .venv/
 dist/
+.runtime/
 __pycache__/
 *.py[cod]
 .env

@@ -149,19 +149,35 @@ def postgres_connection(dsn: str, *, read_only: bool) -> Iterator[Any]:
         yield connection
 
 
-def shared_raw_store_exists(dsn: str) -> bool:
-    """Return whether the optional bounded-scan raw relation exists."""
+def _raw_store_exists(dsn: str, *, schema_name: str, table_name: str) -> bool:
+    """Return whether one exact Postgres raw relation exists."""
 
     with postgres_connection(dsn, read_only=True) as connection:
         row = connection.execute(
             """
             select count(*)
             from shared.information_schema.tables
-            where table_schema = ? and table_name = 'transfer_events'
+            where table_schema = ? and table_name = ?
             """,
-            [SHARED_SCHEMA],
+            [schema_name, table_name],
         ).fetchone()
     return bool(row is not None and row[0])
+
+
+def public_raw_store_exists(dsn: str) -> bool:
+    """Return whether Envio's normal public entity relation exists."""
+
+    return _raw_store_exists(dsn, schema_name="public", table_name="Erc20Transfer")
+
+
+def shared_raw_store_exists(dsn: str) -> bool:
+    """Return whether the optional bounded-scan raw relation exists."""
+
+    return _raw_store_exists(
+        dsn,
+        schema_name=SHARED_SCHEMA,
+        table_name="transfer_events",
+    )
 
 
 def completed_ingestion(dsn: str, interval: RawIngestionInterval) -> int | None:

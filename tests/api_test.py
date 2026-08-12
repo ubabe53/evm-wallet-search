@@ -1,5 +1,6 @@
 import os
 import shutil
+import threading
 import unittest
 from decimal import Decimal
 from pathlib import Path
@@ -34,6 +35,17 @@ class DashboardApiTest(unittest.TestCase):
         with self.service.connect() as connection:
             connection.execute("delete from app.token_recognition_overrides")
 
+    def test_liveness_does_not_require_an_analytics_artifact(self) -> None:
+        with TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.duckdb"
+            client = TestClient(
+                create_app(QueryService(missing), ScanJobManager(live_path=missing))
+            )
+            response = client.get("/api/v1/health/live")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
     def test_scan_job_and_wallet_list_contracts(self) -> None:
         manager = ScanJobManager(
             self.database_path,
@@ -50,6 +62,35 @@ class DashboardApiTest(unittest.TestCase):
         self.assertEqual(payload["wallet_address"], "0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
         self.assertEqual(client.get(f"/api/v1/scan-jobs/{payload['job_id']}").status_code, 200)
         self.assertEqual(client.get("/api/v1/wallets").status_code, 200)
+
+    def test_active_scan_job_contract_is_process_local_and_nullable(self) -> None:
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_worker(job, staging_path, progress) -> None:
+            started.set()
+            release.wait(timeout=2)
+            raise RuntimeError("test worker stopped")
+
+        manager = ScanJobManager(
+            self.database_path,
+            resolver=resolve_wallet,
+            worker=blocking_worker,
+            finalized_head=lambda: 42,
+        )
+        client = TestClient(create_app(self.service, manager))
+
+        self.assertEqual(client.get("/api/v1/scan-jobs/active").json(), {"job": None})
+        response = client.post("/api/v1/scan-jobs", json={"wallet": "vitalik.eth"})
+        self.assertEqual(response.status_code, 202)
+
+        try:
+            self.assertTrue(started.wait(timeout=1))
+            payload = client.get("/api/v1/scan-jobs/active").json()
+            self.assertEqual(payload["job"]["job_id"], response.json()["job_id"])
+            self.assertEqual(payload["job"]["status"], "running")
+        finally:
+            release.set()
 
     def test_scan_job_rejects_invalid_wallet(self) -> None:
         manager = ScanJobManager(self.database_path, resolver=resolve_wallet, finalized_head=lambda: 1)

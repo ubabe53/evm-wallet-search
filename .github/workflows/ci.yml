@@ -63,6 +63,23 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  package-distribution:
+    name: Verify Docker distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Build application images
+        run: docker compose build app web
+
   dependency-audit:
     name: Audit dependencies (advisory)
     runs-on: ubuntu-latest

@@ -142,6 +142,12 @@ def create_app(service: QueryService | None = None, scan_manager: ScanJobManager
     )
     request_filters = DashboardFiltersDependency(query_service)
 
+    @application.get("/api/v1/health/live")
+    def liveness() -> dict:
+        """Report process liveness without claiming that analytics are ready."""
+
+        return {"status": "ok"}
+
     @application.exception_handler(DatabaseUnavailable)
     async def database_unavailable(_request, error: DatabaseUnavailable) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(error)})
@@ -177,6 +183,11 @@ def create_app(service: QueryService | None = None, scan_manager: ScanJobManager
         except RuntimeError as error:
             status = 409 if "already running" in str(error) else 503
             raise HTTPException(status_code=status, detail=str(error)) from error
+
+    @application.get("/api/v1/scan-jobs/active")
+    def active_scan_job() -> dict:
+        job = jobs.active()
+        return {"job": scan_job_payload(job) if job is not None else None}
 
     @application.get("/api/v1/scan-jobs/{job_id}")
     def scan_job(job_id: str) -> dict:

@@ -30,8 +30,10 @@ bun run api:dev
 bun run test:api
 ```
 
-The service binds to `127.0.0.1:8000`, exposes readiness at `/api/v1/health`, and serves OpenAPI
-documentation at `/docs`. Stop it before rebuilding `live.duckdb`, then restart it and reload the
+The native development service binds to `127.0.0.1:8000`. `/api/v1/health/live` reports only that
+the process is reachable and deliberately works before the first artifact exists;
+`/api/v1/health` is readiness backed by validated analytics metadata. OpenAPI documentation is at
+`/docs`. Stop the native API before rebuilding `live.duckdb`, then restart it and reload the
 dashboard after the build completes.
 
 ## Contracts
@@ -52,7 +54,7 @@ reindex history, or expose an HTTP dashboard route.
 
 ### Scan jobs
 
-Live mode also exposes `POST /api/v1/scan-jobs`, `GET /api/v1/scan-jobs/{job_id}`, and `GET /api/v1/wallets`. These are local orchestration endpoints only. The manager enforces one worker, wallet-specific missing-to-finalized bounds, staging of the complete artifact, preservation validation, and atomic artifact replacement. The bundled worker owns bounded Envio collection, shared-Postgres raw merge/checkpointing, and the staged dbt build; `WALLET_SCAN_COMMAND` may explicitly replace that subprocess without changing the manager's publication checks. Fixture mode has no scan controls.
+Live mode also exposes `POST /api/v1/scan-jobs`, `GET /api/v1/scan-jobs/active`, `GET /api/v1/scan-jobs/{job_id}`, and `GET /api/v1/wallets`. These are local orchestration endpoints only. Active-job discovery is process-local and returns the one queued/running job or `null`; durable scan truth remains in Postgres checkpoints and the published DuckDB artifact. The manager enforces one worker, wallet-specific missing-to-finalized bounds, staging of the complete artifact, preservation validation, and atomic artifact replacement. The bundled worker owns bounded Envio collection, shared-Postgres raw merge/checkpointing, and the staged dbt build; `WALLET_SCAN_COMMAND` may explicitly replace that subprocess without changing the manager's publication checks. Fixture mode has no scan controls.
 
 Do not add ingestion, general database writes, fixture serving, public binding, or browser-held
 credentials without an explicit architecture and data-contract decision.

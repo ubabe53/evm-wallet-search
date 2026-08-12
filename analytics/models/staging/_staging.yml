@@ -8,7 +8,7 @@ models:
       materialization: view
       grain: one captured Transfer-signature log
       primary_key: [chain_id, transaction_hash, log_index]
-      provenance: HyperIndex Erc20Transfer in live mode; raw_transfer_events_fixture in fixture mode
+      provenance: available durable Postgres raw transfer relations in live mode; raw_transfer_events_fixture in fixture mode
       consumers: [int_wallet_transfer_events]
     columns:
       - name: chain_id

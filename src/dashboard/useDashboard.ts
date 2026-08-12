@@ -16,6 +16,7 @@ import {
   dashboardDataMode,
   createScanJob,
   loadApiDashboardData,
+  loadActiveScanJob,
   loadDashboardData,
   loadNextApiEvents,
   loadScanJob,
@@ -66,6 +67,9 @@ export function useDashboard() {
   const [scanJob, setScanJob] = useState<ScanJob | null>(null);
   const [scanSubmitting, setScanSubmitting] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [activeScanDiscoveryComplete, setActiveScanDiscoveryComplete] = useState(
+    dashboardDataMode !== "api",
+  );
   const [wallets, setWallets] = useState<WalletListItem[]>([]);
   const [walletListRevision, setWalletListRevision] = useState(0);
   const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
@@ -100,6 +104,19 @@ export function useDashboard() {
     loadWallets(controller.signal).then((result) => setWallets(result.items)).catch(() => undefined);
     return () => controller.abort();
   }, [walletListRevision]);
+
+  useEffect(() => {
+    if (dashboardDataMode !== "api") return;
+    const controller = new AbortController();
+    loadActiveScanJob(controller.signal).then(({ job }) => {
+      if (job) setScanJob(job);
+    }).catch((loadError: unknown) => {
+      if (!(loadError instanceof Error && loadError.name === "AbortError")) {
+        setScanError(loadError instanceof Error ? loadError.message : "Could not discover active scan");
+      }
+    }).finally(() => setActiveScanDiscoveryComplete(true));
+    return () => controller.abort();
+  }, []);
 
   const activeScanJobId = scanJob && (scanJob.status === "queued" || scanJob.status === "running")
     ? scanJob.job_id
@@ -178,7 +195,7 @@ export function useDashboard() {
   }, [dashboardQueryKey]);
 
   useEffect(() => {
-    if (dashboardDataMode !== "api") {
+    if (dashboardDataMode !== "api" || !activeScanDiscoveryComplete) {
       return;
     }
     const controller = new AbortController();
@@ -209,12 +226,14 @@ export function useDashboard() {
       const message = loadError instanceof Error ? loadError.message : "Could not load live dashboard data";
       if (hasLoadedApiDataRef.current) {
         setRefreshError(message);
+      } else if (activeScanJobId) {
+        setError(null);
       } else {
         setError(message);
       }
     });
     return () => controller.abort();
-  }, [dashboardQuery, dashboardQueryKey, dataRevision]);
+  }, [activeScanDiscoveryComplete, activeScanJobId, dashboardQuery, dashboardQueryKey, dataRevision]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -529,6 +548,7 @@ export function useDashboard() {
 
   return {
     apiResult,
+    activeScanDiscoveryComplete,
     apiResultIsCurrent,
     availableTimelineYears,
     changeTimelineYear,
