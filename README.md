@@ -18,10 +18,10 @@ the same signature, and the wildcard indexer does not yet disambiguate it from E
 | Path | What it is | Data boundary |
 | --- | --- | --- |
 | **Packaged local live product** | The primary application, run with Docker Compose on one loopback origin. It accepts a normalized address or conservatively validated ASCII ENS name and retains every successfully published wallet. | Exact calculations over complete local rows inside each wallet's recorded contiguous range through an Ethereum `finalized` block; rankings and event pages disclose their limits. It is not a publicly hosted scanner. |
-| **Fixture-backed portfolio demo** | A static React build for GitHub Pages or another static host. It demonstrates the interface without a database, RPC credentials, or scan controls. | Small, bounded JSON generated from checked-in fixture rows. It does not establish live HyperIndex coverage or complete wallet history. |
+| **Snapshot-backed portfolio demo** | A static React build for GitHub Pages or another static host. It demonstrates the interface without a database, RPC credentials, or scan controls. | Bounded JSON generated from a checked-in, unsampled finalized HyperIndex snapshot of the public Gitcoin Schelling Point multisig, with pinned token and account evidence. It is historical, not live. |
 
-These paths are selected at build time and cannot be mixed at runtime. The fixed synthetic fixture
-address and `Example wallet` label are demo configuration only; they are never a live API fallback
+These paths are selected at build time and cannot be mixed at runtime. The checked-in Gitcoin
+address and label identify only the historical static snapshot; they are never a live API fallback
 or evidence of live ENS resolution.
 
 ## Dashboard preview
@@ -48,7 +48,7 @@ An ENS name is also accepted. The `app:up` command builds the images, starts per
 and analytics volumes, scans only the wallet's missing range through a recorded finalized block,
 waits for validated atomic DuckDB publication, and prints the loopback dashboard URL. A first scan
 begins at block 0 and can take time for a highly active wallet. No live target is hardcoded, and the
-synthetic fixture target is never used as a fallback.
+static demo target is never used as a fallback.
 
 While a scan runs, the command and browser report elapsed time and the same honest named stages;
 neither invents a percentage from the worker's coarse checkpoints.
@@ -80,11 +80,12 @@ commands are in the [operations guide](docs/operations.md#native-component-devel
   submission with stage-based progress, last-good dashboard preservation, retry, and automatic
   switching after validated publication.
 
-Fixture mode keeps scan and recognition-write controls disabled. Its persistent disclosure marks
-the 100 rows as synthetic examples rather than live wallet history or HyperIndex completeness
-evidence, shows exported-versus-complete event counts and sampling state, and labels the primary
-total `Captured events`. Its fixture badge, bounded payload, and unrecorded scan coverage are part
-of the contract, not caveats to hide.
+Snapshot mode keeps scan and recognition-write controls disabled. Its persistent disclosure marks
+the data as a historical Ethereum mainnet snapshot rather than a live wallet view, links the
+official Gitcoin attribution, shows exported-versus-complete event counts and sampling state, and
+labels the primary total `Captured events`. The current snapshot contains all 90 captured
+Transfer-signature rows from its recorded block 0–25,739,543 scan; that coverage does not make the
+static site current after its pinned finalized endpoint.
 
 ## Scope and limitations
 
@@ -112,7 +113,7 @@ flowchart LR
     live --> api["Loopback FastAPI<br/>server/"]
     api --> dashboard["React dashboard<br/>src/"]
 
-    fixtures["Checked-in fixtures"] --> fixturedb["fixture.duckdb"]
+    fixtures["Checked-in demo snapshot"] --> fixturedb["fixture.duckdb"]
     fixturedb --> export["Bounded JSON exporter"]
     export --> static["Static fixture demo"]
 ```
@@ -150,5 +151,5 @@ publication contract, and known gaps.
 | [dbt source contracts](analytics/models/) | Model descriptions, tests, provenance, consumers, and exposures |
 
 Run `bun run static:check` for mandatory static analysis and `bun run test` for the deterministic
-cross-layer suite. Fixture validation proves the fixture/demo contract; it does not prove live
-HyperIndex behavior.
+cross-layer suite. The suite separately validates synthetic semantic cases and the checked-in
+historical demo contract; neither substitutes for testing a fresh live scan.

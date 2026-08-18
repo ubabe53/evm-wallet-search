@@ -39,7 +39,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
     const analysisContext = screen.getByRole("region", { name: "Analysis context" });
     expect(analysisContext).toHaveTextContent(
-      "Analyzing0xeee...eeeExample walletEthereum mainnetExample wallet",
+      "Analyzing0xeee...eeeExample walletEthereum mainnetHistorical snapshot",
     );
     expect(screen.getByRole("link", { name: "0xeee...eee" })).toHaveAttribute(
       "href",
@@ -111,14 +111,18 @@ describe("App", () => {
     expect(screen.getByRole("columnheader", { name: "Inbound / Outbound Events" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
-    expect(screen.getByText("Fixture data")).toBeInTheDocument();
-    expect(screen.getByText("Coverage not recorded")).toBeInTheDocument();
+    expect(screen.getAllByText("Historical snapshot")).toHaveLength(2);
+    expect(screen.getByText("Blocks 0–25,739,543 · Finalized")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
-      .toHaveTextContent("Synthetic fixture demo");
+      .toHaveTextContent("Historical Ethereum mainnet snapshot");
     expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
-      .toHaveTextContent("not live wallet history or evidence of HyperIndex completeness");
+      .toHaveTextContent("This checked-in snapshot is not live data");
     expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
-      .toHaveTextContent("100 / 100fixture events exported · not sampled");
+      .toHaveTextContent("100 / 100captured events exported · not sampled · 0 / 2 counterparties classified");
+    expect(screen.getByRole("link", { name: "Attribution source" })).toHaveAttribute(
+      "href",
+      "https://manual.gitcoin.co/introduction-and-overview/dao-finances",
+    );
     expect(screen.getByText("Captured events", { selector: ".stat span" })).toBeInTheDocument();
     expect(screen.getByText(/Generated Nov 14, 2023(?:,| at) 10:17 PM UTC/)).toBeInTheDocument();
     expect(screen.getByText("Activity Timeline")).toBeInTheDocument();

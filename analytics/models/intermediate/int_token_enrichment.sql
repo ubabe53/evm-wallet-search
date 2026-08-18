@@ -32,7 +32,11 @@ rpc_metadata as (
     nullif(trim(name), '') as name,
     try_cast(decimals as integer) as decimals
   {% if var('use_fixture', true) %}
+  {% if var('fixture_dataset', 'demo') == 'synthetic' %}
   from {{ ref('token_rpc_metadata_fixture') }}
+  {% else %}
+  from {{ ref('token_rpc_metadata_demo') }}
+  {% endif %}
   {% else %}
   from {{ ref('token_rpc_metadata') }}
   {% endif %}

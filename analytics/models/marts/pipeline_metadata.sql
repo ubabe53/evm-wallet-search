@@ -1,4 +1,23 @@
 with
+{% if var('use_fixture', true) and var('fixture_dataset', 'demo') != 'synthetic' %}
+demo_snapshot as (
+  select
+    cast(chain_id as integer) as chain_id,
+    lower(wallet_address) as wallet_address,
+    snapshot_run_id,
+    snapshot_generation_id,
+    cast(snapshot_start_block as bigint) as snapshot_start_block,
+    cast(snapshot_end_block as bigint) as snapshot_end_block,
+    lower(snapshot_end_block_hash) as snapshot_end_block_hash,
+    snapshot_finality_policy,
+    snapshot_scope_version,
+    cast(snapshot_generated_at as timestamptz) as snapshot_generated_at,
+    snapshot_source,
+    snapshot_schema_version,
+    wallet_attribution_source_url
+  from {{ ref('demo_snapshot') }}
+),
+{% endif %}
 {% if var('use_fixture', true) %}
 wallets as (
   select chain_id, ens, wallet_address
@@ -94,8 +113,13 @@ select
   wallets.wallet_address,
   wallets.chain_id,
   {% if var('use_fixture', true) %}'fixture'{% else %}'hyperindex'{% endif %} as data_source,
+  {% if var('use_fixture', true) and var('fixture_dataset', 'demo') != 'synthetic' %}
+  demo_snapshot.snapshot_generated_at as generated_at,
+  {% else %}
   current_timestamp as generated_at,
+  {% endif %}
   {% if var('use_fixture', true) %}
+  {% if var('fixture_dataset', 'demo') == 'synthetic' %}
   cast(null as varchar) as snapshot_run_id,
   cast(null as varchar) as snapshot_generation_id,
   cast(null as bigint) as snapshot_start_block,
@@ -103,6 +127,21 @@ select
   cast(null as varchar) as snapshot_end_block_hash,
   cast(null as varchar) as snapshot_finality_policy,
   cast(null as varchar) as snapshot_scope_version,
+  cast(null as varchar) as snapshot_source,
+  cast(null as varchar) as snapshot_schema_version,
+  cast(null as varchar) as wallet_attribution_source_url,
+  {% else %}
+  demo_snapshot.snapshot_run_id,
+  demo_snapshot.snapshot_generation_id,
+  demo_snapshot.snapshot_start_block,
+  demo_snapshot.snapshot_end_block,
+  demo_snapshot.snapshot_end_block_hash,
+  demo_snapshot.snapshot_finality_policy,
+  demo_snapshot.snapshot_scope_version,
+  demo_snapshot.snapshot_source,
+  demo_snapshot.snapshot_schema_version,
+  demo_snapshot.wallet_attribution_source_url,
+  {% endif %}
   {% else %}
   snapshot_runs.run_id as snapshot_run_id,
   snapshot_runs.generation_id as snapshot_generation_id,
@@ -111,6 +150,9 @@ select
   snapshot_runs.to_block_hash as snapshot_end_block_hash,
   '{{ env_var("EVM_WALLET_SNAPSHOT_FINALITY_POLICY") }}' as snapshot_finality_policy,
   '{{ env_var("EVM_WALLET_SNAPSHOT_SCOPE_VERSION") }}' as snapshot_scope_version,
+  'envio_hyperindex' as snapshot_source,
+  cast(null as varchar) as snapshot_schema_version,
+  cast(null as varchar) as wallet_attribution_source_url,
   {% endif %}
   coalesce(events.transfer_count, 0) as transfer_count,
   events.event_block_number_min,
@@ -134,6 +176,9 @@ select
 from wallets
 left join event_metrics as events using (chain_id, wallet_address)
 left join account_evidence_metrics as evidence using (chain_id, wallet_address)
+{% if var('use_fixture', true) and var('fixture_dataset', 'demo') != 'synthetic' %}
+join demo_snapshot using (chain_id, wallet_address)
+{% endif %}
 {% if not var('use_fixture', true) %}
 join snapshot_runs using (chain_id, wallet_address)
 {% endif %}

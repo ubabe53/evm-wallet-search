@@ -371,13 +371,13 @@ export function App() {
           <div className="subjectMeta">
             <span>Ethereum mainnet</span>
             <span className={`sourceBadge ${data.metadata.data_source}`}>
-              {data.metadata.data_source === "fixture" ? "Example wallet" : "Configured wallet"}
+              {data.metadata.data_source === "fixture" ? "Historical snapshot" : "Configured wallet"}
             </span>
           </div>
         </div>
         <div className={`selectionContext ${data.metadata.data_source}`}>
           <strong>Current selection</strong>
-          <span>{data.metadata.data_source === "fixture" ? "Fixture data" : "HyperIndex data"}</span>
+          <span>{data.metadata.data_source === "fixture" ? "Historical snapshot" : "HyperIndex data"}</span>
           <span>{snapshotCoverageLabel(data.metadata)}</span>
           <span>Generated {generatedAtLabel(data.metadata.generated_at)}</span>
           <span title={accountEvidenceCoverageDescription(data.metadata)}>
@@ -392,11 +392,16 @@ export function App() {
       {fixtureMetadata && (
         <aside className="fixtureDisclosure" aria-label="Fixture demo disclosure">
           <div>
-            <strong>Synthetic fixture demo</strong>
+            <strong>Historical Ethereum mainnet snapshot</strong>
             <span>
-              Deterministic example events for a synthetic configured address—not live wallet
-              history or evidence of HyperIndex completeness. Transfer-signature rows do not
-              prove token standard, intent, or economic ownership.
+              Real captured events for the publicly attributed Gitcoin Schelling Point multisig,
+              complete from block 0 through the recorded finalized endpoint. This checked-in
+              snapshot is not live data. Transfer-signature rows do not prove token standard,
+              intent, or economic ownership. {fixtureMetadata.wallet_attribution_source_url && (
+                <a href={fixtureMetadata.wallet_attribution_source_url} target="_blank" rel="noreferrer">
+                  Attribution source
+                </a>
+              )}
             </span>
           </div>
           <div className="fixtureExportBoundary">
@@ -406,8 +411,10 @@ export function App() {
               {fixtureMetadata.complete_event_count.toLocaleString("en-US")}
             </strong>
             <span>
-              fixture events exported · {fixtureMetadata.is_sampled ? "bounded subset" : "not sampled"}
-              {" · account-type evidence intentionally absent"}
+              captured events exported · {fixtureMetadata.is_sampled ? "bounded subset" : "not sampled"}
+              {" · "}{fixtureMetadata.account_evidence_classified_address_count.toLocaleString("en-US")}
+              {" / "}{fixtureMetadata.account_evidence_eligible_address_count.toLocaleString("en-US")}
+              {" counterparties classified"}
             </span>
           </div>
         </aside>

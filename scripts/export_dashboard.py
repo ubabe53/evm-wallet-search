@@ -49,6 +49,9 @@ REQUIRED_EXPORT_COLUMNS = {
         "snapshot_end_block_hash",
         "snapshot_finality_policy",
         "snapshot_scope_version",
+        "snapshot_source",
+        "snapshot_schema_version",
+        "wallet_attribution_source_url",
         "transfer_count",
         "event_block_number_min",
         "event_block_number_max",
@@ -553,6 +556,9 @@ def main() -> None:
                 snapshot_end_block_hash,
                 snapshot_finality_policy,
                 snapshot_scope_version,
+                snapshot_source,
+                snapshot_schema_version,
+                wallet_attribution_source_url,
                 transfer_count,
                 event_block_number_min,
                 event_block_number_max,
@@ -581,6 +587,8 @@ def main() -> None:
             raise RuntimeError(f"Expected one configured wallet, found {len(metadata)}")
         if metadata[0]["data_source"] != "fixture":
             raise RuntimeError("Static dashboard export requires fixture provenance")
+        if metadata[0]["snapshot_schema_version"] != "mainnet-demo-snapshot-v1":
+            raise RuntimeError("Static dashboard export requires the finalized mainnet demo snapshot")
 
         complete_export_counts = query_rows(
             connection,
@@ -628,9 +636,9 @@ def main() -> None:
             **metadata[0],
             **complete_export_counts,
             "export_schema_version": EXPORT_SCHEMA_VERSION,
-            "completeness_scope": "duckdb_snapshot",
-            "indexer_checkpoint_recorded": False,
-            "finality_status": "not_recorded",
+            "completeness_scope": "finalized_block_range",
+            "indexer_checkpoint_recorded": True,
+            "finality_status": "finalized",
             "recognition_counts": recognition_counts,
             "recognition_account_counts": composed_filter_counts,
             "exported_event_count": len(events),
