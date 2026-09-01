@@ -40,7 +40,7 @@ dashboard after the build completes.
 
 - [Local API data contract](../docs/data-model.md#local-api-contract)
 - [Application behavior and filter semantics](../docs/architecture.md#local-application-contract)
-- [Runtime and recovery procedure](../docs/operations.md#local-setup)
+- [Runtime and recovery procedure](../docs/operations.md#packaged-live-setup)
 - [System delivery boundary](../ARCHITECTURE.md#local-api-boundary)
 
 ## Scan input boundary
