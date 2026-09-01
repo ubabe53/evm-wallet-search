@@ -42,7 +42,7 @@ bun run test
 - `test:api` runs the isolated FastAPI contract suite.
 - `test:labels` runs the Python `test_*.py` suites, including enrichment, export, snapshot,
   documentation, and launcher tests.
-- `test:analytics` tests the already built fixture artifact; run
+- `test:analytics` tests the already-built fixture artifact; run
   `bun run analytics:build:fixture` first when invoking it separately.
 - `test` builds and documents the fixture artifact, runs the Python and JavaScript suites,
   exports fixture JSON, and runs dbt tests.
