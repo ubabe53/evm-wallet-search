@@ -45,7 +45,7 @@ bun run analytics:docs:serve
 bun run test:analytics
 ```
 
-`test:analytics` tests the already materialized fixture artifact; build the intended dataset first.
+`test:analytics` tests the already-materialized fixture artifact; build the intended dataset first.
 Both fixture builds are deterministic and offline. The default uses the reviewed historical demo;
 `analytics:build:test-fixture` selects synthetic edge cases. The live build requires HyperIndex progress, a Postgres DSN,
 and Ethereum finality evidence, and records attempted intervals in `ops.pipeline_runs`.
