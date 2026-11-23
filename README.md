@@ -74,8 +74,9 @@ commands are in the [operations guide](docs/operations.md#native-component-devel
 - provenance that separates finalized scan coverage from observed event extrema;
 - `All`, `Recognized`, and `Other` token views, where recognition means exact-address registry
   membership or a manual local override—not safety;
-- pinned-block `EOA`/`Contract` evidence, where `EOA` means only that no bytecode was observed at
-  that block; and
+- pinned-block address evidence, where `EOA` covers addresses with no code or an EIP-7702
+  delegation indicator and `Contract` covers addresses with other code. These labels describe
+  what was observed at that block.
 - selection among completed local wallets without rescanning, plus separate address/ENS scan
   submission with stage-based progress, last-good dashboard preservation, retry, and automatic
   switching after validated publication.

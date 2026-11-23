@@ -277,9 +277,8 @@ export function App() {
               </div>
             </details>
             <InfoTooltip label="How address type works" title="Address type">
-              EOA means no contract bytecode was observed at the pinned block; Contract means bytecode
-              was observed. This is a point-in-time classification, not proof of ownership, personhood,
-              or permanent account type. Unclassified addresses appear when both options are selected.
+              At the pinned block, EOA covers addresses with no code or EIP-7702 delegation.
+              Contract covers addresses with other code.
             </InfoTooltip>
           </div>
           <label className="searchbox">
