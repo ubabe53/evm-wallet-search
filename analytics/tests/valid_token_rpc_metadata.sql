@@ -2,6 +2,8 @@ with metadata as (
   select * from {{ ref('token_rpc_metadata') }}
   union all
   select * from {{ ref('token_rpc_metadata_fixture') }}
+  union all
+  select * from {{ ref('token_rpc_metadata_demo') }}
 ),
 
 invalid_rows as (

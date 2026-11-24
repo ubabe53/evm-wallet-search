@@ -3,6 +3,9 @@
 -- depends_on: {{ ref('int_wallet_transfer_events') }}
 -- depends_on: {{ ref('pipeline_metadata') }}
 -- depends_on: {{ ref('raw_transfer_events_fixture') }}
+-- depends_on: {{ ref('raw_transfer_events_demo') }}
+-- depends_on: {{ ref('account_evidence_demo') }}
+-- depends_on: {{ ref('demo_snapshot') }}
 -- depends_on: {{ ref('stg_account_evidence') }}
 -- depends_on: {{ ref('stg_transfer_events') }}
 -- depends_on: {{ ref('stg_wallets') }}
@@ -11,17 +14,22 @@
 -- depends_on: {{ ref('token_metadata') }}
 -- depends_on: {{ ref('token_rpc_metadata') }}
 -- depends_on: {{ ref('token_rpc_metadata_fixture') }}
+-- depends_on: {{ ref('token_rpc_metadata_demo') }}
 -- depends_on: {{ ref('token_summary') }}
 -- depends_on: {{ ref('wallet_events') }}
 -- depends_on: {{ ref('wallets') }}
+-- depends_on: {{ ref('wallets_demo') }}
 
 with expected(table_name, table_type) as (
   values
     ('counterparty_summary', 'BASE TABLE'),
+    ('account_evidence_demo', 'BASE TABLE'),
+    ('demo_snapshot', 'BASE TABLE'),
     ('int_token_enrichment', 'VIEW'),
     ('int_wallet_transfer_events', 'BASE TABLE'),
     ('pipeline_metadata', 'BASE TABLE'),
     ('raw_transfer_events_fixture', 'BASE TABLE'),
+    ('raw_transfer_events_demo', 'BASE TABLE'),
     ('stg_account_evidence', 'VIEW'),
     ('stg_transfer_events', 'VIEW'),
     ('stg_wallets', 'VIEW'),
@@ -30,9 +38,11 @@ with expected(table_name, table_type) as (
     ('token_metadata', 'BASE TABLE'),
     ('token_rpc_metadata', 'BASE TABLE'),
     ('token_rpc_metadata_fixture', 'BASE TABLE'),
+    ('token_rpc_metadata_demo', 'BASE TABLE'),
     ('token_summary', 'BASE TABLE'),
     ('wallet_events', 'BASE TABLE'),
-    ('wallets', 'BASE TABLE')
+    ('wallets', 'BASE TABLE'),
+    ('wallets_demo', 'BASE TABLE')
 ),
 
 actual as (

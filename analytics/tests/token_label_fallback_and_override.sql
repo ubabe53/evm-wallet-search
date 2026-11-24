@@ -1,3 +1,5 @@
+{{ config(enabled=not var('use_fixture', true) or var('fixture_dataset', 'demo') == 'synthetic') }}
+
 select chain_id, transaction_hash, log_index
 from {{ ref('int_wallet_transfer_events') }}
 where
