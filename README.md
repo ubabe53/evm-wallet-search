@@ -68,14 +68,16 @@ commands are in the [operations guide](docs/operations.md#native-component-devel
 
 ## What the dashboard shows
 
-- exact selection totals alongside bounded rankings and cursor-paginated events;
+- exact selection totals alongside bounded rankings and cursor-paginated events. Mint and burn
+  events count toward activity, and the counterparty total excludes the zero address;
 - yearly and monthly captured-event timelines with explicit inbound, outbound, and self directions;
 - token and counterparty rankings by captured event count, never cross-token quantity or value;
 - provenance that separates finalized scan coverage from observed event extrema;
 - `All`, `Recognized`, and `Other` token views, where recognition means exact-address registry
   membership or a manual local override—not safety;
-- pinned-block `EOA`/`Contract` evidence, where `EOA` means only that no bytecode was observed at
-  that block; and
+- pinned-block address evidence, where `EOA` covers addresses with no code or an EIP-7702
+  delegation indicator and `Contract` covers addresses with other code. These labels describe
+  what was observed at that block.
 - selection among completed local wallets without rescanning, plus separate address/ENS scan
   submission with stage-based progress, last-good dashboard preservation, retry, and automatic
   switching after validated publication.
@@ -85,7 +87,8 @@ the data as a historical Ethereum mainnet snapshot rather than a live wallet vie
 official Gitcoin attribution, shows exported-versus-complete event counts and sampling state, and
 labels the primary total `Captured events`. The current snapshot contains all 90 captured
 Transfer-signature rows from its recorded block 0–25,739,543 scan; that coverage does not make the
-static site current after its pinned finalized endpoint.
+static site current after its pinned finalized endpoint. Text search in the demo uses matching
+exported events for the totals, timeline, rankings, and event list.
 
 ## Scope and limitations
 

@@ -277,9 +277,8 @@ export function App() {
               </div>
             </details>
             <InfoTooltip label="How address type works" title="Address type">
-              EOA means no contract bytecode was observed at the pinned block; Contract means bytecode
-              was observed. This is a point-in-time classification, not proof of ownership, personhood,
-              or permanent account type. Unclassified addresses appear when both options are selected.
+              At the pinned block, EOA covers addresses with no code or EIP-7702 delegation.
+              Contract covers addresses with other code.
             </InfoTooltip>
           </div>
           <label className="searchbox">
@@ -416,6 +415,13 @@ export function App() {
               {" / "}{fixtureMetadata.account_evidence_eligible_address_count.toLocaleString("en-US")}
               {" counterparties classified"}
             </span>
+            {query.trim() && fixtureMetadata.exported_event_count < fixtureMetadata.complete_event_count && (
+              <span>
+                Search results cover exported events.
+                {fixtureMetadata.token_contract_counterparties === undefined &&
+                  " Counterparty results use saved ranking candidates."}
+              </span>
+            )}
           </div>
         </aside>
       )}

@@ -146,7 +146,7 @@ The loopback-only FastAPI service:
 
 - expose process liveness at `/api/v1/health/live` without implying that a live analytics artifact exists, while `/api/v1/health` remains artifact-aware readiness;
 - own DuckDB connections and limit writes to `app.token_recognition_overrides`;
-- validates typed query parameters and exposes bounded, paginated queries under `/api/v1`;
+- validate typed query parameters and expose bounded, paginated queries under `/api/v1`;
 - compute filters, counts, rankings, timeline buckets, event pages, and time ranges on demand;
 - return source, generation time, cumulative indexed bounds, observed event block/time extrema, population-reconciled account-evidence coverage, complete matching counts, and returned limits;
 - expose only the event identity, display, classification, and count fields consumed by the dashboard while retaining exact raw values, token decimals, and detailed provenance in the complete DuckDB intermediate relation;

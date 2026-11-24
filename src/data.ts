@@ -135,6 +135,7 @@ export type PipelineMetadata = ArtifactMetadata & {
     counterparty_count: number;
   }>;
   exported_event_count: number;
+  token_contract_counterparties?: string[];
   exported_token_summary_count: number;
   exported_counterparty_summary_count: number;
   exported_timeline_row_count: number;
