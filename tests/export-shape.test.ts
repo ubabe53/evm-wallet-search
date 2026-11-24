@@ -42,6 +42,12 @@ describe("dashboard export shape", () => {
     expect(metadata.complete_event_count).toBe(metadata.transfer_count);
     expect(metadata.exported_event_count).toBe(metadata.complete_event_count);
     expect(events).toHaveLength(90);
+    const tokenAddresses = new Set(events.map((event: { token_address: string }) => event.token_address));
+    const tokenCounterparties = new Set(events
+      .map((event: { counterparty_address: string }) => event.counterparty_address)
+      .filter((address: string) => tokenAddresses.has(address)));
+    expect(tokenCounterparties.size).toBeGreaterThan(0);
+    expect(metadata.token_contract_counterparties).toEqual([...tokenCounterparties].sort());
     expect(metadata.event_block_number_min).toBe(15_616_484);
     expect(metadata.event_block_number_max).toBe(20_442_331);
     expect(Math.max(...events.map((event: { block_timestamp: string }) =>

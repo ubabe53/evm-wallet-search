@@ -10,7 +10,6 @@ import {
   type RecognitionStatus,
   type TimelineBucket,
   type TimelineInterval,
-  type WalletEvent,
   type ScanJob,
   type WalletListItem,
   dashboardDataMode,
@@ -37,6 +36,7 @@ import {
   utcDate,
   type DisplayedTokenSummary,
 } from "./model";
+import { searchStaticEvents } from "./staticSearch";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -271,6 +271,11 @@ export function useDashboard() {
     const visibleEvents = data.events.filter((event) =>
       recognitionVisible(event.recognition_status) &&
       accountVisible(event.counterparty_account_type));
+    const normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery) {
+      return { ...data, ...searchStaticEvents(data, visibleEvents, normalizedQuery) };
+    }
+
     const visibleTokens = data.summaries.tokens.filter((row) =>
       recognitionVisible(row.recognition_status) &&
       accountVisible(row.counterparty_account_type ?? "unknown"));
@@ -280,66 +285,11 @@ export function useDashboard() {
     const visibleTimeline = data.timeline.filter((row) =>
       recognitionVisible(row.recognition_status) &&
       accountVisible(row.counterparty_account_type));
-    const visibleData = {
+    return {
       ...data,
       events: visibleEvents,
       summaries: { tokens: aggregateTokenSummaries(visibleTokens), counterparties: visibleCounterparties },
       timeline: aggregateTimelineRows(visibleTimeline),
-    };
-
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return visibleData;
-    }
-
-    const eventMatches = (event: WalletEvent) =>
-      [
-        event.transaction_hash,
-        event.wallet_address,
-        event.counterparty_address,
-        event.token_address,
-        event.token_symbol,
-        event.token_name,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-
-    const tokenMatches = (row: DisplayedTokenSummary) =>
-      [row.token_symbol, row.token_name, row.token_address]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-
-    const events = visibleData.events.filter(eventMatches);
-    const directlyMatchedTokens = visibleData.summaries.tokens.filter(tokenMatches);
-    const directlyMatchedCounterparties = visibleData.summaries.counterparties.filter((row) =>
-      row.counterparty_address.toLowerCase().includes(normalizedQuery),
-    );
-
-    const tokenAddresses = new Set([
-      ...events.map((event) => event.token_address),
-      ...directlyMatchedTokens.map((row) => row.token_address),
-    ]);
-    const counterpartyAddresses = new Set([
-      ...events.map((event) => event.counterparty_address),
-      ...directlyMatchedCounterparties.map((row) => row.counterparty_address),
-    ]);
-    const tokens = visibleData.summaries.tokens.filter(
-      (row) => tokenAddresses.has(row.token_address) || tokenMatches(row),
-    );
-    const counterparties = visibleData.summaries.counterparties.filter(
-      (row) => counterpartyAddresses.has(row.counterparty_address),
-    );
-
-    return {
-      ...visibleData,
-      events,
-      summaries: { tokens, counterparties },
-      timeline: visibleData.timeline.filter(
-        (row) =>
-          tokenAddresses.has(row.token_address) ||
-          [row.block_date, row.direction, row.token_address, row.token_symbol]
-            .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
-      ),
     };
   }, [data, query, recognitionFilter, selectedAccountFilters]);
 
