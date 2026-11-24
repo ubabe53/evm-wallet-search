@@ -415,6 +415,13 @@ export function App() {
               {" / "}{fixtureMetadata.account_evidence_eligible_address_count.toLocaleString("en-US")}
               {" counterparties classified"}
             </span>
+            {query.trim() && fixtureMetadata.exported_event_count < fixtureMetadata.complete_event_count && (
+              <span>
+                Search results cover exported events.
+                {fixtureMetadata.token_contract_counterparties === undefined &&
+                  " Counterparty results use saved ranking candidates."}
+              </span>
+            )}
           </div>
         </aside>
       )}

@@ -190,7 +190,16 @@ describe("App", () => {
     expect(recognizedStatus).toHaveTextContent(/^Recognized$/);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0xaaa" } });
-    expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" }).length).toBeGreaterThan(0);
+    const selection = screen.getByRole("region", { name: "Current selection summary" });
+    expect(selection).toHaveTextContent("Captured events1");
+    expect(screen.getByRole("button", {
+      name: /2023 UTC: 1 captured events \(1 inbound, 0 outbound, 0 self\)/,
+    })).toBeInTheDocument();
+    expect(tokenActivity.getByTitle("1 captured Transfer-signature events")).toBeInTheDocument();
+    expect(tokenActivity.getByText("Indirect 1 in · 0 out")).toBeInTheDocument();
+    const counterpartyPanel = within(counterpartyHeading.closest(".panel") as HTMLElement);
+    expect(counterpartyPanel.getByTitle("1 inbound, 0 outbound Transfer events")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" })).toHaveLength(1);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0x1111" } });
     expect(screen.getAllByText("0x1111...1111").length).toBeGreaterThan(0);
@@ -200,6 +209,53 @@ describe("App", () => {
 
     fireEvent.click(screen.getByLabelText("Switch to light theme"));
     expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  it.each([true, false])("scopes bounded search with emitter metadata set to %s", async (hasEmitterMetadata) => {
+    const event = dashboardEvents[0];
+    const ordinaryTransfer = {
+      ...dashboardEvents[dashboardEvents.length - 1],
+      block_number: event.block_number,
+      block_timestamp: event.block_timestamp,
+      transaction_hash: event.transaction_hash,
+      transaction_index: event.transaction_index,
+      log_index: event.log_index + 1,
+      transfer_id: `${event.chain_id}-${event.transaction_hash}-${event.log_index + 1}`,
+    };
+    const payloads: Record<string, unknown> = {
+      "summaries.json": { ...summaries, counterparties: [] },
+      "timeline.json": [],
+      "meta.json": {
+        ...metadata,
+        exported_event_count: 2,
+        is_sampled: true,
+        token_contract_counterparties: hasEmitterMetadata ? [event.counterparty_address] : undefined,
+      },
+      "events.json": [event, ordinaryTransfer],
+    };
+    vi.stubGlobal("fetch", vi.fn((path: string) => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(payloads[path.split("/").pop() ?? ""]),
+    })));
+
+    render(<App />);
+
+    const search = await screen.findByLabelText("Filter dashboard");
+    fireEvent.change(search, { target: { value: event.transaction_hash } });
+
+    expect(screen.getByText(/^Search results cover exported events/)).toBeInTheDocument();
+    const rankingDisclosure = screen.queryByText(/Counterparty results use saved ranking candidates/);
+    const ranking = within(screen.getByText("Top Counterparties").closest(".panel") as HTMLElement);
+    expect(ranking.queryByRole("link", { name: "0x111...111" })).not.toBeInTheDocument();
+    if (hasEmitterMetadata) {
+      expect(rankingDisclosure).not.toBeInTheDocument();
+      expect(ranking.getByRole("link", { name: "0x222...222" })).toBeInTheDocument();
+    } else {
+      expect(rankingDisclosure).toBeInTheDocument();
+      expect(ranking.getByText("No counterparties match")).toBeInTheDocument();
+    }
+    expect(screen.getByRole("region", { name: "Current selection summary" }))
+      .toHaveTextContent("Captured events2");
   });
 
   it("shows an actionable error when generated data is unavailable", async () => {

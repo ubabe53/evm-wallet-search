@@ -321,6 +321,22 @@ class DashboardExportTest(unittest.TestCase):
 
         self.assertEqual(query.call_count, 1)
 
+    def test_token_counterparties_include_emitters_outside_the_event_export(self) -> None:
+        with dashboard_export.ensure_duckdb().connect(":memory:") as connection:
+            connection.execute(
+                "create table wallet_events as select * from (values ('visible'), ('emitter')) as logs(token_address)"
+            )
+            exported_events = [
+                {"token_address": "visible", "counterparty_address": "emitter"},
+                {"token_address": "visible", "counterparty_address": "ordinary"},
+            ]
+
+            self.assertEqual(
+                dashboard_export.exported_token_counterparties(connection, exported_events),
+                ["emitter"],
+            )
+            self.assertEqual(dashboard_export.exported_token_counterparties(connection, []), [])
+
     def test_sampling_covers_every_bounded_export(self) -> None:
         metadata = {
             "exported_event_count": 10,

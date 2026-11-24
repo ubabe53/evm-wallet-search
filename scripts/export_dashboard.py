@@ -470,6 +470,23 @@ def recognition_account_counts(connection: Any) -> dict[str, dict[str, int]]:
     return result
 
 
+def exported_token_counterparties(
+    connection: Any, events: list[dict[str, Any]]
+) -> list[str]:
+    addresses = sorted({event["counterparty_address"] for event in events})
+    matches = query_rows(
+        connection,
+        """
+          select distinct token_address
+          from wallet_events
+          where token_address in (select unnest(?))
+          order by token_address
+        """,
+        [addresses],
+    )
+    return [row["token_address"] for row in matches]
+
+
 def main() -> None:
     if not DB_PATH.exists():
         subprocess.run([sys.executable, str(ROOT / "scripts" / "run_dbt.py"), "build"], check=True)
@@ -642,6 +659,7 @@ def main() -> None:
             "recognition_counts": recognition_counts,
             "recognition_account_counts": composed_filter_counts,
             "exported_event_count": len(events),
+            "token_contract_counterparties": exported_token_counterparties(connection, events),
             "exported_token_summary_count": len(token_summaries),
             "exported_counterparty_summary_count": len(counterparty_summaries),
             "exported_timeline_row_count": len(timeline),

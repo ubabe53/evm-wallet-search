@@ -86,7 +86,8 @@ the data as a historical Ethereum mainnet snapshot rather than a live wallet vie
 official Gitcoin attribution, shows exported-versus-complete event counts and sampling state, and
 labels the primary total `Captured events`. The current snapshot contains all 90 captured
 Transfer-signature rows from its recorded block 0–25,739,543 scan; that coverage does not make the
-static site current after its pinned finalized endpoint.
+static site current after its pinned finalized endpoint. Text search in the demo uses matching
+exported events for the totals, timeline, rankings, and event list.
 
 ## Scope and limitations
 
