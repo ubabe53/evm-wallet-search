@@ -38,6 +38,8 @@ import {
   type DisplayedTokenSummary,
 } from "./model";
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 type Theme = "light" | "dark";
 
 export function useDashboard() {
@@ -361,7 +363,10 @@ export function useDashboard() {
     const tokenCount = new Set(filtered.events.map((event) => event.token_address)).size;
     const counterpartyCount = new Set(
       filtered.events
-        .filter((event) => event.counterparty_address !== event.wallet_address)
+        .filter((event) =>
+          event.counterparty_address !== event.wallet_address &&
+          event.counterparty_address !== ZERO_ADDRESS
+        )
         .map((event) => event.counterparty_address),
     ).size;
     return { transferCount, tokenCount, counterpartyCount };

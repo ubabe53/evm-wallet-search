@@ -473,6 +473,7 @@ class QueryService:
                   count(distinct token_address) as token_count,
                   count(distinct counterparty_address) filter (
                     where counterparty_address != wallet_address
+                      and counterparty_address != '{ZERO_ADDRESS}'
                   ) as counterparty_count,
                   min(block_number) as block_number_min,
                   max(block_number) as block_number_max,

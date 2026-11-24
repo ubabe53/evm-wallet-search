@@ -36,6 +36,7 @@ TIMELINE_ROW_LIMIT_PER_RECOGNITION_ACCOUNT_EVIDENCE = 5_000
 EXPORT_SCHEMA_VERSION = "dashboard-export-v1"
 RECOGNITION_STATUSES = ("recognized", "other")
 ACCOUNT_FILTERS = ("eoa_candidate", "contract")
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 REQUIRED_EXPORT_COLUMNS = {
     "pipeline_metadata": {
         "configured_wallet_label",
@@ -444,6 +445,7 @@ def recognition_account_counts(connection: Any) -> dict[str, dict[str, int]]:
             count(distinct classified.token_address) as token_count,
             count(distinct classified.counterparty_address) filter (
               where classified.counterparty_address != classified.wallet_address
+                and classified.counterparty_address != ?
             ) as counterparty_count
           from selections
           left join classified
@@ -454,6 +456,7 @@ def recognition_account_counts(connection: Any) -> dict[str, dict[str, int]]:
             )
           group by selections.recognition_mask, selections.account_mask
         """,
+        [ZERO_ADDRESS],
     )
 
     result: dict[str, dict[str, int]] = {}
@@ -611,26 +614,12 @@ def main() -> None:
                 "Pipeline metadata transfer count does not reconcile with wallet_events"
             )
 
+        composed_filter_counts = recognition_account_counts(connection)
+        all_accounts = "+".join(ACCOUNT_FILTERS)
         recognition_counts: dict[str, dict[str, int]] = {}
         for selected in non_empty_subsets(RECOGNITION_STATUSES):
-            placeholders = ", ".join("?" for _ in selected)
-            metrics = query_rows(
-                connection,
-                f"""
-                  select
-                    count(*) as transfer_count,
-                    count(distinct token_address) as token_count,
-                    count(distinct counterparty_address) filter (
-                      where counterparty_address != wallet_address
-                    ) as counterparty_count
-                  from wallet_events
-                  where recognition_status in ({placeholders})
-                """,
-                selected,
-            )[0]
-            recognition_counts["+".join(selected)] = metrics
-
-        composed_filter_counts = recognition_account_counts(connection)
+            recognition_key = "+".join(selected)
+            recognition_counts[recognition_key] = composed_filter_counts[f"{recognition_key}|{all_accounts}"]
 
         meta = {
             **metadata[0],
