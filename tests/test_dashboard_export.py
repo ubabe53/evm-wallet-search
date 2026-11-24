@@ -215,6 +215,34 @@ class DashboardExportTest(unittest.TestCase):
         self.assertEqual(len(recognition_combinations) * len(account_combinations), 9)
         self.assertEqual(query.call_count, 1)
 
+    def test_filter_counts_exclude_zero_address_from_counterparty_totals(self) -> None:
+        with dashboard_export.ensure_duckdb().connect(":memory:") as connection:
+            connection.execute(
+                """
+                create table wallet_events as
+                select * from (values
+                    ('mint', 'token', ?, 'wallet', 'recognized', 'unknown'),
+                    ('burn', 'token', ?, 'wallet', 'recognized', 'unknown'),
+                    ('self', 'token', 'wallet', 'wallet', 'recognized', 'unknown'),
+                    ('transfer', 'token', 'external', 'wallet', 'other', 'contract')
+                ) as events (
+                    transaction_hash, token_address, counterparty_address, wallet_address,
+                    recognition_status, counterparty_account_type
+                )
+                """,
+                ["0x" + "0" * 40] * 2,
+            )
+            counts = dashboard_export.recognition_account_counts(connection)
+
+        self.assertEqual(
+            counts["recognized|eoa_candidate+contract"],
+            {"transfer_count": 3, "token_count": 1, "counterparty_count": 0},
+        )
+        self.assertEqual(
+            counts["recognized+other|eoa_candidate+contract"],
+            {"transfer_count": 4, "token_count": 1, "counterparty_count": 1},
+        )
+
     def test_full_binary_selection_retains_internal_unknown_rows(self) -> None:
         duckdb = dashboard_export.ensure_duckdb()
         connection = duckdb.connect(":memory:")

@@ -13,6 +13,35 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("counts mint and burn events without counting the zero address as a counterparty", async () => {
+    const mint = {
+      ...dashboardEvents[0],
+      counterparty_address: "0x" + "0".repeat(40),
+    };
+    const burn = {
+      ...mint,
+      transfer_id: "1-0xburn-0",
+      transaction_hash: "0xburn",
+      direction: "out",
+    };
+    const payloads: Record<string, unknown> = {
+      "summaries.json": { tokens: [], counterparties: [] },
+      "timeline.json": [],
+      "meta.json": { ...metadata, complete_event_count: 2, exported_event_count: 2 },
+      "events.json": [mint, burn],
+    };
+    vi.stubGlobal("fetch", vi.fn((path: string) => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(payloads[path.split("/").pop() ?? ""]),
+    })));
+
+    render(<App />);
+
+    const summary = await screen.findByRole("region", { name: "Current selection summary" });
+    expect(summary).toHaveTextContent("Captured events2");
+    expect(summary).toHaveTextContent("Counterparties0");
+  });
+
   it("renders exported dashboard data", async () => {
     vi.stubGlobal(
       "fetch",

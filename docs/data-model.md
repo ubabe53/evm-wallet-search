@@ -224,7 +224,7 @@ The `/api/v1` service currently advertises response schema `dashboard-api-v16`. 
   activity recovery; it is not durable scan history;
 
 - `metadata`: one provenance object for the configured wallet, including DuckDB generation time, contiguous finalized snapshot bounds, observed event block/time extrema, account-evidence coverage, `finality_status`, and API schema version. Event extrema remain separate from the indexer checkpoint;
-- `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds;
+- `summary`: one exact aggregate for the active selection, with transfer, distinct-token, distinct-counterparty, block, and event-time bounds. The counterparty count excludes the zero address and tracked wallet. Mint, burn, and self events still contribute to the transfer total.
 - `events`: one row per immutable `wallet_events` row, ordered newest-first by block/transaction/log position and traversed with an opaque keyset cursor;
 - `timeline`: one complete, gap-filled UTC series with exact total, inbound, outbound, and self captured-event counts; each bucket reconciles as `total = inbound + outbound + self`. `interval=year` returns the stable observed-year domain; `interval=month` requires one `year` and returns only that calendar window through the latest observed month when it is the boundary year. Recognition, account, and search filters can zero a bucket but do not remove its calendar position;
 - `tokens`: one exact aggregate per emitting token contract, ranked after filtering and limited only after aggregation;
@@ -235,7 +235,7 @@ Event responses distinguish `complete_matching_count` from `returned_count`, `li
 
 The React live adapter sends the same recognition, account, and search predicates to every endpoint, displays summary counts from the complete matching set, and distinguishes those totals from bounded token, counterparty, and event rows. `All years` requests yearly buckets without a date predicate. Selecting a year—through the dropdown or its bar—requests that year's monthly buckets while sending its exact half-open UTC range to summary, event, token, and counterparty requests. Selecting a month narrows those endpoints again; clearing the month returns to the selected year, while `All years` clears the time scope. The timeline request omits the active date predicate so all buckets in the current navigation scope remain available. Event expansion follows `next_cursor`; it never infers completeness from the current browser array. The static adapter remains separate, reads only generated fixture JSON, permits year/month timeline navigation, and does not claim that its bounded rows support dashboard period cross-filtering.
 
-The fixture exporter records exact transfer/token/counterparty statistics for the nine combinations of three non-empty recognition selections and three non-empty EOA/Contract selections. The full account selection includes unresolved internal rows. Live serving computes only the requested selection.
+The fixture exporter records exact transfer/token/counterparty statistics for the nine combinations of three non-empty recognition selections and three non-empty EOA/Contract selections. The full account selection includes unresolved internal rows. Exported and displayed counterparty totals exclude the zero address and tracked wallet. Live serving computes only the requested selection.
 
 ## Tests
 

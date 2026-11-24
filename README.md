@@ -68,7 +68,8 @@ commands are in the [operations guide](docs/operations.md#native-component-devel
 
 ## What the dashboard shows
 
-- exact selection totals alongside bounded rankings and cursor-paginated events;
+- exact selection totals alongside bounded rankings and cursor-paginated events. Mint and burn
+  events count toward activity, and the counterparty total excludes the zero address;
 - yearly and monthly captured-event timelines with explicit inbound, outbound, and self directions;
 - token and counterparty rankings by captured event count, never cross-token quantity or value;
 - provenance that separates finalized scan coverage from observed event extrema;
