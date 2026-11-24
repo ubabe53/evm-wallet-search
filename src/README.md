@@ -20,7 +20,7 @@ be retried without returning to the startup error screen.
 The frontend has two explicit build-time data modes:
 
 - `api`: local development calls the loopback API over complete live DuckDB analytics.
-- `static`: fixture development and production builds read bounded generated JSON.
+- `static`: historical-snapshot development and production builds read bounded generated JSON.
 
 There is no runtime switch between them. Browser code must not connect to Postgres, DuckDB, or
 Ethereum RPC and must not receive their credentials.
@@ -47,7 +47,7 @@ Live mode, after building analytics and starting the API:
 bun run dashboard:dev
 ```
 
-Deterministic fixture mode:
+Reproducible historical snapshot mode:
 
 ```sh
 bun run analytics:build:fixture

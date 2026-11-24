@@ -255,12 +255,17 @@ class DashboardApiTest(unittest.TestCase):
                 connection.execute(
                     """
                     insert into ops.pipeline_runs values (
-                      'run-1', 1, '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
-                      'Example wallet', 0, ?, ?, ?, 'completed', current_timestamp,
+                      'run-1', 1, ?, ?, 0, ?, ?, ?, 'completed', current_timestamp,
                       'wallet-transfer-signature-v1'
                     )
                     """,
-                    [snapshot_end_block, "0x" + "a" * 64, event_count],
+                    [
+                        FIXTURE_WALLET_ADDRESS,
+                        FIXTURE_WALLET_LABEL,
+                        snapshot_end_block,
+                        "0x" + "a" * 64,
+                        event_count,
+                    ],
                 )
                 connection.execute(
                     """
@@ -623,6 +628,21 @@ class DashboardApiTest(unittest.TestCase):
         )
         self.assertEqual(summary["transfer_count"], 1)
         self.assertEqual(summary["counterparty_count"], 0)
+
+    def test_summary_counts_mint_and_burn_events_without_counting_a_counterparty(self) -> None:
+        with self.service.connect() as connection:
+            mint_burn_events = connection.execute(
+                "select transaction_hash, direction from wallet_events where counterparty_address = ?",
+                ["0x" + "0" * 40],
+            ).fetchall()
+
+        self.assertEqual({direction for _, direction in mint_burn_events}, {"in", "out"})
+        for transaction_hash, direction in mint_burn_events:
+            with self.subTest(direction=direction, transaction_hash=transaction_hash):
+                response = self.client.get("/api/v1/summary", params={"q": transaction_hash})
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json()["transfer_count"], 1)
+                self.assertEqual(response.json()["counterparty_count"], 0)
 
     def test_ranked_endpoints_disclose_complete_and_returned_counts(self) -> None:
         for endpoint in ("tokens", "counterparties"):

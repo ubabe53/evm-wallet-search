@@ -1,4 +1,4 @@
-{% if var('use_fixture', true) %}
+{% if var('use_fixture', true) and var('fixture_dataset', 'demo') == 'synthetic' %}
 with expected (
   chain_id,
   transaction_hash,

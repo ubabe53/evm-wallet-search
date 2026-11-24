@@ -13,6 +13,35 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("counts mint and burn events without counting the zero address as a counterparty", async () => {
+    const mint = {
+      ...dashboardEvents[0],
+      counterparty_address: "0x" + "0".repeat(40),
+    };
+    const burn = {
+      ...mint,
+      transfer_id: "1-0xburn-0",
+      transaction_hash: "0xburn",
+      direction: "out",
+    };
+    const payloads: Record<string, unknown> = {
+      "summaries.json": { tokens: [], counterparties: [] },
+      "timeline.json": [],
+      "meta.json": { ...metadata, complete_event_count: 2, exported_event_count: 2 },
+      "events.json": [mint, burn],
+    };
+    vi.stubGlobal("fetch", vi.fn((path: string) => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(payloads[path.split("/").pop() ?? ""]),
+    })));
+
+    render(<App />);
+
+    const summary = await screen.findByRole("region", { name: "Current selection summary" });
+    expect(summary).toHaveTextContent("Captured events2");
+    expect(summary).toHaveTextContent("Counterparties0");
+  });
+
   it("renders exported dashboard data", async () => {
     vi.stubGlobal(
       "fetch",
@@ -39,7 +68,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
     const analysisContext = screen.getByRole("region", { name: "Analysis context" });
     expect(analysisContext).toHaveTextContent(
-      "Analyzing0xeee...eeeExample walletEthereum mainnetExample wallet",
+      "Analyzing0xeee...eeeExample walletEthereum mainnetHistorical snapshot",
     );
     expect(screen.getByRole("link", { name: "0xeee...eee" })).toHaveAttribute(
       "href",
@@ -111,14 +140,18 @@ describe("App", () => {
     expect(screen.getByRole("columnheader", { name: "Inbound / Outbound Events" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
     expect(screen.queryByText("raw only")).not.toBeInTheDocument();
-    expect(screen.getByText("Fixture data")).toBeInTheDocument();
-    expect(screen.getByText("Coverage not recorded")).toBeInTheDocument();
+    expect(screen.getAllByText("Historical snapshot")).toHaveLength(2);
+    expect(screen.getByText("Blocks 0–25,739,543 · Finalized")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
-      .toHaveTextContent("Synthetic fixture demo");
+      .toHaveTextContent("Historical Ethereum mainnet snapshot");
     expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
-      .toHaveTextContent("not live wallet history or evidence of HyperIndex completeness");
+      .toHaveTextContent("This checked-in snapshot is not live data");
     expect(screen.getByRole("complementary", { name: "Fixture demo disclosure" }))
-      .toHaveTextContent("100 / 100fixture events exported · not sampled");
+      .toHaveTextContent("100 / 100captured events exported · not sampled · 0 / 2 counterparties classified");
+    expect(screen.getByRole("link", { name: "Attribution source" })).toHaveAttribute(
+      "href",
+      "https://manual.gitcoin.co/introduction-and-overview/dao-finances",
+    );
     expect(screen.getByText("Captured events", { selector: ".stat span" })).toBeInTheDocument();
     expect(screen.getByText(/Generated Nov 14, 2023(?:,| at) 10:17 PM UTC/)).toBeInTheDocument();
     expect(screen.getByText("Activity Timeline")).toBeInTheDocument();
@@ -186,7 +219,16 @@ describe("App", () => {
     expect(recognizedStatus).toHaveTextContent(/^Recognized$/);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0xaaa" } });
-    expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" }).length).toBeGreaterThan(0);
+    const selection = screen.getByRole("region", { name: "Current selection summary" });
+    expect(selection).toHaveTextContent("Captured events1");
+    expect(screen.getByRole("button", {
+      name: /2023 UTC: 1 captured events \(1 inbound, 0 outbound, 0 self\)/,
+    })).toBeInTheDocument();
+    expect(tokenActivity.getByTitle("1 captured Transfer-signature events")).toBeInTheDocument();
+    expect(tokenActivity.getByText("Indirect 1 in · 0 out")).toBeInTheDocument();
+    const counterpartyPanel = within(counterpartyHeading.closest(".panel") as HTMLElement);
+    expect(counterpartyPanel.getByTitle("1 inbound, 0 outbound Transfer events")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "View transaction on Etherscan" })).toHaveLength(1);
 
     fireEvent.change(screen.getByLabelText("Filter dashboard"), { target: { value: "0x1111" } });
     expect(screen.getAllByText("0x1111...1111").length).toBeGreaterThan(0);
@@ -196,6 +238,53 @@ describe("App", () => {
 
     fireEvent.click(screen.getByLabelText("Switch to light theme"));
     expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  it.each([true, false])("scopes bounded search with emitter metadata set to %s", async (hasEmitterMetadata) => {
+    const event = dashboardEvents[0];
+    const ordinaryTransfer = {
+      ...dashboardEvents[dashboardEvents.length - 1],
+      block_number: event.block_number,
+      block_timestamp: event.block_timestamp,
+      transaction_hash: event.transaction_hash,
+      transaction_index: event.transaction_index,
+      log_index: event.log_index + 1,
+      transfer_id: `${event.chain_id}-${event.transaction_hash}-${event.log_index + 1}`,
+    };
+    const payloads: Record<string, unknown> = {
+      "summaries.json": { ...summaries, counterparties: [] },
+      "timeline.json": [],
+      "meta.json": {
+        ...metadata,
+        exported_event_count: 2,
+        is_sampled: true,
+        token_contract_counterparties: hasEmitterMetadata ? [event.counterparty_address] : undefined,
+      },
+      "events.json": [event, ordinaryTransfer],
+    };
+    vi.stubGlobal("fetch", vi.fn((path: string) => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(payloads[path.split("/").pop() ?? ""]),
+    })));
+
+    render(<App />);
+
+    const search = await screen.findByLabelText("Filter dashboard");
+    fireEvent.change(search, { target: { value: event.transaction_hash } });
+
+    expect(screen.getByText(/^Search results cover exported events/)).toBeInTheDocument();
+    const rankingDisclosure = screen.queryByText(/Counterparty results use saved ranking candidates/);
+    const ranking = within(screen.getByText("Top Counterparties").closest(".panel") as HTMLElement);
+    expect(ranking.queryByRole("link", { name: "0x111...111" })).not.toBeInTheDocument();
+    if (hasEmitterMetadata) {
+      expect(rankingDisclosure).not.toBeInTheDocument();
+      expect(ranking.getByRole("link", { name: "0x222...222" })).toBeInTheDocument();
+    } else {
+      expect(rankingDisclosure).toBeInTheDocument();
+      expect(ranking.getByText("No counterparties match")).toBeInTheDocument();
+    }
+    expect(screen.getByRole("region", { name: "Current selection summary" }))
+      .toHaveTextContent("Captured events2");
   });
 
   it("shows an actionable error when generated data is unavailable", async () => {

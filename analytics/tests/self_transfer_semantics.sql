@@ -24,7 +24,7 @@ with invalid_self_events as (
 select 'invalid_self_event' as failure
 from invalid_self_events
 
-{% if var('use_fixture', true) %}
+{% if var('use_fixture', true) and var('fixture_dataset', 'demo') == 'synthetic' %}
 union all
 
 select 'missing_fixture_self_event' as failure

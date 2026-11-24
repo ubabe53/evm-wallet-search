@@ -237,7 +237,7 @@ models:
         description: Number of captured Transfer-signature events in the daily cell.
 
   - name: pipeline_metadata
-    description: One provenance and completeness row per configured wallet. Live snapshot fields are run-backed finalized coverage; fixture snapshot fields are intentionally null. {{ doc('finalized_snapshot') }}
+    description: One provenance and completeness row per configured wallet. Live and historical-demo snapshot fields are run-backed finalized coverage; synthetic test-fixture snapshot fields are null. {{ doc('finalized_snapshot') }}
     meta:
       layer: mart
       materialization: table
@@ -267,7 +267,7 @@ models:
               arguments:
                 values: [fixture, hyperindex]
       - name: generated_at
-        description: UTC time at which dbt materialized this metadata row.
+        description: UTC snapshot generation time for the historical demo, or dbt materialization time for live and synthetic-test builds.
         tests: [not_null]
       - name: snapshot_run_id
         description: Nullable identifier of the completed live pipeline run supporting the published artifact; the current in-flight run may appear temporarily during dbt materialization.
@@ -283,6 +283,12 @@ models:
         description: Nullable live finality policy; currently `ethereum_finalized`.
       - name: snapshot_scope_version
         description: Nullable semantic indexing-scope version recorded by the live run.
+      - name: snapshot_source
+        description: Nullable collector supporting the finalized snapshot, currently `envio_hyperindex`.
+      - name: snapshot_schema_version
+        description: Nullable checked-in historical-demo snapshot contract version.
+      - name: wallet_attribution_source_url
+        description: Nullable public source supporting the historical demo wallet's configured entity label.
       - name: transfer_count
         description: Complete captured event count in the DuckDB snapshot.
         tests: [not_null]
