@@ -73,7 +73,7 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "envio": "^3.2.1",
-    "jsdom": "^25.0.1",
+    "jsdom": "^30.0.1",
     "oxlint": "1.77.0",
     "playwright": "^1.61.1",
     "pyright": "1.1.411",
