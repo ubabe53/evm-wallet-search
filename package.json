@@ -86,6 +86,7 @@
     "esbuild": "0.28.1",
     "express": "4.21.2",
     "path-to-regexp": "0.1.13",
+    "proxy-addr": "2.0.8",
     "qs": "6.15.3",
     "send": "0.19.0",
     "serve-static": "1.16.2",
