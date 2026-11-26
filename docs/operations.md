@@ -346,6 +346,8 @@ The full test command first builds and tests the synthetic semantic dataset, the
 5. Set the repository homepage URL to the verified Pages URL.
 6. Capture a current screenshot only from that verified fixture deployment, following `docs/images/README.md`; do not substitute or fabricate an image.
 
+The build job completes its artifact upload before the Pages deployment job starts. Each build attempt uploads under a distinct name and passes that name to the deployment job. If an artifact expires before deployment, start a fresh Deploy run from `main` to rebuild it.
+
 The demo site does not expire after one day; only the separate CI download artifact does. If private-repository Pages is unavailable on the current plan, keep the gate disabled and connect the fixture-demo build to a static host that supports private Git integration, such as Cloudflare Pages, Netlify, or Vercel. Set the host's build command to `bun run test && bun run dashboard:build` and its output directory to `dist`.
 
 The Compose live distribution and static deployment are deliberately separate. Compose packages

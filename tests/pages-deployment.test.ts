@@ -23,6 +23,24 @@ describe("GitHub Pages fixture deployment contract", () => {
     expect(workflow).not.toMatch(/analytics:build:hyperindex|api:dev|ENVIO_API_TOKEN|ETHEREUM_RPC_URL/);
   });
 
+  it("deploys the artifact produced by the completed build job", () => {
+    const workflow = readProjectFile(".github/workflows/deploy.yml");
+    const buildStart = workflow.indexOf("\n  build:");
+    const deployStart = workflow.indexOf("\n  deploy:");
+    expect(buildStart).toBeGreaterThan(0);
+    expect(deployStart).toBeGreaterThan(buildStart);
+
+    const build = workflow.slice(buildStart, deployStart);
+    const deploy = workflow.slice(deployStart);
+    expect(build).toContain("uses: actions/upload-pages-artifact");
+    expect(build).toContain("PAGES_ARTIFACT_NAME: github-pages-${{ github.run_attempt }}");
+    expect(build).toContain("name: ${{ env.PAGES_ARTIFACT_NAME }}");
+    expect(build).toContain("artifact_name: ${{ env.PAGES_ARTIFACT_NAME }}");
+    expect(deploy).toContain("needs: build");
+    expect(deploy).toContain("uses: actions/deploy-pages");
+    expect(deploy).toContain("artifact_name: ${{ needs.build.outputs.artifact_name }}");
+  });
+
   it("uses base-relative fixture assets and a compile-time static adapter", () => {
     const html = readProjectFile("index.html");
     const dataSource = readProjectFile("src/data.ts");

@@ -8,18 +8,13 @@ on:
       - completed
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
   group: github-pages
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy GitHub Pages
+  build:
+    name: Build GitHub Pages artifact
     if: >-
       vars.ENABLE_GITHUB_PAGES == 'true' &&
       ((github.event_name == 'workflow_dispatch' &&
@@ -28,9 +23,13 @@ jobs:
       github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: read
+    env:
+      PAGES_ARTIFACT_NAME: github-pages-${{ github.run_attempt }}
+    outputs:
+      artifact_name: ${{ env.PAGES_ARTIFACT_NAME }}
 
     steps:
       - name: Check out verified revision
@@ -72,8 +71,24 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
+          name: ${{ env.PAGES_ARTIFACT_NAME }}
           path: dist
 
+  deploy:
+    name: Deploy GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
