@@ -33,7 +33,7 @@ describe("dashboard export shape", () => {
     expect(metadata.snapshot_source).toBe("envio_hyperindex");
     expect(metadata.snapshot_schema_version).toBe("mainnet-demo-snapshot-v1");
     expect(metadata.wallet_attribution_source_url).toBe(
-      "https://manual.gitcoin.co/introduction-and-overview/dao-finances",
+      "https://manual.gitcoin.co/introduction-and-overview/dao-finances.html",
     );
     expect(metadata.data_source).toBe("fixture");
     expect(metadata.configured_wallet_label).toBe("Gitcoin Schelling Point multisig");

@@ -163,7 +163,7 @@ export const metadata = {
   export_schema_version: "dashboard-export-v1",
   snapshot_source: "envio_hyperindex",
   snapshot_schema_version: "mainnet-demo-snapshot-v1",
-  wallet_attribution_source_url: "https://manual.gitcoin.co/introduction-and-overview/dao-finances",
+  wallet_attribution_source_url: "https://manual.gitcoin.co/introduction-and-overview/dao-finances.html",
   completeness_scope: "finalized_block_range",
   indexer_checkpoint_recorded: true,
   finality_status: "finalized",

@@ -24,6 +24,6 @@
   "snapshot_start_block": 0,
   "token_contract_count": 9,
   "wallet_address": "0x11c24f0031b4c35e2e9353764edc61299291e0af",
-  "wallet_attribution_source_url": "https://manual.gitcoin.co/introduction-and-overview/dao-finances",
+  "wallet_attribution_source_url": "https://manual.gitcoin.co/introduction-and-overview/dao-finances.html",
   "wallet_label": "Gitcoin Schelling Point multisig"
 }

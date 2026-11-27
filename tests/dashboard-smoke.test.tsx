@@ -150,7 +150,7 @@ describe("App", () => {
       .toHaveTextContent("100 / 100captured events exported · not sampled · 0 / 2 counterparties classified");
     expect(screen.getByRole("link", { name: "Attribution source" })).toHaveAttribute(
       "href",
-      "https://manual.gitcoin.co/introduction-and-overview/dao-finances",
+      "https://manual.gitcoin.co/introduction-and-overview/dao-finances.html",
     );
     expect(screen.getByText("Captured events", { selector: ".stat span" })).toBeInTheDocument();
     expect(screen.getByText(/Generated Nov 14, 2023(?:,| at) 10:17 PM UTC/)).toBeInTheDocument();
